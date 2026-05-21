@@ -26,6 +26,7 @@
 ## 主な設定
 - `Target`: 選択オブジェクトまたはコレクションを対象にする
 - `Hide Proxy from Render`: プロキシをレンダー非表示にする
+- `Show Proxy Object Name`: Viewport上のプロキシ名表示を切り替える
 - `Auto Add Rigid Body`: 作成時にRigid Bodyを付ける
 - `Collision Shape`: Convex Hull / Mesh / Box など
 - `Update Selected Proxy` / `Update All Proxies`: 元アセット変更後にプロキシを更新

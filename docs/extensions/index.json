@@ -63,8 +63,8 @@
       ],
       "blender_version_min": "5.1.0",
       "archive_url": "./rb_instance_helper-1.3.1.zip",
-      "archive_size": 19991,
-      "archive_hash": "sha256:9e05f68f5f555296c9fed68e5f77585595af757b11ff2bd644d9c5a57022fbbd"
+      "archive_size": 20133,
+      "archive_hash": "sha256:b104e6ca8eeecc64f37c296cf0442f70b9876baaaea8fab17a4bebdc44c98d12"
     },
     {
       "schema_version": "1.0.0",

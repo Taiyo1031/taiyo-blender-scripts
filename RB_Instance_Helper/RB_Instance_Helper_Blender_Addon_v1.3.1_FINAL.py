@@ -86,6 +86,12 @@ class RBIH_Props(PropertyGroup):
         description="Hide generated proxy mesh from render. The original linked instance remains renderable",
     )
 
+    show_proxy_name: BoolProperty(
+        name="Show Proxy Object Name",
+        default=True,
+        description="Show generated proxy object names in the viewport",
+    )
+
     move_to_rb_collection: BoolProperty(
         name='Put Proxies in "RB_Proxies"',
         default=True,
@@ -673,8 +679,8 @@ def _unparent_instance_keep_world(instance_obj):
     instance_obj.matrix_world = world
 
 
-def _apply_default_proxy_display(proxy_obj):
-    proxy_obj.show_name = True
+def _apply_default_proxy_display(proxy_obj, props):
+    proxy_obj.show_name = bool(props.show_proxy_name)
     proxy_obj.show_in_front = False
     proxy_obj.display_type = "WIRE"
     proxy_obj.color = (0.55, 0.32, 0.16, 1.0)
@@ -741,7 +747,7 @@ def _create_proxy_for_instance(context, instance_obj, pair_id=None, rb_cache=Non
     target_col.objects.link(proxy_obj)
 
     proxy_obj.hide_render = bool(props.hide_proxy_render)
-    _apply_default_proxy_display(proxy_obj)
+    _apply_default_proxy_display(proxy_obj, props)
     _assign_pair_properties(instance_obj, proxy_obj, pair_id)
 
     if props.auto_add_rigid_body:
@@ -1647,6 +1653,7 @@ class RBIH_PT_Setup(Panel):
 
         col = layout.column(align=True)
         col.prop(props, "hide_proxy_render")
+        col.prop(props, "show_proxy_name")
         col.prop(props, "move_to_rb_collection")
         col.prop(props, "auto_add_rigid_body")
         col.prop(props, "center_proxy_origin")

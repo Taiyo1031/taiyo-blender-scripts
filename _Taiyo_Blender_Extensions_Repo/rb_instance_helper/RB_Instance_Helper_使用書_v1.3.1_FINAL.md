@@ -123,7 +123,17 @@ RB Instance Helper
 
 ---
 
-## 1-4. Put Proxies in "RB_Proxies"
+## 1-4. Show Proxy Object Name
+
+デフォルト: ON
+
+生成されたプロキシのオブジェクト名を Viewport 上に表示するかどうかを指定します。
+
+ON の場合、プロキシ名が表示されます。OFF の場合、プロキシは表示されたままですが、オブジェクト名ラベルは表示されません。
+
+---
+
+## 1-5. Put Proxies in "RB_Proxies"
 
 デフォルト: ON
 
@@ -135,7 +145,7 @@ RB Instance Helper
 
 ---
 
-## 1-5. Auto Add Rigid Body
+## 1-6. Auto Add Rigid Body
 
 デフォルト: ON
 
@@ -147,7 +157,7 @@ ON の場合、`Realize & Parent` を押した時点でプロキシに Active Ri
 
 ---
 
-## 1-6. Center Proxy Origin
+## 1-7. Center Proxy Origin
 
 デフォルト: ON
 
@@ -163,7 +173,7 @@ Rigid Body シミュレーションでは、オブジェクトの原点や重心
 
 ---
 
-## 1-7. Collision Shape
+## 1-8. Collision Shape
 
 `Auto Add Rigid Body` が ON の時に表示されます。
 
@@ -189,7 +199,7 @@ Rigid Body シミュレーションでは、オブジェクトの原点や重心
 
 ---
 
-## 1-8. Realize & Parent
+## 1-9. Realize & Parent
 
 セットアップを実行するボタンです。
 
@@ -494,6 +504,7 @@ Rigid Body シミュレーション結果を、プロキシのキーフレーム
 ```text
 Target: Selected Objects
 Hide Proxy from Render: ON
+Show Proxy Object Name: ON
 Put Proxies in "RB_Proxies": ON
 Auto Add Rigid Body: ON
 Center Proxy Origin: ON
