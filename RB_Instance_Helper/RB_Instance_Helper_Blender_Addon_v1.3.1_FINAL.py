@@ -27,6 +27,7 @@ from bpy.props import (
 
 ADDON_VERSION_STR = "1.3.1"
 RB_PROXIES_COLLECTION_NAME = "RB_Proxies"
+LOG_PREFIX = "[RB Instance Helper]"
 
 PROP_PAIR_ID = "rbih_pair_id"
 PROP_ROLE = "rbih_role"
@@ -219,6 +220,34 @@ def _select_only(context, objects, active=None):
         context.view_layer.objects.active = active
 
 
+def _object_log_name(obj):
+    if not obj:
+        return "<None>"
+    library = getattr(obj, "library", None)
+    if library and getattr(library, "filepath", ""):
+        return f"{obj.name} ({library.filepath})"
+    return obj.name
+
+
+def _log(message):
+    print(f"{LOG_PREFIX} {message}")
+
+
+def _log_skip(subject, reason):
+    if hasattr(subject, "name"):
+        subject = _object_log_name(subject)
+    _log(f"SKIP: {subject}: {reason}")
+
+
+def _report_warning(op, message, subject=None):
+    if subject is not None:
+        _log_skip(subject, message)
+    else:
+        _log(f"WARNING: {message}")
+    if op:
+        op.report({"WARNING"}, message)
+
+
 def _has_pair(obj):
     return obj is not None and PROP_PAIR_ID in obj
 
@@ -361,6 +390,27 @@ def _get_target_instances(context):
     return []
 
 
+def _log_target_selection_skips(context):
+    props = context.scene.rbih
+
+    if props.target_mode == "SELECTED":
+        for obj in context.selected_objects:
+            if not _is_collection_instance(obj):
+                _log_skip(obj, "Selected object is not a Collection Instance")
+        return
+
+    if props.target_mode == "COLLECTION" and props.target_collection:
+        ignored = [
+            obj for obj in props.target_collection.all_objects
+            if not _is_collection_instance(obj)
+        ]
+        if ignored:
+            _log_skip(
+                props.target_collection.name,
+                f"Ignored {len(ignored)} non Collection Instance object(s) in target collection",
+            )
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Mesh Proxy Generation
 # ──────────────────────────────────────────────────────────────────────────────
@@ -389,6 +439,75 @@ def _mesh_data_for_object(context, src_obj):
     return src_obj.data, None
 
 
+def _iter_evaluated_instance_mesh_sources(context, instance_obj):
+    """
+    Yield evaluated mesh sources as they are drawn by this Collection Instance.
+
+    This path handles both external linked collections and local same-file
+    collection instances. The fallback below still covers cases where the
+    depsgraph does not expose instance children.
+    """
+    depsgraph = context.evaluated_depsgraph_get()
+
+    try:
+        instance_world_inv = instance_obj.matrix_world.inverted()
+    except Exception:
+        instance_world_inv = Matrix.Identity(4)
+
+    for inst in depsgraph.object_instances:
+        if not getattr(inst, "is_instance", False):
+            continue
+
+        parent = getattr(inst, "parent", None)
+        parent_original = getattr(parent, "original", parent)
+        if parent_original != instance_obj and getattr(parent_original, "name", "") != instance_obj.name:
+            continue
+
+        src_obj = getattr(inst, "instance_object", None) or getattr(inst, "object", None)
+        if not src_obj or src_obj.type != "MESH" or src_obj.data is None:
+            continue
+
+        original_obj = getattr(src_obj, "original", src_obj)
+        matrix_local = instance_world_inv @ inst.matrix_world.copy()
+        mesh = None
+        clear_obj = None
+
+        try:
+            mesh = src_obj.to_mesh(preserve_all_data_layers=False, depsgraph=depsgraph)
+            clear_obj = src_obj
+        except Exception:
+            mesh = src_obj.data
+
+        if not mesh:
+            continue
+
+        try:
+            yield original_obj, mesh, matrix_local
+        finally:
+            if clear_obj:
+                try:
+                    clear_obj.to_mesh_clear()
+                except Exception:
+                    pass
+
+
+def _append_mesh_source(raw_verts, faces, source_names, src_obj, src_mesh, mat):
+    if not src_mesh or len(src_mesh.vertices) == 0:
+        return False
+
+    base_index = len(raw_verts)
+
+    for v in src_mesh.vertices:
+        raw_verts.append(mat @ v.co)
+
+    for poly in src_mesh.polygons:
+        if len(poly.vertices) >= 3:
+            faces.append(tuple(base_index + i for i in poly.vertices))
+
+    source_names.append(src_obj.name)
+    return True
+
+
 def _build_combined_proxy_mesh(context, instance_obj, center_origin=True):
     """
     Build a single generated mesh for a linked Collection Instance.
@@ -402,45 +521,34 @@ def _build_combined_proxy_mesh(context, instance_obj, center_origin=True):
     Returns (mesh, origin_offset_local, error).
     """
     source_col = instance_obj.instance_collection
-    mesh_sources = _iter_mesh_source_objects(source_col)
-
-    if not mesh_sources:
-        return None, Vector((0.0, 0.0, 0.0)), "No mesh objects found in source collection"
 
     raw_verts = []
     faces = []
     source_names = []
+    evaluated_source_count = 0
 
-    for src_obj in mesh_sources:
-        src_mesh, eval_obj = _mesh_data_for_object(context, src_obj)
+    for src_obj, src_mesh, mat in _iter_evaluated_instance_mesh_sources(context, instance_obj):
+        evaluated_source_count += 1
+        _append_mesh_source(raw_verts, faces, source_names, src_obj, src_mesh, mat)
 
-        if not src_mesh or len(src_mesh.vertices) == 0:
+    if evaluated_source_count == 0:
+        mesh_sources = _iter_mesh_source_objects(source_col)
+
+        if not mesh_sources:
+            return None, Vector((0.0, 0.0, 0.0)), "No mesh objects found in source collection"
+
+        for src_obj in mesh_sources:
+            src_mesh, eval_obj = _mesh_data_for_object(context, src_obj)
+
+            # Fallback: source object transforms are used as collection-local transforms.
+            # The evaluated depsgraph path above is preferred for same-file instances.
+            _append_mesh_source(raw_verts, faces, source_names, src_obj, src_mesh, src_obj.matrix_world.copy())
+
             if eval_obj:
                 try:
                     eval_obj.to_mesh_clear()
                 except Exception:
                     pass
-            continue
-
-        # In Collection Instance drawing, source object transforms are applied under the instance transform.
-        # Therefore vertices are first placed into the Collection Instance's local space.
-        mat = src_obj.matrix_world.copy()
-        base_index = len(raw_verts)
-
-        for v in src_mesh.vertices:
-            raw_verts.append(mat @ v.co)
-
-        for poly in src_mesh.polygons:
-            if len(poly.vertices) >= 3:
-                faces.append(tuple(base_index + i for i in poly.vertices))
-
-        source_names.append(src_obj.name)
-
-        if eval_obj:
-            try:
-                eval_obj.to_mesh_clear()
-            except Exception:
-                pass
 
     if not raw_verts or not faces:
         return None, Vector((0.0, 0.0, 0.0)), "Source collection contains meshes, but no valid faces were generated"
@@ -593,7 +701,7 @@ def _create_proxy_for_instance(context, instance_obj, pair_id=None, rb_cache=Non
     props = context.scene.rbih
 
     if not _is_collection_instance(instance_obj):
-        return None, f"'{instance_obj.name}' is not a linked Collection Instance"
+        return None, f"'{instance_obj.name}' is not a Collection Instance"
 
     if pair_id is None:
         pair_id = _new_pair_id()
@@ -885,7 +993,7 @@ def _rebuild_pair(context, pair_id, op=None):
 
     if not instance_obj:
         if op:
-            op.report({"WARNING"}, f"Pair {pair_id}: source instance not found")
+            _report_warning(op, f"Pair {pair_id}: source instance not found", subject=pair_id)
         return None, False
 
     state = _cache_proxy_state(proxy_obj)
@@ -908,7 +1016,7 @@ def _rebuild_pair(context, pair_id, op=None):
 
     if err:
         if op:
-            op.report({"WARNING"}, err)
+            _report_warning(op, err, subject=instance_obj)
         return None, False
 
     # Re-apply custom props after generated link props are assigned.
@@ -937,7 +1045,7 @@ def _setup_or_rebuild_instance(context, instance_obj, op=None):
     proxy, err = _create_proxy_for_instance(context, instance_obj)
     if err:
         if op:
-            op.report({"WARNING"}, err)
+            _report_warning(op, err, subject=instance_obj)
         return None, False
 
     return proxy, True
@@ -958,13 +1066,14 @@ class RBIH_OT_RealizeAndParent(Operator):
         props = context.scene.rbih
 
         if props.target_mode == "COLLECTION" and not props.target_collection:
-            self.report({"WARNING"}, "Collection mode is enabled, but no collection is specified")
+            _report_warning(self, "Collection mode is enabled, but no collection is specified")
             return {"CANCELLED"}
 
+        _log_target_selection_skips(context)
         targets = _get_target_instances(context)
 
         if not targets:
-            self.report({"WARNING"}, "No linked Collection Instance objects found")
+            _report_warning(self, "No Collection Instance objects found")
             return {"CANCELLED"}
 
         if props.move_to_rb_collection:
@@ -1006,7 +1115,7 @@ class RBIH_OT_UpdateSelected(Operator):
         pair_ids = _pair_ids_from_objects(context.selected_objects)
 
         if not pair_ids:
-            self.report({"WARNING"}, "No RB Instance Helper pair selected")
+            _report_warning(self, "No RB Instance Helper pair selected")
             return {"CANCELLED"}
 
         updated = []
@@ -1041,9 +1150,11 @@ class RBIH_OT_UpdateAll(Operator):
             if pair_id and pair_id not in pair_ids:
                 if _find_instance_by_pair(pair_id) and _find_proxy_by_pair(pair_id):
                     pair_ids.append(pair_id)
+                else:
+                    _log_skip(obj, f"Pair {pair_id}: source instance or proxy not found")
 
         if not pair_ids:
-            self.report({"WARNING"}, "No valid RB Instance Helper proxy pairs found")
+            _report_warning(self, "No valid RB Instance Helper proxy pairs found")
             return {"CANCELLED"}
 
         updated = []
@@ -1152,12 +1263,16 @@ class RBIH_OT_BakeRB(Operator):
                 proxy = _find_proxy_by_pair(pair_id)
                 if proxy and proxy.rigid_body:
                     proxies.append(proxy)
+                elif proxy:
+                    _log_skip(proxy, "Proxy has no Rigid Body")
+                else:
+                    _log_skip(pair_id, "Proxy not found for selected pair")
         else:
             # Fallback: allow direct selected rigid bodies, but prefer managed pairs.
             proxies = [o for o in context.selected_objects if o.rigid_body is not None]
 
         if not proxies:
-            self.report({"WARNING"}, "No selected proxy with Rigid Body found")
+            _report_warning(self, "No selected proxy with Rigid Body found")
             return {"CANCELLED"}
 
         prev_selected, prev_active = _store_selection(context)
@@ -1193,7 +1308,7 @@ class RBIH_OT_TransferAndRemove(Operator):
 
         pair_ids = _pair_ids_from_objects(context.selected_objects)
         if not pair_ids:
-            self.report({"WARNING"}, "No RB Instance Helper pair selected")
+            _report_warning(self, "No RB Instance Helper pair selected")
             return {"CANCELLED"}
 
         prev_selected, prev_active = _store_selection(context)
@@ -1206,14 +1321,14 @@ class RBIH_OT_TransferAndRemove(Operator):
             proxy_obj = _find_proxy_by_pair(pair_id)
 
             if not instance_obj or not proxy_obj:
-                self.report({"WARNING"}, f"Pair {pair_id}: instance or proxy not found")
+                _report_warning(self, f"Pair {pair_id}: instance or proxy not found", subject=pair_id)
                 failed += 1
                 continue
 
             try:
                 _transfer_proxy_animation_to_instance(context, instance_obj, proxy_obj, fs, fe)
             except Exception as exc:
-                self.report({"WARNING"}, f"{instance_obj.name}: transfer failed: {exc}")
+                _report_warning(self, f"{instance_obj.name}: transfer failed: {exc}", subject=instance_obj)
                 failed += 1
                 continue
 
@@ -1319,6 +1434,39 @@ class RBIH_OT_SelectBoth(Operator):
 
         _select_only(context, objects, active=objects[-1])
         self.report({"INFO"}, f"Selected all RB Instance Helper objects: {len(objects)}")
+        return {"FINISHED"}
+
+
+class RBIH_OT_SelectProxyChildren(Operator):
+    bl_idname = "rbih.select_proxy_children"
+    bl_label = "Proxy Children"
+    bl_description = "Select direct child objects of the selected RB Instance Helper proxies"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        _ensure_object_mode(context)
+
+        proxies = []
+        for obj in context.selected_objects:
+            if obj.get(PROP_ROLE, "") == ROLE_PROXY_ROOT and obj.get(PROP_PAIR_ID, ""):
+                proxies.append(obj)
+
+        if not proxies:
+            self.report({"WARNING"}, "No selected RB Instance Helper proxy found")
+            return {"CANCELLED"}
+
+        children = _dedupe_objects(
+            child
+            for proxy in proxies
+            for child in proxy.children
+        )
+
+        if not children:
+            self.report({"WARNING"}, "Selected proxy has no child objects")
+            return {"CANCELLED"}
+
+        _select_only(context, children, active=children[-1])
+        self.report({"INFO"}, f"Selected proxy child object(s): {len(children)}")
         return {"FINISHED"}
 
 
@@ -1485,6 +1633,7 @@ class RBIH_PT_SelectCopy(Panel):
         row.operator("rbih.select_instance", icon="LINKED")
         row.operator("rbih.select_proxy", icon="OUTLINER_OB_MESH")
         row.operator("rbih.select_both", icon="SELECT_EXTEND")
+        layout.operator("rbih.select_proxy_children", icon="OUTLINER_OB_EMPTY")
 
         layout.separator()
         layout.label(text="Rigid Body:", icon="RIGID_BODY")
@@ -1506,6 +1655,7 @@ classes = (
     RBIH_OT_SelectInstance,
     RBIH_OT_SelectProxy,
     RBIH_OT_SelectBoth,
+    RBIH_OT_SelectProxyChildren,
     RBIH_OT_CopyRBSettings,
 
     RBIH_PT_Main,

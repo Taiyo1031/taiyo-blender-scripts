@@ -55,6 +55,7 @@ RB_Proxies コレクション
 
 - Asset Browser などから配置したリンク Collection Instance
 - `Object > Collection Instance` で配置した Collection Instance
+- 同じ `.blend` ファイル内の Collection を参照している Collection Instance
 - `instance_collection` を持っているオブジェクト
 
 対象にならないもの:
@@ -369,6 +370,21 @@ Rigid Body シミュレーション結果を、プロキシのキーフレーム
 
 ---
 
+### Proxy Children
+
+選択中のプロキシの直下にある子オブジェクトを選択します。
+
+使う場面:
+
+- プロキシを選んだ状態から、元リンクインスタンス側へ素早く選択を切り替えたい
+- 複数プロキシを選択して、それぞれの子オブジェクトをまとめて確認したい
+
+注意:
+
+このボタンは、選択中の RB Instance Helper プロキシだけを対象にします。プロキシ以外を選択している場合や、プロキシに子オブジェクトがない場合は実行されません。
+
+---
+
 ## 4-2. Copy RB Settings to Selected
 
 アクティブオブジェクトの Rigid Body 設定を、選択中の他オブジェクトへコピーします。
@@ -502,6 +518,7 @@ Delete Proxy after Transfer: ON
 - 選択しているものが Collection Instance か
 - `instance_collection` を持っているか
 - Collection モードの場合、Collection が指定されているか
+- Blender のコンソールに `[RB Instance Helper] SKIP:` で始まるログが出ていないか
 
 普通の Mesh Object は対象外です。
 
