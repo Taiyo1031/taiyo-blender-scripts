@@ -58,3 +58,5 @@ https://taiyo1031.github.io/taiyo-blender-scripts/extensions/index.json
 - 新しい注意点、失敗した手順、Blender バージョン差分、配布時の落とし穴はここに追記してください。
 - SynologyDrive 上で `Stale NFS file handle` が出ることがあります。読み取りが不安定な場合は、少し待って再実行してください。
 - Codex の sandbox 内で `./tools/build_extensions.sh` から Blender を子プロセス起動すると、環境によって Metal 初期化でセグフォすることがあります。同じ `blender --background --command extension ...` を直接実行すると通る場合があります。
+- `./tools/build_extensions.sh` は最初に `docs/extensions/*.zip`、`index.json`、`index.html` を削除してから validate/build を始めます。途中で Blender がセグフォした場合、配布フォルダが空になるので、そのままコミットしないでください。必要なら `git archive` や `git checkout` で既存の `docs/extensions` を復元してから作業を続けます。
+- 一部アドオンだけ手動で配布更新する場合は、対象zipを作り直したあと、`docs/extensions/index.json` の `archive_size` と `archive_hash` を実ファイルの `wc -c` / `shasum -a 256` に合わせます。`index.html` のサイズ表示と Built 時刻も更新し、最後に index の値と実zipが一致することを確認してください。
