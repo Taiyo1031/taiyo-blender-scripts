@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "uv_channel_placement_tool"
+version = "2.6.0"
+name = "UV Channel Placement Tool"
+tagline = "Place selected UVs or mesh islands to predefined grid slots with"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.4.0"
+license = ["SPDX:GPL-3.0-or-later"]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "*.zip",
+]

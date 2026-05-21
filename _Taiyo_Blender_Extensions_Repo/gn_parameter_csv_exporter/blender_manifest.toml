@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "gn_parameter_csv_exporter"
+version = "1.1.0"
+name = "GN Parameter CSV Exporter"
+tagline = "Export selected objects' Geometry Nodes modifier input parameter"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "*.zip",
+]

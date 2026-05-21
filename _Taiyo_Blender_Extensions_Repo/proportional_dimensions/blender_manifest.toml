@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "proportional_dimensions"
+version = "1.0.0"
+name = "Proportional Dimensions"
+tagline = "指定したX/Y/Z寸法を基準に、選択オブジェクトを縦横比を保ったまま均等スケールします"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "*.zip",
+]

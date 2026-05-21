@@ -1,0 +1,29 @@
+# Python / Blender cache
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store
+
+# Local editor and tool caches
+.cache/
+.vscode/
+.idea/
+
+# Build scratch output
+/build/
+/dist/
+/*.zip
+
+# Blender backup/autosave files
+*.backup
+*.blend1
+*.blend2
+*.blend@
+
+# Keep generated static extension repository artifacts tracked.
+!docs/
+!docs/extensions/
+!docs/extensions/*.zip
+!docs/extensions/index.json
+!docs/extensions/index.html
