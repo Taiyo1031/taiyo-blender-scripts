@@ -29,6 +29,7 @@
 - `Auto Add Rigid Body`: 作成時にRigid Bodyを付ける
 - `Collision Shape`: Convex Hull / Mesh / Box など
 - `Update Selected Proxy` / `Update All Proxies`: 元アセット変更後にプロキシを更新
+- `Restore Selected`: 選択中ペアの親子解除、または現在のプロキシトランスフォームだけを元インスタンスへ適用
 - `Proxy Children`: 選択中のプロキシ直下の子オブジェクトを選択
 
 ## 結果

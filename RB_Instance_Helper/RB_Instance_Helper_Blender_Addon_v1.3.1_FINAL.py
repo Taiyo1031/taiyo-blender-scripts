@@ -131,8 +131,18 @@ class RBIH_Props(PropertyGroup):
     frame_start_custom: IntProperty(name="Start", default=1, min=0)
     frame_end_custom:   IntProperty(name="End",   default=250, min=1)
 
+    restore_selected_mode: EnumProperty(
+        name="Restore Mode",
+        items=[
+            ("REMOVE_PARENT", "Remove Parent Only", "Clear the proxy parent while keeping the current visual transform"),
+            ("APPLY_PROXY_TRANSFORM", "Apply Proxy Transform", "Copy the current proxy transform to the instance, then clear the parent"),
+        ],
+        default="REMOVE_PARENT",
+        description="How Restore Selected handles the current transform before removing the proxy parent",
+    )
+
     delete_proxy_after_transfer: BoolProperty(
-        name="Delete Proxy after Transfer",
+        name="Delete Proxy after Transfer/Restore",
         default=True,
     )
 
@@ -1234,6 +1244,26 @@ def _transfer_proxy_animation_to_instance(context, instance_obj, proxy_obj, fram
     instance_obj.matrix_world = desired_world
 
 
+def _restore_instance_from_proxy_current(context, instance_obj, proxy_obj, mode):
+    if mode == "APPLY_PROXY_TRANSFORM":
+        offset = _get_instance_proxy_offset(instance_obj, proxy_obj)
+        desired_world = proxy_obj.matrix_world.copy() @ offset
+    else:
+        depsgraph = context.evaluated_depsgraph_get()
+        try:
+            desired_world = instance_obj.evaluated_get(depsgraph).matrix_world.copy()
+        except Exception:
+            desired_world = instance_obj.matrix_world.copy()
+
+    try:
+        instance_obj.parent = None
+        instance_obj.matrix_parent_inverse = Matrix.Identity(4)
+    except Exception:
+        pass
+
+    instance_obj.matrix_world = desired_world
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Operators — BAKE & TRANSFER
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1348,6 +1378,63 @@ class RBIH_OT_TransferAndRemove(Operator):
             _restore_selection(context, prev_selected, prev_active)
 
         self.report({"INFO"}, f"Transfer complete: {done} done, {failed} failed")
+        return {"FINISHED"}
+
+
+class RBIH_OT_RestoreSelected(Operator):
+    bl_idname = "rbih.restore_selected"
+    bl_label = "Restore Selected"
+    bl_description = "Remove the proxy parent from selected pair(s), optionally applying the current proxy transform first"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        _ensure_object_mode(context)
+
+        props = context.scene.rbih
+        pair_ids = _pair_ids_from_objects(context.selected_objects)
+        if not pair_ids:
+            _report_warning(self, "No RB Instance Helper pair selected")
+            return {"CANCELLED"}
+
+        restored_instances = []
+        done = 0
+        failed = 0
+
+        for pair_id in pair_ids:
+            instance_obj = _find_instance_by_pair(pair_id)
+            proxy_obj = _find_proxy_by_pair(pair_id)
+
+            if not instance_obj or not proxy_obj:
+                _report_warning(self, f"Pair {pair_id}: instance or proxy not found", subject=pair_id)
+                failed += 1
+                continue
+
+            try:
+                _restore_instance_from_proxy_current(
+                    context,
+                    instance_obj,
+                    proxy_obj,
+                    props.restore_selected_mode,
+                )
+            except Exception as exc:
+                _report_warning(self, f"{instance_obj.name}: restore failed: {exc}", subject=instance_obj)
+                failed += 1
+                continue
+
+            _cleanup_instance_pair_props(instance_obj)
+            restored_instances.append(instance_obj)
+
+            if props.delete_proxy_after_transfer:
+                _delete_proxy_objects_for_pair(pair_id)
+            else:
+                _cleanup_proxy_pair_props(proxy_obj)
+
+            done += 1
+
+        if restored_instances:
+            _select_only(context, restored_instances, active=restored_instances[-1])
+
+        self.report({"INFO"}, f"Restore complete: {done} done, {failed} failed")
         return {"FINISHED"}
 
 
@@ -1615,6 +1702,10 @@ class RBIH_PT_Bake(Panel):
         layout.prop(props, "delete_proxy_after_transfer")
         layout.operator("rbih.transfer_and_remove", icon="FORWARD")
 
+        layout.separator(factor=0.8)
+        layout.prop(props, "restore_selected_mode", text="Restore")
+        layout.operator("rbih.restore_selected", icon="UNLINKED")
+
 
 class RBIH_PT_SelectCopy(Panel):
     bl_label = "4 · SELECT & COPY"
@@ -1652,6 +1743,7 @@ classes = (
     RBIH_OT_UpdateAll,
     RBIH_OT_BakeRB,
     RBIH_OT_TransferAndRemove,
+    RBIH_OT_RestoreSelected,
     RBIH_OT_SelectInstance,
     RBIH_OT_SelectProxy,
     RBIH_OT_SelectBoth,
