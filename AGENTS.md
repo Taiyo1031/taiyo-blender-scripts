@@ -27,7 +27,7 @@
 
 このスクリプトは以下を行います。
 
-- 9個の Extensions パッケージを `blender --command extension validate` で検証
+- 10個の Extensions パッケージを `blender --command extension validate` で検証
 - 各パッケージを zip 化して `docs/extensions/` に出力
 - `blender --command extension server-generate --repo-dir docs/extensions --html` で `index.json` と `index.html` を生成
 
@@ -49,7 +49,7 @@ https://taiyo1031.github.io/taiyo-blender-scripts/extensions/index.json
 ## 配布前チェック
 
 - `find . -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store'` で不要物を確認します。
-- `docs/extensions/` に zip が9個あることを確認します。
+- `docs/extensions/` に zip が10個あることを確認します。
 - `docs/extensions/index.json` と `docs/extensions/index.html` が生成されていることを確認します。
 - 可能なら Blender の Preferences から Remote Repository に `index.json` URL を追加して確認します。
 

@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "move_selected_to_own_collections"
+version = "1.2.0"
+name = "Move Objects to Own Collections"
+tagline = "Move selected objects into matching child collections"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "*.zip",
+]

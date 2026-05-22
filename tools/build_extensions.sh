@@ -4,13 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_ROOT="$ROOT_DIR/_Taiyo_Blender_Extensions_Repo"
 OUTPUT_DIR="$ROOT_DIR/docs/extensions"
-BLENDER_BIN="${BLENDER_BIN:-/Applications/Blender5.1_2.app/Contents/MacOS/Blender}"
+BLENDER_BIN="${BLENDER_BIN:-/Applications/Blender.app/Contents/MacOS/Blender}"
 
 packages=(
   "attribute_csv_exporter"
   "export_selected_names_csv"
   "gn_parameter_csv_exporter"
   "instance_name_fixer"
+  "move_selected_to_own_collections"
   "proportional_dimensions"
   "rb_instance_helper"
   "replace_selected_with_active"

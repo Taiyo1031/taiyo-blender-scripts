@@ -57,6 +57,7 @@ gh repo create Taiyo1031/taiyo-blender-scripts --private --source=. --remote=ori
 | Geometry Nodesの入力値を一覧化したい | `ExportModefireParametor` | 選択オブジェクトのGeometry Nodesモディファイア入力パラメータをCSVに書き出すアドオンです。 | パラメータCSV | `ExportModefireParametor/README.md` |
 | 選択オブジェクト名だけをCSVにしたい | `ExportNameAsCSV` | 選択中のオブジェクト名をCSVへ書き出すシンプルなアドオンです。 | 名前CSV | `ExportNameAsCSV/README.md` |
 | コレクションインスタンス名を整理したい | `instance_name_fixer` | コレクションインスタンスの名前を、参照元コレクション名に揃えるアドオンです。`.001` などの番号サフィックスは保持します。 | オブジェクト名の修正 | `instance_name_fixer/README.md` |
+| 選択オブジェクトを個別コレクションへ整理したい | `Move_Selected_to_Own_Collections` | 選択オブジェクトごとに、元コレクション内へオブジェクト名と同じ名前のコレクションを作成または再利用して移動します。 | 個別コレクション整理 | `Move_Selected_to_Own_Collections/README.md` |
 | 比率を保ったまま寸法を合わせたい | `proportional_dimensions` | 指定したX/Y/Z寸法を基準に、選択オブジェクトを縦横比を保ったまま均等スケールするアドオンです。 | 均等スケール済みオブジェクト | `proportional_dimensions/README.md` |
 | コレクションインスタンスでRigid Bodyを使いたい | `RB_Instance_Helper` | リンクされたコレクションインスタンス用にRigid Body向けプロキシメッシュを作り、更新、ベイク、転送まで扱う補助アドオンです。 | プロキシ、ベイク、転送結果 | `RB_Instance_Helper/README.md` |
 | 選択オブジェクトを別モデルに置き換えたい | `Replace_Selected_with_Active` | 選択オブジェクトを、アクティブオブジェクトのコピーに置き換えるアドオンです。位置、回転、スケールの引き継ぎを選べます。 | 置き換え済みオブジェクト | `Replace_Selected_with_Active/README.md` |
@@ -71,6 +72,7 @@ gh repo create Taiyo1031/taiyo-blender-scripts --private --source=. --remote=ori
 | `ExportModefireParametor` | GN Parameter CSV Exporter | `View3D > Sidebar (N) > GN CSV Export` | Geometry Nodes入力値をCSV化 |
 | `ExportNameAsCSV` | Export Selected Object Names to CSV | `View3D > Sidebar > Selected CSV Export` | 選択名をCSV化 |
 | `instance_name_fixer` | Instance Name Fixer | `View3D > Sidebar > Name Fixer` | インスタンス名を整理 |
+| `Move_Selected_to_Own_Collections` | Move Objects to Own Collections | `View3D > Sidebar (N) > Collection Tools` | 選択を個別コレクションへ整理 |
 | `proportional_dimensions` | Proportional Dimensions | `View3D > Sidebar(N) > 比率寸法` | 比率維持で寸法合わせ |
 | `RB_Instance_Helper` | RB Instance Helper | `View3D > N-panel > RB Helper` | インスタンス用Rigid Body補助 |
 | `Replace_Selected_with_Active` | Replace Selected with Active | `View3D > Sidebar > Replace` | 選択をアクティブで置き換え |

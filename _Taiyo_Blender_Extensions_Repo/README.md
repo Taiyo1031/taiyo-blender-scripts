@@ -9,6 +9,7 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 - `gn_parameter_csv_exporter`: GN Parameter CSV Exporter
 - `export_selected_names_csv`: Export Selected Object Names to CSV
 - `instance_name_fixer`: Instance Name Fixer
+- `move_selected_to_own_collections`: Move Objects to Own Collections
 - `proportional_dimensions`: Proportional Dimensions
 - `rb_instance_helper`: RB Instance Helper
 - `replace_selected_with_active`: Replace Selected with Active
