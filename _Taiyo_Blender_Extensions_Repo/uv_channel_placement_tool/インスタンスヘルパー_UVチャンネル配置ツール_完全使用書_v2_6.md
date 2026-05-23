@@ -1,8 +1,8 @@
-# インスタンスヘルパー / UVチャンネル配置ツール 完全使用書 v2.6
+# インスタンスヘルパー / UVチャンネル配置ツール 完全使用書 v2.6.1
 
-対象ファイル：`インスタンスヘルパー_UVチャンネル配置ツール_v2_6_修正版.py`  
-元ファイル：`UVMatSlots_Ver2.6.py`  
-アドオン名：`UV Channel Placement Tool`  
+対象ファイル：`__init__.py`
+元ファイル：`UVMatSlots_Ver2.6.py`
+アドオン名：`UV Channel Placement Tool`
 対応想定：Blender 4.4 以降
 
 ---
@@ -46,7 +46,7 @@
 2. 上部メニューから `Edit > Preferences` を開きます。
 3. 左メニューの `Add-ons` を開きます。
 4. 右上付近の `Install...` または `Install from Disk...` を押します。
-5. `インスタンスヘルパー_UVチャンネル配置ツール_v2_6_修正版.py` を選択します。
+5. Remote Repositoryまたは配布zipから `UV Channel Placement Tool` をインストールします。
 6. アドオン一覧に表示された `UV Channel Placement Tool` にチェックを入れて有効化します。
 7. 3Dビューポートで `N` キーを押し、`UV Tools` タブを確認します。
 
@@ -437,7 +437,7 @@ UVエディタ上では別アイランドでも、メッシュとしてつなが
 ### アドオンファイル名
 
 ```text
-インスタンスヘルパー_UVチャンネル配置ツール_v2_6_修正版.py
+__init__.py
 ```
 
 ### 使用書ファイル名

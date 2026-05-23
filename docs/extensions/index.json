@@ -52,6 +52,22 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "rb_instance_helper",
+      "name": "RB Instance Helper",
+      "tagline": "Rigid Body workflow helper for linked Collection Instances using",
+      "version": "1.3.2",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.9",
+      "archive_url": "./rb_instance_helper-1.3.2.zip",
+      "archive_size": 19752,
+      "archive_hash": "sha256:cc787703410954ca70922822856069a32ea8b2986d33275052255e04ebe94613"
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "export_selected_names_csv",
       "name": "Export Selected Object Names to CSV",
       "tagline": "Export selected object names to CSV file",
@@ -68,51 +84,35 @@
     },
     {
       "schema_version": "1.0.0",
-      "id": "rb_instance_helper",
-      "name": "RB Instance Helper",
-      "tagline": "Rigid Body workflow helper for linked Collection Instances using",
-      "version": "1.3.1",
+      "id": "attribute_csv_exporter",
+      "name": "Attribute CSV Exporter",
+      "tagline": "Export selected mesh attributes to CSV (TRANSPOSED). Rows=index",
+      "version": "1.8.2",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
-      "blender_version_min": "5.1.0",
-      "archive_url": "./rb_instance_helper-1.3.1.zip",
-      "archive_size": 20133,
-      "archive_hash": "sha256:b104e6ca8eeecc64f37c296cf0442f70b9876baaaea8fab17a4bebdc44c98d12"
+      "blender_version_min": "4.5.9",
+      "archive_url": "./attribute_csv_exporter-1.8.2.zip",
+      "archive_size": 14761,
+      "archive_hash": "sha256:b3dd89ee1eb8eac5a6ee9610acc391e1a77c2f1c26b1c91b6482c3d9945c8520"
     },
     {
       "schema_version": "1.0.0",
       "id": "replace_selected_with_active",
       "name": "Replace Selected with Active",
-      "tagline": "\u9078\u629e\u30aa\u30d6\u30b8\u30a7\u30af\u30c8\u3092\u30a2\u30af\u30c6\u30a3\u30d6\u30aa\u30d6\u30b8\u30a7\u30af\u30c8\u306e\u30b3\u30d4\u30fc\u306b\u3059\u3052\u66ff\u3048\u307e\u3059",
-      "version": "2.1.0",
+      "tagline": "Replace selected objects with copies of the active object",
+      "version": "3.0.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
       "blender_version_min": "4.2.0",
-      "archive_url": "./replace_selected_with_active-2.1.0.zip",
-      "archive_size": 9453,
-      "archive_hash": "sha256:53ede573cc204c7a94e0d684729d7d8d50ae0d250b78a9d38aea3285281d7eb0"
-    },
-    {
-      "schema_version": "1.0.0",
-      "id": "attribute_csv_exporter",
-      "name": "Attribute CSV Exporter",
-      "tagline": "Export selected mesh attributes to CSV (TRANSPOSED). Rows=index",
-      "version": "1.8.1",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "5.1.0",
-      "archive_url": "./attribute_csv_exporter-1.8.1.zip",
-      "archive_size": 14751,
-      "archive_hash": "sha256:e3a3e061f257c88d1edc82800d744b7b43e7f78a1cae50f3bb009ad608239b96"
+      "archive_url": "./replace_selected_with_active-3.0.0.zip",
+      "archive_size": 9830,
+      "archive_hash": "sha256:23757d0c0de589c5d14eba0c9063e7d37e98ec3a6ed472a6d3c66c0414bcaaa2"
     },
     {
       "schema_version": "1.0.0",
@@ -135,32 +135,32 @@
       "id": "instance_name_fixer",
       "name": "Instance Name Fixer",
       "tagline": "\u30b3\u30ec\u30af\u30b7\u30e7\u30f3\u30a4\u30f3\u30b9\u30bf\u30f3\u30b9\u306e\u540d\u524d\u3092\u30a4\u30f3\u30b9\u30bf\u30f3\u30b9\u5143\u306b\u63c3\u3048\u308b",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
-      "blender_version_min": "5.1.1",
-      "archive_url": "./instance_name_fixer-0.1.0.zip",
-      "archive_size": 8195,
-      "archive_hash": "sha256:2645c15aad876690b48de7ebd27c0d01df1969c32fcb3580a05b2566aa629056"
+      "blender_version_min": "4.5.9",
+      "archive_url": "./instance_name_fixer-0.1.1.zip",
+      "archive_size": 8225,
+      "archive_hash": "sha256:4cdbd7117c39a71901f11b30087aa3bb747d50f5bddb35ab814f6d06205d4554"
     },
     {
       "schema_version": "1.0.0",
       "id": "uv_channel_placement_tool",
       "name": "UV Channel Placement Tool",
       "tagline": "Place selected UVs or mesh islands to predefined grid slots with",
-      "version": "2.6.0",
+      "version": "2.6.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
       "blender_version_min": "4.4.0",
-      "archive_url": "./uv_channel_placement_tool-2.6.0.zip",
-      "archive_size": 9103,
-      "archive_hash": "sha256:95281d8ebe36f6afe5180f44496083c63eb5a1c419ddd1559da5b3584cea8836"
+      "archive_url": "./uv_channel_placement_tool-2.6.1.zip",
+      "archive_size": 9270,
+      "archive_hash": "sha256:2b04b59f60a8cdae6c377ed83226e2e7c153c7c94ddc2401f7572ef4dbee7cab"
     }
   ]
 }

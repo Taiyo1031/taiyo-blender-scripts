@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "uv_channel_placement_tool"
-version = "2.6.0"
+version = "2.6.1"
 name = "UV Channel Placement Tool"
 tagline = "Place selected UVs or mesh islands to predefined grid slots with"
 maintainer = "Taiyo"

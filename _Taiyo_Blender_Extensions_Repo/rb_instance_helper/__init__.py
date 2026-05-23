@@ -2,8 +2,8 @@
 bl_info = {
     "name": "RB Instance Helper",
     "author": "Taiyo Parent + ChatGPT",
-    "version": (1, 3, 1),
-    "blender": (5, 1, 0),
+    "version": (1, 3, 2),
+    "blender": (4, 5, 9),
     "location": "View3D > N-panel > RB Helper",
     "description": "Rigid Body workflow helper for linked Collection Instances using stable generated proxy meshes",
     "category": "Object",
@@ -25,7 +25,7 @@ from bpy.props import (
 # Constants / Custom Properties
 # ──────────────────────────────────────────────────────────────────────────────
 
-ADDON_VERSION_STR = "1.3.1"
+ADDON_VERSION_STR = "1.3.2"
 RB_PROXIES_COLLECTION_NAME = "RB_Proxies"
 LOG_PREFIX = "[RB Instance Helper]"
 

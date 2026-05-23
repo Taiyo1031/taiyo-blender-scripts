@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
 id = "replace_selected_with_active"
-version = "2.1.0"
+version = "3.0.0"
 name = "Replace Selected with Active"
-tagline = "選択オブジェクトをアクティブオブジェクトのコピーにすげ替えます"
+tagline = "Replace selected objects with copies of the active object"
 maintainer = "Taiyo"
 type = "add-on"
 blender_version_min = "4.2.0"

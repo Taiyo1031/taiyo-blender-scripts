@@ -3,7 +3,7 @@
 bl_info = {
     "name": "UV Channel Placement Tool",
     "author": "ChatGPT",
-    "version": (2, 6),
+    "version": (2, 6, 1),
     "blender": (4, 4, 0),
     "location": "View3D > Sidebar > UV Tools",
     "description": "Place selected UVs or mesh islands to predefined grid slots with presets",
@@ -14,6 +14,18 @@ import bpy
 import bmesh
 import random
 from mathutils import Vector
+
+
+def ensure_edit_mesh_context(operator, context):
+    obj = context.object
+    if obj is None or obj.type != 'MESH':
+        operator.report({'ERROR'}, "No mesh object selected")
+        return None
+    if obj.mode != 'EDIT':
+        operator.report({'WARNING'}, "Edit Modeで実行してください")
+        return None
+    return obj
+
 
 # ─────────────────────────────────────────────
 # プリセット構造
@@ -103,9 +115,8 @@ class UV_OT_MoveToSlot(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
     slot_index: bpy.props.IntProperty()
     def execute(self, context):
-        obj = context.object
-        if obj is None or obj.type != 'MESH':
-            self.report({'ERROR'}, "No mesh object selected")
+        obj = ensure_edit_mesh_context(self, context)
+        if obj is None:
             return {'CANCELLED'}
         props = context.scene.uv_manual_props
         uv_index = props.uv_map_index
@@ -133,9 +144,8 @@ class UV_OT_RandomIslandPlacement(bpy.types.Operator):
     bl_label = "Place All Islands Randomly"
     bl_options = {'REGISTER', 'UNDO'}
     def execute(self, context):
-        obj = context.object
-        if obj is None or obj.type != 'MESH':
-            self.report({'ERROR'}, "No mesh object selected")
+        obj = ensure_edit_mesh_context(self, context)
+        if obj is None:
             return {'CANCELLED'}
         props = context.scene.uv_random_props
         uv_index = props.uv_map_index

@@ -1,8 +1,8 @@
-# RB Instance Helper 使用書 v1.3.1 FINAL
+# RB Instance Helper 使用書 v1.3.2
 
-**使用するアドオンファイル:** `RB_Instance_Helper_Blender_Addon_v1.3.1_FINAL.py`  
-**対象:** Blender 5.1.x  
-**表示場所:** `View3D > N-panel > RB Helper`  
+**使用するアドオンファイル:** `__init__.py`
+**対象:** Blender 4.5.9 LTS 以降
+**表示場所:** `View3D > N-panel > RB Helper`
 **用途:** リンク Collection Instance を Rigid Body シミュレーションで扱いやすくするための補助アドオン
 
 ---
@@ -661,7 +661,7 @@ Transfer & Remove Parent
 使用するファイルは以下です。
 
 ```text
-RB_Instance_Helper_Blender_Addon_v1.3.1_FINAL.py
+__init__.py
 ```
 
-この使用書は、上記ファイルに対応しています。
+この使用書は、Blender Extensions 用パッケージ `rb_instance_helper` に対応しています。

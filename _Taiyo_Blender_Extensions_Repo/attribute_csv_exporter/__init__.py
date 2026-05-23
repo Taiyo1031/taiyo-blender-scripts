@@ -1,8 +1,8 @@
 bl_info = {
     "name": "Attribute CSV Exporter (Domain) - Transposed (Evaluated)",
     "author": "Taiyo Parent",
-    "version": (1, 8, 1),
-    "blender": (5, 1, 0),
+    "version": (1, 8, 2),
+    "blender": (4, 5, 9),
     "location": "View3D > Sidebar (N) > Attr CSV",
     "description": (
         "Export selected mesh attributes to CSV (TRANSPOSED). Rows=index, Columns=attribute names. "

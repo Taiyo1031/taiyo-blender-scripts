@@ -36,8 +36,8 @@
 |---|---|
 | アドオン名 | Instance Name Fixer |
 | 作者 | Taiyo |
-| バージョン | 0.1.0 |
-| 対応 Blender | Blender 5.1.1 |
+| バージョン | 0.1.1 |
+| 対応 Blender | Blender 4.5.9 LTS 以降 |
 | カテゴリ | Object |
 | 表示場所 | View3D > Sidebar > Name Fixer |
 | 主な目的 | コレクションインスタンスの名前をインスタンス元コレクション名に揃える |

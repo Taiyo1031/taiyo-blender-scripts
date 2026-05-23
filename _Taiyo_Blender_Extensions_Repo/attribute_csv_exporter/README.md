@@ -6,8 +6,8 @@
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar (N) > Attr CSV`
-- バージョン: `1.8.1`
-- 対応Blender目安: `5.1.0` 以降
+- バージョン: `1.8.2`
+- 対応Blender目安: `4.5.9 LTS` 以降
 - カテゴリ: `Import-Export`
 
 ## 使う場面

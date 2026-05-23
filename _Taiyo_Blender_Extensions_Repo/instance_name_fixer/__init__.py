@@ -1,6 +1,6 @@
 """
 Instance Name Fixer v0 (確認用)
-Blender 5.1.1 対応
+Blender 4.5.9 LTS 対応
 
 コレクションインスタンスの名前を、インスタンス元のコレクション名に揃えるツール。
 .001 などの数字サフィックスはそのまま保持。
@@ -12,8 +12,8 @@ import re
 bl_info = {
     "name": "Instance Name Fixer",
     "author": "Taiyo",
-    "version": (0, 1, 0),
-    "blender": (5, 1, 1),
+    "version": (0, 1, 1),
+    "blender": (4, 5, 9),
     "location": "View3D > Sidebar > Name Fixer",
     "description": "コレクションインスタンスの名前をインスタンス元に揃える",
     "category": "Object",
