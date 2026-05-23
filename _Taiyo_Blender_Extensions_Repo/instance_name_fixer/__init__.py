@@ -126,9 +126,36 @@ class INF_RenameItem(bpy.types.PropertyGroup):
 
 class INF_Props(bpy.types.PropertyGroup):
     rename_items: bpy.props.CollectionProperty(type=INF_RenameItem)
+    show_scan_section: bpy.props.BoolProperty(
+        name="STEP 1 ─ スキャン",
+        default=True,
+    )
+    show_preview_section: bpy.props.BoolProperty(
+        name="STEP 2 ─ 修正候補プレビュー",
+        default=True,
+    )
+    show_execute_section: bpy.props.BoolProperty(
+        name="STEP 3 ─ 実行",
+        default=True,
+    )
 
 
 # ── UI パネル ────────────────────────────────────────────────
+
+def draw_foldout_box(layout, props, prop_name: str, title: str, icon: str):
+    is_open = getattr(props, prop_name)
+    box = layout.box()
+    header = box.row(align=True)
+    header.prop(
+        props,
+        prop_name,
+        text="",
+        icon='TRIA_DOWN' if is_open else 'TRIA_RIGHT',
+        emboss=False,
+    )
+    header.label(text=title, icon=icon)
+    return box if is_open else None
+
 
 class INF_PT_Panel(bpy.types.Panel):
     bl_label       = "Instance Name Fixer"
@@ -142,30 +169,48 @@ class INF_PT_Panel(bpy.types.Panel):
         props  = context.scene.inf_props
 
         # ── STEP 1: スキャン
-        box = layout.box()
-        box.label(text="STEP 1 ─ スキャン", icon='VIEWZOOM')
-        box.operator("inf.scan", icon='FILE_REFRESH')
+        box = draw_foldout_box(
+            layout,
+            props,
+            "show_scan_section",
+            "STEP 1 ─ スキャン",
+            'VIEWZOOM',
+        )
+        if box:
+            box.operator("inf.scan", icon='FILE_REFRESH')
 
         # ── STEP 2: プレビュー
-        box2 = layout.box()
-        box2.label(text="STEP 2 ─ 修正候補プレビュー", icon='PREVIEW_RANGE')
+        box2 = draw_foldout_box(
+            layout,
+            props,
+            "show_preview_section",
+            "STEP 2 ─ 修正候補プレビュー",
+            'PREVIEW_RANGE',
+        )
 
-        if len(props.rename_items) == 0:
-            box2.label(text="（候補なし）", icon='INFO')
-        else:
-            col = box2.column(align=True)
-            for item in props.rename_items:
-                row = col.row(align=True)
-                row.label(text=item.obj_name,      icon='OBJECT_DATA')
-                row.label(text="→")
-                row.label(text=item.proposed_name, icon='CHECKMARK')
+        if box2:
+            if len(props.rename_items) == 0:
+                box2.label(text="（候補なし）", icon='INFO')
+            else:
+                col = box2.column(align=True)
+                for item in props.rename_items:
+                    row = col.row(align=True)
+                    row.label(text=item.obj_name,      icon='OBJECT_DATA')
+                    row.label(text="→")
+                    row.label(text=item.proposed_name, icon='CHECKMARK')
 
         # ── STEP 3: 実行
-        box3 = layout.box()
-        box3.label(text="STEP 3 ─ 実行", icon='PLAY')
-        row = box3.row()
-        row.enabled = len(props.rename_items) > 0
-        row.operator("inf.execute", icon='CHECKMARK')
+        box3 = draw_foldout_box(
+            layout,
+            props,
+            "show_execute_section",
+            "STEP 3 ─ 実行",
+            'PLAY',
+        )
+        if box3:
+            row = box3.row()
+            row.enabled = len(props.rename_items) > 0
+            row.operator("inf.execute", icon='CHECKMARK')
 
 
 # ── 登録 ─────────────────────────────────────────────────────

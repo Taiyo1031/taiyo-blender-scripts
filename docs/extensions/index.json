@@ -143,8 +143,8 @@
       ],
       "blender_version_min": "5.1.1",
       "archive_url": "./instance_name_fixer-0.1.0.zip",
-      "archive_size": 7830,
-      "archive_hash": "sha256:01cd408911c1611f8d201cea2ec7638454a625bc180d7683ba3ae4784057c89d"
+      "archive_size": 8195,
+      "archive_hash": "sha256:2645c15aad876690b48de7ebd27c0d01df1969c32fcb3580a05b2566aa629056"
     },
     {
       "schema_version": "1.0.0",
