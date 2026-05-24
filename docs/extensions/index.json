@@ -4,163 +4,190 @@
   "data": [
     {
       "schema_version": "1.0.0",
-      "id": "viewport_export_selected_meshes",
-      "name": "Viewport Export Selected Meshes",
-      "tagline": "Export selected mesh objects one by one from the current viewpor",
-      "version": "1.5.2",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.2.0",
-      "archive_url": "./viewport_export_selected_meshes-1.5.2.zip",
-      "archive_size": 13777,
-      "archive_hash": "sha256:e0877c63d4f606abf7bd95e4081ba6ce2b68959669c1bdeb7e09827aeb1fab9b"
-    },
-    {
-      "schema_version": "1.0.0",
       "id": "move_selected_to_own_collections",
       "name": "Move Objects to Own Collections",
       "tagline": "Move selected objects into matching child collections",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
       "blender_version_min": "4.2.0",
-      "archive_url": "./move_selected_to_own_collections-1.2.0.zip",
-      "archive_size": 3816,
-      "archive_hash": "sha256:73d4e8f65ff54e51d61307a90cfc5c16600352e954bebae1aae34952a140dcb8"
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/move_selected_to_own_collections/Move_Objects_to_Own_Collections_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./move_selected_to_own_collections-1.2.1.zip",
+      "archive_size": 4327,
+      "archive_hash": "sha256:26701481b631753ec047b10b81a712a9d236e1880f68537a583ba25f5099788c"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "viewport_export_selected_meshes",
+      "name": "Viewport Export Selected Meshes",
+      "tagline": "Export selected mesh objects one by one from the current viewpor",
+      "version": "1.5.3",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/viewport_export_selected_meshes/ViewportExport_SelectedMesh_AutoFit_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./viewport_export_selected_meshes-1.5.3.zip",
+      "archive_size": 14302,
+      "archive_hash": "sha256:016ae7c2e15b13131070525204eac3b97f26def227dd3c2fc038bb67d767fcb8"
     },
     {
       "schema_version": "1.0.0",
       "id": "proportional_dimensions",
       "name": "Proportional Dimensions",
       "tagline": "\u6307\u5b9a\u3057\u305fX/Y/Z\u5bf8\u6cd5\u3092\u57fa\u6e96\u306b\u3001\u9078\u629e\u30aa\u30d6\u30b8\u30a7\u30af\u30c8\u3092\u7e26\u6a2a\u6bd4\u3092\u4fdd\u3063\u305f\u307e\u307e\u5747\u7b49\u30b9\u30b1\u30fc\u30eb\u3057\u307e\u3059",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
       "blender_version_min": "4.2.0",
-      "archive_url": "./proportional_dimensions-1.0.0.zip",
-      "archive_size": 4025,
-      "archive_hash": "sha256:c4c4d6eab4187abc8ad261df82c8a124df3f115c40987f4fe2422cd7a3171080"
-    },
-    {
-      "schema_version": "1.0.0",
-      "id": "rb_instance_helper",
-      "name": "RB Instance Helper",
-      "tagline": "Rigid Body workflow helper for linked Collection Instances using",
-      "version": "1.3.2",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.5.9",
-      "archive_url": "./rb_instance_helper-1.3.2.zip",
-      "archive_size": 19752,
-      "archive_hash": "sha256:cc787703410954ca70922822856069a32ea8b2986d33275052255e04ebe94613"
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/proportional_dimensions/README.md",
+      "archive_url": "./proportional_dimensions-1.0.1.zip",
+      "archive_size": 4402,
+      "archive_hash": "sha256:320f5804e2c29628667781175b38100e74af1254dcadc4b577bebfb9889fdf23"
     },
     {
       "schema_version": "1.0.0",
       "id": "export_selected_names_csv",
       "name": "Export Selected Object Names to CSV",
       "tagline": "Export selected object names to CSV file",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
       "blender_version_min": "4.2.0",
-      "archive_url": "./export_selected_names_csv-1.0.0.zip",
-      "archive_size": 6738,
-      "archive_hash": "sha256:050855957d016b24771176dd065175d8cacdab3db7835e36b06dc2b358a2ac80"
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/export_selected_names_csv/%E3%82%A4%E3%83%B3%E3%82%B9%E3%82%BF%E3%83%B3%E3%82%B9%E3%83%98%E3%83%AB%E3%83%8F%E3%82%9A%E3%83%BC_%E9%81%B8%E6%8A%9E%E3%82%AA%E3%83%95%E3%82%99%E3%82%B7%E3%82%99%E3%82%A7%E3%82%AF%E3%83%88%E5%90%8DCSV%E6%9B%B8%E3%81%8D%E5%87%BA%E3%81%97_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./export_selected_names_csv-1.0.1.zip",
+      "archive_size": 7546,
+      "archive_hash": "sha256:106fcf5b47a08574a06c174da06199a5546989ec075ac7881e90e4f550fed913"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "rb_instance_helper",
+      "name": "RB Instance Helper",
+      "tagline": "Rigid Body workflow helper for linked Collection Instances using",
+      "version": "1.3.3",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.9",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/rb_instance_helper/RB_Instance_Helper_%E4%BD%BF%E7%94%A8%E6%9B%B8_v1.3.1_FINAL.md",
+      "archive_url": "./rb_instance_helper-1.3.3.zip",
+      "archive_size": 20235,
+      "archive_hash": "sha256:9f67cf33478acb9725267585d885f9fa7e123bd500b38d81cbeaf3c8d2f87f2c"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "overlap_selector",
+      "name": "Overlap Object Selector",
+      "tagline": "Detect and review overlapping objects in the scene",
+      "version": "1.2.2",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/overlap_selector/Overlap_Selector_User_Guide_v1_2_1.md",
+      "archive_url": "./overlap_selector-1.2.2.zip",
+      "archive_size": 14448,
+      "archive_hash": "sha256:5844d16f8cff1d58e5a406049df7813072f69869da1c7d6639f090e6c1e970a1"
     },
     {
       "schema_version": "1.0.0",
       "id": "attribute_csv_exporter",
       "name": "Attribute CSV Exporter",
       "tagline": "Export selected mesh attributes to CSV (TRANSPOSED). Rows=index",
-      "version": "1.8.2",
+      "version": "1.8.3",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
       "blender_version_min": "4.5.9",
-      "archive_url": "./attribute_csv_exporter-1.8.2.zip",
-      "archive_size": 14761,
-      "archive_hash": "sha256:b3dd89ee1eb8eac5a6ee9610acc391e1a77c2f1c26b1c91b6482c3d9945c8520"
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/attribute_csv_exporter/Attribute_CSV_Exporter_Helper_User_Manual_JP_v1_8_2.md",
+      "archive_url": "./attribute_csv_exporter-1.8.3.zip",
+      "archive_size": 15190,
+      "archive_hash": "sha256:2bea2af1468c03677c0276bfc10e607ffe550f8fc6a3c77336fbc49d44414e56"
     },
     {
       "schema_version": "1.0.0",
       "id": "replace_selected_with_active",
       "name": "Replace Selected with Active",
       "tagline": "Replace selected objects with copies of the active object",
-      "version": "3.0.0",
+      "version": "3.0.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
       "blender_version_min": "4.2.0",
-      "archive_url": "./replace_selected_with_active-3.0.0.zip",
-      "archive_size": 9830,
-      "archive_hash": "sha256:23757d0c0de589c5d14eba0c9063e7d37e98ec3a6ed472a6d3c66c0414bcaaa2"
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/replace_selected_with_active/Replace_Selected_with_Active_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./replace_selected_with_active-3.0.1.zip",
+      "archive_size": 10313,
+      "archive_hash": "sha256:8cfc27ce0e25dba37f5292ec7dcf9ecec3c81e1e067bf79f3f83752ed4b9852a"
     },
     {
       "schema_version": "1.0.0",
       "id": "gn_parameter_csv_exporter",
       "name": "GN Parameter CSV Exporter",
       "tagline": "Export selected objects' Geometry Nodes modifier input parameter",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
       "blender_version_min": "4.2.0",
-      "archive_url": "./gn_parameter_csv_exporter-1.1.0.zip",
-      "archive_size": 11001,
-      "archive_hash": "sha256:bf54cf318a212e4eb451c8e100f681393d732c76737ddecd7ed9292ba31b49c4"
-    },
-    {
-      "schema_version": "1.0.0",
-      "id": "instance_name_fixer",
-      "name": "Instance Name Fixer",
-      "tagline": "\u30b3\u30ec\u30af\u30b7\u30e7\u30f3\u30a4\u30f3\u30b9\u30bf\u30f3\u30b9\u306e\u540d\u524d\u3092\u30a4\u30f3\u30b9\u30bf\u30f3\u30b9\u5143\u306b\u63c3\u3048\u308b",
-      "version": "0.1.1",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.5.9",
-      "archive_url": "./instance_name_fixer-0.1.1.zip",
-      "archive_size": 8225,
-      "archive_hash": "sha256:4cdbd7117c39a71901f11b30087aa3bb747d50f5bddb35ab814f6d06205d4554"
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/gn_parameter_csv_exporter/GN%E3%83%8F%E3%82%9A%E3%83%A9%E3%83%A1%E3%83%BC%E3%82%BFCSV%E3%82%A8%E3%82%AF%E3%82%B9%E3%83%9B%E3%82%9A%E3%83%BC%E3%82%BF%E3%83%BC_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./gn_parameter_csv_exporter-1.1.1.zip",
+      "archive_size": 11637,
+      "archive_hash": "sha256:ef2796991123c6cff9b8094d2d2edec26e5ea41366cdf610c256462334fe303b"
     },
     {
       "schema_version": "1.0.0",
       "id": "uv_channel_placement_tool",
       "name": "UV Channel Placement Tool",
       "tagline": "Place selected UVs or mesh islands to predefined grid slots with",
-      "version": "2.6.1",
+      "version": "2.6.2",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
       "blender_version_min": "4.4.0",
-      "archive_url": "./uv_channel_placement_tool-2.6.1.zip",
-      "archive_size": 9270,
-      "archive_hash": "sha256:2b04b59f60a8cdae6c377ed83226e2e7c153c7c94ddc2401f7572ef4dbee7cab"
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/uv_channel_placement_tool/%E3%82%A4%E3%83%B3%E3%82%B9%E3%82%BF%E3%83%B3%E3%82%B9%E3%83%98%E3%83%AB%E3%83%8F%E3%82%9A%E3%83%BC_UV%E3%83%81%E3%83%A3%E3%83%B3%E3%83%8D%E3%83%AB%E9%85%8D%E7%BD%AE%E3%83%84%E3%83%BC%E3%83%AB_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8_v2_6.md",
+      "archive_url": "./uv_channel_placement_tool-2.6.2.zip",
+      "archive_size": 9992,
+      "archive_hash": "sha256:009d7d3493cbb1640e6ad65f1e9e1c98dff4b232538bb03b6980d105886288d2"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "instance_name_fixer",
+      "name": "Instance Name Fixer",
+      "tagline": "\u30b3\u30ec\u30af\u30b7\u30e7\u30f3\u30a4\u30f3\u30b9\u30bf\u30f3\u30b9\u306e\u540d\u524d\u3092\u30a4\u30f3\u30b9\u30bf\u30f3\u30b9\u5143\u306b\u63c3\u3048\u308b",
+      "version": "0.1.2",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.9",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/instance_name_fixer/Instance_Name_Fixer_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./instance_name_fixer-0.1.2.zip",
+      "archive_size": 8721,
+      "archive_hash": "sha256:a96e3446389e3173c4034aad555f3ea40a7888b6c29c0591b0f7b04efbef6238"
     }
   ]
 }

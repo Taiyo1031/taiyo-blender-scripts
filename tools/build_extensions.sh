@@ -12,6 +12,7 @@ packages=(
   "gn_parameter_csv_exporter"
   "instance_name_fixer"
   "move_selected_to_own_collections"
+  "overlap_selector"
   "proportional_dimensions"
   "rb_instance_helper"
   "replace_selected_with_active"

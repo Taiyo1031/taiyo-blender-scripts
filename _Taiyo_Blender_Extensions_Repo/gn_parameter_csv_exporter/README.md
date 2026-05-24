@@ -6,7 +6,7 @@
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar (N) > GN CSV Export`
-- バージョン: `1.1.0`
+- バージョン: `1.1.1`
 - 対応Blender目安: `4.0.0` 以降
 - カテゴリ: `3D View`
 
@@ -38,3 +38,6 @@ CSV。各行がオブジェクト、各列が指定したGeometry Nodes入力パ
 
 ## 詳細な使用書
 - 元フォルダの詳細使用書: `GNパラメータCSVエクスポーター_完全使用書.md`
+
+## GitHub仕様書
+- [GNパラメータCSVエクスポーター_完全使用書.md](https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/gn_parameter_csv_exporter/GN%E3%83%8F%E3%82%9A%E3%83%A9%E3%83%A1%E3%83%BC%E3%82%BFCSV%E3%82%A8%E3%82%AF%E3%82%B9%E3%83%9B%E3%82%9A%E3%83%BC%E3%82%BF%E3%83%BC_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8.md)

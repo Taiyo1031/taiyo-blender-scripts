@@ -1,12 +1,13 @@
 schema_version = "1.0.0"
 
 id = "proportional_dimensions"
-version = "1.0.0"
+version = "1.0.1"
 name = "Proportional Dimensions"
 tagline = "指定したX/Y/Z寸法を基準に、選択オブジェクトを縦横比を保ったまま均等スケールします"
 maintainer = "Taiyo"
 type = "add-on"
 blender_version_min = "4.2.0"
+website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/proportional_dimensions/README.md"
 license = ["SPDX:GPL-3.0-or-later"]
 
 [build]

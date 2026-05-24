@@ -36,7 +36,7 @@
 |---|---|
 | アドオン名 | Instance Name Fixer |
 | 作者 | Taiyo |
-| バージョン | 0.1.1 |
+| バージョン | 0.1.2 |
 | 対応 Blender | Blender 4.5.9 LTS 以降 |
 | カテゴリ | Object |
 | 表示場所 | View3D > Sidebar > Name Fixer |

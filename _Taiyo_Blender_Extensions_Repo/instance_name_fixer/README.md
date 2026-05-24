@@ -6,7 +6,7 @@
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar > Name Fixer`
-- バージョン: `0.1.1`
+- バージョン: `0.1.2`
 - 対応Blender目安: `4.5.9 LTS` 以降
 - カテゴリ: `Object`
 
@@ -37,3 +37,6 @@
 
 ## 詳細な使用書
 - 元フォルダの詳細使用書: `Instance_Name_Fixer_使用書.md`
+
+## GitHub仕様書
+- [Instance_Name_Fixer_使用書.md](https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/instance_name_fixer/Instance_Name_Fixer_%E4%BD%BF%E7%94%A8%E6%9B%B8.md)

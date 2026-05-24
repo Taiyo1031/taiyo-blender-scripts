@@ -12,12 +12,14 @@ import re
 bl_info = {
     "name": "Instance Name Fixer",
     "author": "Taiyo",
-    "version": (0, 1, 1),
+    "version": (0, 1, 2),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > Name Fixer",
     "description": "コレクションインスタンスの名前をインスタンス元に揃える",
     "category": "Object",
 }
+
+DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/instance_name_fixer/Instance_Name_Fixer_%E4%BD%BF%E7%94%A8%E6%9B%B8.md"
 
 # ── ユーティリティ ─────────────────────────────────────────────
 
@@ -215,7 +217,18 @@ class INF_PT_Panel(bpy.types.Panel):
 
 # ── 登録 ─────────────────────────────────────────────────────
 
+class INF_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ or __name__
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Documentation")
+        op = layout.operator("wm.url_open", text="Open User Guide on GitHub", icon="URL")
+        op.url = DOCUMENTATION_URL
+
+
 classes = [
+    INF_AddonPreferences,
     INF_RenameItem,
     INF_Props,
     INF_OT_Scan,

@@ -1,12 +1,13 @@
 schema_version = "1.0.0"
 
 id = "move_selected_to_own_collections"
-version = "1.2.0"
+version = "1.2.1"
 name = "Move Objects to Own Collections"
 tagline = "Move selected objects into matching child collections"
 maintainer = "Taiyo"
 type = "add-on"
 blender_version_min = "4.2.0"
+website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/move_selected_to_own_collections/Move_Objects_to_Own_Collections_%E4%BD%BF%E7%94%A8%E6%9B%B8.md"
 license = ["SPDX:GPL-3.0-or-later"]
 
 [build]

@@ -1,12 +1,14 @@
 bl_info = {
     "name": "Proportional Dimensions N-Panel",
     "author": "ChatGPT",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (3, 6, 0),
     "location": "View3D > Sidebar(N) > 比率寸法",
     "description": "指定したX/Y/Z寸法を基準に、選択オブジェクトを縦横比を保ったまま均等スケールします。",
     "category": "Object",
 }
+
+DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/proportional_dimensions/README.md"
 
 import bpy
 from bpy.props import BoolProperty, EnumProperty, FloatProperty
@@ -216,7 +218,18 @@ class PDIM_PT_ProportionalDimensionsPanel(Panel):
         layout.label(text="X欄に500mm → X基準")
 
 
+class PDIM_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ or __name__
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Documentation")
+        op = layout.operator("wm.url_open", text="Open User Guide on GitHub", icon="URL")
+        op.url = DOCUMENTATION_URL
+
+
 classes = (
+    PDIM_AddonPreferences,
     PDIM_Properties,
     PDIM_OT_LoadCurrentDimensions,
     PDIM_OT_UniformScaleToDimension,

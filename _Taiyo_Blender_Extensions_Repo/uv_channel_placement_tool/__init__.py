@@ -3,12 +3,14 @@
 bl_info = {
     "name": "UV Channel Placement Tool",
     "author": "ChatGPT",
-    "version": (2, 6, 1),
+    "version": (2, 6, 2),
     "blender": (4, 4, 0),
     "location": "View3D > Sidebar > UV Tools",
     "description": "Place selected UVs or mesh islands to predefined grid slots with presets",
     "category": "UV"
 }
+
+DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/uv_channel_placement_tool/%E3%82%A4%E3%83%B3%E3%82%B9%E3%82%BF%E3%83%B3%E3%82%B9%E3%83%98%E3%83%AB%E3%83%8F%E3%82%9A%E3%83%BC_UV%E3%83%81%E3%83%A3%E3%83%B3%E3%83%8D%E3%83%AB%E9%85%8D%E7%BD%AE%E3%83%84%E3%83%BC%E3%83%AB_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8_v2_6.md"
 
 import bpy
 import bmesh
@@ -225,7 +227,18 @@ class UV_PT_PlacementPanel(bpy.types.Panel):
 
 # ─────────────────────────────────────────────
 # 登録・解除
+class UVPLACER_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ or __name__
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Documentation")
+        op = layout.operator("wm.url_open", text="Open User Guide on GitHub", icon="URL")
+        op.url = DOCUMENTATION_URL
+
+
 classes = [
+    UVPLACER_AddonPreferences,
     UVSlotPreset,
     UVManualProperties,
     UVRandomProperties,

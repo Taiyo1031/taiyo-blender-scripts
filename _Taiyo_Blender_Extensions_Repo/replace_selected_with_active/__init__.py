@@ -1,12 +1,14 @@
 bl_info = {
     "name": "Replace Selected with Active",
     "author": "Taiyo",
-    "version": (3, 0, 0),
+    "version": (3, 0, 1),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Replace",
     "description": "Replace selected objects with copies of the active object",
     "category": "Object",
 }
+
+DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/replace_selected_with_active/Replace_Selected_with_Active_%E4%BD%BF%E7%94%A8%E6%9B%B8.md"
 
 import bpy
 
@@ -292,7 +294,18 @@ class REPSEL_PT_panel(bpy.types.Panel):
 #  Register
 # ─────────────────────────────────────────
 
+class REPSEL_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ or __name__
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Documentation")
+        op = layout.operator("wm.url_open", text="Open User Guide on GitHub", icon="URL")
+        op.url = DOCUMENTATION_URL
+
+
 classes = (
+    REPSEL_AddonPreferences,
     REPSEL_Props,
     REPSEL_OT_execute,
     REPSEL_PT_panel,

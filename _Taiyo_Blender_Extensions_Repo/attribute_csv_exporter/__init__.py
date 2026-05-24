@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Attribute CSV Exporter (Domain) - Transposed (Evaluated)",
     "author": "Taiyo Parent",
-    "version": (1, 8, 2),
+    "version": (1, 8, 3),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar (N) > Attr CSV",
     "description": (
@@ -11,6 +11,8 @@ bl_info = {
     ),
     "category": "Import-Export",
 }
+
+DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/attribute_csv_exporter/Attribute_CSV_Exporter_Helper_User_Manual_JP_v1_8_2.md"
 
 import bpy
 import csv
@@ -779,7 +781,18 @@ class ATTRCSV_PT_panel(Panel):
 # Register
 # ----------------------------
 
+class ATTRCSV_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ or __name__
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Documentation")
+        op = layout.operator("wm.url_open", text="Open User Guide on GitHub", icon="URL")
+        op.url = DOCUMENTATION_URL
+
+
 classes = (
+    ATTRCSV_AddonPreferences,
     AttrCSVAttributeItem,
     ATTRCSV_UL_attribute_list,
     AttrCSVProps,

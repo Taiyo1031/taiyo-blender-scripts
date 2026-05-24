@@ -6,7 +6,7 @@
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar(N) > 比率寸法`
-- バージョン: `1.0.0`
+- バージョン: `1.0.1`
 - 対応Blender目安: `3.6.0` 以降
 - カテゴリ: `Object`
 
@@ -37,3 +37,6 @@
 
 ## 詳細な使用書
 - 詳細使用書はまだありません。このREADMEを基本操作メモとして使ってください。
+
+## GitHub仕様書
+- [README.md](https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/proportional_dimensions/README.md)

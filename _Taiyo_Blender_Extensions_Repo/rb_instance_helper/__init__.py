@@ -2,12 +2,14 @@
 bl_info = {
     "name": "RB Instance Helper",
     "author": "Taiyo Parent + ChatGPT",
-    "version": (1, 3, 2),
+    "version": (1, 3, 3),
     "blender": (4, 5, 9),
     "location": "View3D > N-panel > RB Helper",
     "description": "Rigid Body workflow helper for linked Collection Instances using stable generated proxy meshes",
     "category": "Object",
 }
+
+DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/rb_instance_helper/RB_Instance_Helper_%E4%BD%BF%E7%94%A8%E6%9B%B8_v1.3.1_FINAL.md"
 
 import uuid
 import bpy
@@ -25,7 +27,7 @@ from bpy.props import (
 # Constants / Custom Properties
 # ──────────────────────────────────────────────────────────────────────────────
 
-ADDON_VERSION_STR = "1.3.2"
+ADDON_VERSION_STR = "1.3.3"
 RB_PROXIES_COLLECTION_NAME = "RB_Proxies"
 LOG_PREFIX = "[RB Instance Helper]"
 
@@ -1742,7 +1744,18 @@ class RBIH_PT_SelectCopy(Panel):
 # Registration
 # ──────────────────────────────────────────────────────────────────────────────
 
+class RBIH_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ or __name__
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Documentation")
+        op = layout.operator("wm.url_open", text="Open User Guide on GitHub", icon="URL")
+        op.url = DOCUMENTATION_URL
+
+
 classes = (
+    RBIH_AddonPreferences,
     RBIH_Props,
 
     RBIH_OT_RealizeAndParent,

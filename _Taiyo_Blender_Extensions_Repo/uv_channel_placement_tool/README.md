@@ -6,7 +6,7 @@
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar > UV Tools`
-- バージョン: `2.6.1`
+- バージョン: `2.6.2`
 - 対応Blender目安: `4.4.0` 以降
 - カテゴリ: `UV`
 
@@ -39,3 +39,6 @@
 
 ## 詳細な使用書
 - 詳細使用書: `インスタンスヘルパー_UVチャンネル配置ツール_完全使用書_v2_6.md`
+
+## GitHub仕様書
+- [インスタンスヘルパー_UVチャンネル配置ツール_完全使用書_v2_6.md](https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/uv_channel_placement_tool/%E3%82%A4%E3%83%B3%E3%82%B9%E3%82%BF%E3%83%B3%E3%82%B9%E3%83%98%E3%83%AB%E3%83%8F%E3%82%9A%E3%83%BC_UV%E3%83%81%E3%83%A3%E3%83%B3%E3%83%8D%E3%83%AB%E9%85%8D%E7%BD%AE%E3%83%84%E3%83%BC%E3%83%AB_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8_v2_6.md)

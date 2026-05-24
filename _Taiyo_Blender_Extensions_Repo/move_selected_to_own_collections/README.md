@@ -8,7 +8,7 @@
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar (N) > Collection Tools`
-- バージョン: `1.2.0`
+- バージョン: `1.2.1`
 - 対応Blender目安: `4.2.0` 以降
 - カテゴリ: `Object`
 
@@ -43,3 +43,6 @@ Original Collection
 
 ## 詳細な使用書
 - `Move_Objects_to_Own_Collections_使用書.md`
+
+## GitHub仕様書
+- [Move_Objects_to_Own_Collections_使用書.md](https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/move_selected_to_own_collections/Move_Objects_to_Own_Collections_%E4%BD%BF%E7%94%A8%E6%9B%B8.md)

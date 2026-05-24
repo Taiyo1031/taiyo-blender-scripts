@@ -6,7 +6,7 @@
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar > Viewport Export`
-- バージョン: `1.5.2`
+- バージョン: `1.5.3`
 - 対応Blender目安: `4.0.0` 以降
 - カテゴリ: `Render`
 
@@ -34,9 +34,12 @@
 選択メッシュごとの画像ファイル。ファイル名はオブジェクト名ベースです。
 
 ## 注意点
-- 旧版 `VirportExport.py` ではなく、修正版 v1.5.2 を配布対象にしています。
+- 旧版 `VirportExport.py` ではなく、修正版 v1.5.3 を配布対象にしています。
 - 出力品質と見た目はビューポート表示、レンダー解像度、画像形式に依存します。
 - グリッドやアウトラインを写したくない場合はOverlaysをOFFにします。
 
 ## 詳細な使用書
 - 元フォルダの詳細使用書: `ViewportExport_SelectedMesh_AutoFit_完全使用書.md`
+
+## GitHub仕様書
+- [ViewportExport_SelectedMesh_AutoFit_完全使用書.md](https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/viewport_export_selected_meshes/ViewportExport_SelectedMesh_AutoFit_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8.md)

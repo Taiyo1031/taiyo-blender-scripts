@@ -55,7 +55,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 
 このコマンドは以下を行います。
 
-- `_Taiyo_Blender_Extensions_Repo` 内の10個のパッケージを validate
+- `_Taiyo_Blender_Extensions_Repo` 内の11個のパッケージを validate
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `docs/extensions/index.json` と `docs/extensions/index.html` を生成
 
@@ -68,6 +68,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 | `gn_parameter_csv_exporter` | GN Parameter CSV Exporter | Geometry Nodes入力値をCSV化 |
 | `instance_name_fixer` | Instance Name Fixer | インスタンス名を整理 |
 | `move_selected_to_own_collections` | Move Objects to Own Collections | 選択を個別コレクションへ整理 |
+| `overlap_selector` | Overlap Object Selector | 重なりオブジェクトを検出・選択 |
 | `proportional_dimensions` | Proportional Dimensions | 比率維持で寸法合わせ |
 | `rb_instance_helper` | RB Instance Helper | インスタンス用Rigid Body補助 |
 | `replace_selected_with_active` | Replace Selected with Active | 選択をアクティブで置き換え |

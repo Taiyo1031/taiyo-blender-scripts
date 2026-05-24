@@ -1,12 +1,13 @@
 schema_version = "1.0.0"
 
 id = "attribute_csv_exporter"
-version = "1.8.2"
+version = "1.8.3"
 name = "Attribute CSV Exporter"
 tagline = "Export selected mesh attributes to CSV (TRANSPOSED). Rows=index"
 maintainer = "Taiyo"
 type = "add-on"
 blender_version_min = "4.5.9"
+website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/attribute_csv_exporter/Attribute_CSV_Exporter_Helper_User_Manual_JP_v1_8_2.md"
 license = ["SPDX:GPL-3.0-or-later"]
 
 [build]

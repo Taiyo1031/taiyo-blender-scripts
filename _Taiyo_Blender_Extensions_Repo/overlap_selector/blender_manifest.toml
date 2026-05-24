@@ -1,0 +1,18 @@
+schema_version = "1.0.0"
+
+id = "overlap_selector"
+version = "1.2.2"
+name = "Overlap Object Selector"
+tagline = "Detect and review overlapping objects in the scene"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.2.0"
+website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/overlap_selector/Overlap_Selector_User_Guide_v1_2_1.md"
+license = ["SPDX:GPL-3.0-or-later"]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "*.zip",
+]

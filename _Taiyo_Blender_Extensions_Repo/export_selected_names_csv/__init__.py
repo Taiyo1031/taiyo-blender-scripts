@@ -1,12 +1,14 @@
 bl_info = {
     "name": "Export Selected Object Names to CSV",
     "author": "ChatGPT",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > Selected CSV Export",
     "description": "Export selected object names to CSV file",
     "category": "Object",
 }
+
+DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/export_selected_names_csv/%E3%82%A4%E3%83%B3%E3%82%B9%E3%82%BF%E3%83%B3%E3%82%B9%E3%83%98%E3%83%AB%E3%83%8F%E3%82%9A%E3%83%BC_%E9%81%B8%E6%8A%9E%E3%82%AA%E3%83%95%E3%82%99%E3%82%B7%E3%82%99%E3%82%A7%E3%82%AF%E3%83%88%E5%90%8DCSV%E6%9B%B8%E3%81%8D%E5%87%BA%E3%81%97_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8.md"
 
 import bpy
 import csv
@@ -81,7 +83,18 @@ class VIEW3D_PT_selected_csv_export(bpy.types.Panel):
 # =========================
 # Register
 # =========================
+class SELCsv_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ or __name__
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Documentation")
+        op = layout.operator("wm.url_open", text="Open User Guide on GitHub", icon="URL")
+        op.url = DOCUMENTATION_URL
+
+
 classes = (
+    SELCsv_AddonPreferences,
     OBJECT_OT_export_selected_names_csv,
     SelectedCSVExportProperties,
     VIEW3D_PT_selected_csv_export,

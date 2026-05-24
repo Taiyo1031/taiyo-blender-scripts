@@ -1,12 +1,14 @@
 bl_info = {
     "name": "Move Objects to Own Collections",
     "author": "Taiyo",
-    "version": (1, 2, 0),
+    "version": (1, 2, 1),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar (N) > Collection Tools",
     "description": "Move each selected object into a child collection named after the object.",
     "category": "Object",
 }
+
+DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/move_selected_to_own_collections/Move_Objects_to_Own_Collections_%E4%BD%BF%E7%94%A8%E6%9B%B8.md"
 
 import bpy
 
@@ -107,7 +109,18 @@ class VIEW3D_PT_collection_tools(bpy.types.Panel):
         )
 
 
+class MSOC_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ or __name__
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Documentation")
+        op = layout.operator("wm.url_open", text="Open User Guide on GitHub", icon="URL")
+        op.url = DOCUMENTATION_URL
+
+
 classes = (
+    MSOC_AddonPreferences,
     OBJECT_OT_move_selected_to_own_collections,
     VIEW3D_PT_collection_tools,
 )

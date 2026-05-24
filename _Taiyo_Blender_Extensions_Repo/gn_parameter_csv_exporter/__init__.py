@@ -1,12 +1,14 @@
 bl_info = {
     "name": "GN Parameter CSV Exporter",
     "author": "ChatGPT",
-    "version": (1, 1, 0),
+    "version": (1, 1, 1),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar (N) > GN CSV Export",
     "description": "Export selected objects' Geometry Nodes modifier input parameters to CSV",
     "category": "3D View",
 }
+
+DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/gn_parameter_csv_exporter/GN%E3%83%8F%E3%82%9A%E3%83%A9%E3%83%A1%E3%83%BC%E3%82%BFCSV%E3%82%A8%E3%82%AF%E3%82%B9%E3%83%9B%E3%82%9A%E3%83%BC%E3%82%BF%E3%83%BC_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8.md"
 
 import bpy
 import csv
@@ -427,7 +429,18 @@ class VIEW3D_PT_gncsv_export_panel(Panel):
 # -----------------------------
 # Register
 # -----------------------------
+class GNCSV_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ or __name__
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Documentation")
+        op = layout.operator("wm.url_open", text="Open User Guide on GitHub", icon="URL")
+        op.url = DOCUMENTATION_URL
+
+
 classes = (
+    GNCSV_AddonPreferences,
     GNCSV_ParamItem,
     GNCSV_Settings,
     GNCSV_OT_add_param,

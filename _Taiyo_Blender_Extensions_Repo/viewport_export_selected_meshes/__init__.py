@@ -1,12 +1,14 @@
 bl_info = {
     "name": "Viewport Export Selected Meshes Helper (Auto-Fit Temp Camera)",
     "author": "ChatGPT",
-    "version": (1, 5, 2),
+    "version": (1, 5, 3),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Viewport Export",
     "description": "Export selected mesh objects one by one from the current viewport using a temporary auto-fit camera. Uses the project image format and overwrites files by object name.",
     "category": "Render",
 }
+
+DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/viewport_export_selected_meshes/ViewportExport_SelectedMesh_AutoFit_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8.md"
 
 import bpy
 import os
@@ -509,7 +511,18 @@ class VIEW3D_PT_viewport_export(bpy.types.Panel):
 # =========================
 # Register
 # =========================
+class VPEXPORT_AddonPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ or __name__
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Documentation")
+        op = layout.operator("wm.url_open", text="Open User Guide on GitHub", icon="URL")
+        op.url = DOCUMENTATION_URL
+
+
 classes = (
+    VPEXPORT_AddonPreferences,
     VPEXPORT_Props,
     RENDER_OT_viewport_export_selected_meshes_autofit,
     VIEW3D_PT_viewport_export,
