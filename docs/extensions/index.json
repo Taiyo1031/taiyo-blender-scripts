@@ -191,6 +191,23 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "collection_mesh_merge_fbx_exporter",
+      "name": "Collection Mesh Merge FBX Exporter",
+      "tagline": "Export each target collection as one merged FBX",
+      "version": "0.2.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/collection_mesh_merge_fbx_exporter/Collection_Mesh_Merge_FBX_Exporter_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./collection_mesh_merge_fbx_exporter-0.2.0.zip",
+      "archive_size": 16063,
+      "archive_hash": "sha256:f481ab7852ee95593de3e2e29430eb742f3248fd887987c4b567fa9d8fbb4318"
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "instance_name_fixer",
       "name": "Instance Name Fixer",
       "tagline": "\u30b3\u30ec\u30af\u30b7\u30e7\u30f3\u30a4\u30f3\u30b9\u30bf\u30f3\u30b9\u306e\u540d\u524d\u3092\u30a4\u30f3\u30b9\u30bf\u30f3\u30b9\u5143\u306b\u63c3\u3048\u308b",

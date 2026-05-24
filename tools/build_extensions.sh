@@ -8,6 +8,7 @@ BLENDER_BIN="${BLENDER_BIN:-/Applications/Blender.app/Contents/MacOS/Blender}"
 
 packages=(
   "attribute_csv_exporter"
+  "collection_mesh_merge_fbx_exporter"
   "export_selected_names_csv"
   "gn_parameter_csv_exporter"
   "instance_name_fixer"
