@@ -106,6 +106,23 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "unreal_bridge_tools",
+      "name": "Unreal Bridge Tools",
+      "tagline": "Export transforms and collision tags for Unreal Engine PCG",
+      "version": "2.2.15",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./unreal_bridge_tools-2.2.15.zip",
+      "archive_size": 8178,
+      "archive_hash": "sha256:c3496bb9d70aa62ffc3b57606e7e568d86bb91933bfd9faad18c8759792c5dee"
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "attribute_csv_exporter",
       "name": "Attribute CSV Exporter",
       "tagline": "Export selected mesh attributes to CSV (TRANSPOSED). Rows=index",
