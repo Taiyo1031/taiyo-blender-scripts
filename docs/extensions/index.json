@@ -123,6 +123,23 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "collection_number_to_mesh_name",
+      "name": "Collection Number To Mesh Name",
+      "tagline": "Number collections and rename their mesh data",
+      "version": "1.0.1",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/collection_number_to_mesh_name/README.md",
+      "archive_url": "./collection_number_to_mesh_name-1.0.1.zip",
+      "archive_size": 4918,
+      "archive_hash": "sha256:a2b6fbb5ff6d70777fb3c5dd181528663b966a7cffdcd42a4edc581c1f572b9b"
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "attribute_csv_exporter",
       "name": "Attribute CSV Exporter",
       "tagline": "Export selected mesh attributes to CSV (TRANSPOSED). Rows=index",
