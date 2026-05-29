@@ -18,6 +18,7 @@ packages=(
   "proportional_dimensions"
   "rb_instance_helper"
   "replace_selected_with_active"
+  "taiyo_extension_manager"
   "uv_channel_placement_tool"
   "unreal_bridge_tools"
   "viewport_export_selected_meshes"

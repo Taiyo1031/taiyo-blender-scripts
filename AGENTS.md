@@ -43,7 +43,7 @@ repo/
 
 このスクリプトは以下を行います。
 
-- 14個の Extensions パッケージを `blender --command extension validate` で検証
+- 15個の Extensions パッケージを `blender --command extension validate` で検証
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `blender --command extension server-generate --repo-dir docs/extensions --html` で `index.json` と `index.html` を生成
 
@@ -57,7 +57,7 @@ repo/
 ## 配布前チェック
 
 - `find . -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store'` で不要物を確認します。
-- `docs/extensions/` にzipが14個あることを確認します。
+- `docs/extensions/` にzipが15個あることを確認します。
 - `docs/extensions/index.json` と `docs/extensions/index.html` が生成されていることを確認します。
 - 可能ならBlenderのPreferencesからRemote Repositoryに `index.json` URLを追加して確認します。
 
