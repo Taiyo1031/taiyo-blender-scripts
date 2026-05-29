@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Collection Mesh Merge FBX Exporter",
     "author": "Taiyo",
-    "version": (0, 3, 0),
+    "version": (0, 3, 1),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > CMFE",
     "description": "Export target collections as merged FBX, USD, or Alembic files, non-destructively.",
@@ -34,6 +34,7 @@ from bpy.types import AddonPreferences, Operator, Panel, PropertyGroup
 
 INVALID_FILENAME_CHARS = r'[\\/:*?"<>|]'
 TEMP_COLLECTION_NAME = "__CMFE_TEMP_EXPORT__"
+TEMP_RENAMED_OBJECT_PREFIX = "__CMFE_RENAMED_OBJECT__"
 DEFAULT_COMBINED_FILE_NAME = "CMFE_Combined_Export"
 
 EXPORT_EXTENSIONS = {
@@ -520,6 +521,16 @@ def remove_object_and_mesh(obj):
             pass
 
 
+def unique_temp_object_name(original_name: str) -> str:
+    base_name = f"{TEMP_RENAMED_OBJECT_PREFIX}{original_name}"
+    name = base_name
+    index = 1
+    while bpy.data.objects.get(name) is not None:
+        name = f"{base_name}_{index}"
+        index += 1
+    return name
+
+
 # -----------------------------------------------------------------------------
 # Properties
 # -----------------------------------------------------------------------------
@@ -816,6 +827,7 @@ class CMFE_OT_export_modal(Operator):
     _export_output_mode = "INDIVIDUAL"
     _combined_filepath = ""
     _created_objects = None
+    _reserved_object_names = None
     _original_active = None
     _original_selected_names = None
     _errors = None
@@ -847,6 +859,7 @@ class CMFE_OT_export_modal(Operator):
         self._export_output_mode = props.export_output_mode
         self._combined_filepath = ""
         self._created_objects = []
+        self._reserved_object_names = []
 
         if props.export_output_mode == "COMBINED":
             self._combined_filepath = os.path.join(self._export_folder, combined_output_filename(props))
@@ -940,6 +953,23 @@ class CMFE_OT_export_modal(Operator):
             self._materials = []
             self._source_index = 0
 
+    def _reserve_export_object_name(self, name):
+        existing = bpy.data.objects.get(name)
+        if existing is None:
+            return
+        temp_name = unique_temp_object_name(name)
+        self._reserved_object_names.append((existing, existing.name))
+        existing.name = temp_name
+
+    def _restore_reserved_object_names(self):
+        for obj, original_name in reversed(self._reserved_object_names or []):
+            if obj and obj.name != original_name:
+                try:
+                    obj.name = original_name
+                except Exception:
+                    pass
+        self._reserved_object_names = []
+
     def _process_tick(self, context, props):
         scene = context.scene
         if self._job_index >= len(self._jobs):
@@ -994,6 +1024,7 @@ class CMFE_OT_export_modal(Operator):
         scene = context.scene
         obj = None
         try:
+            self._reserve_export_object_name(job["name"])
             obj = make_merged_object_from_bmesh(job["name"], self._bm, self._materials, scene)
             self._bm.free()
             self._bm = None
@@ -1009,6 +1040,7 @@ class CMFE_OT_export_modal(Operator):
         finally:
             if self._export_output_mode == "INDIVIDUAL":
                 remove_object_and_mesh(obj)
+                self._restore_reserved_object_names()
                 cleanup_temp_collection_if_empty()
 
     def _export_combined_jobs(self, context):
@@ -1056,6 +1088,7 @@ class CMFE_OT_export_modal(Operator):
         for obj in self._created_objects or []:
             remove_object_and_mesh(obj)
         self._created_objects = []
+        self._restore_reserved_object_names()
 
         self._restore_selection(context)
         cleanup_temp_collection_if_empty()

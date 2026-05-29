@@ -228,7 +228,7 @@
       "id": "collection_mesh_merge_fbx_exporter",
       "name": "Collection Mesh Merge FBX Exporter",
       "tagline": "Export target collections as merged FBX, USD, or Alembic files",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -236,9 +236,9 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/collection_mesh_merge_fbx_exporter/Collection_Mesh_Merge_FBX_Exporter_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./collection_mesh_merge_fbx_exporter-0.3.0.zip",
-      "archive_size": 18693,
-      "archive_hash": "sha256:58ec65e98b417a7b29c2fd2346ce98d0236fd5fc6938dc08ec6daad31a99ebd9"
+      "archive_url": "./collection_mesh_merge_fbx_exporter-0.3.1.zip",
+      "archive_size": 19251,
+      "archive_hash": "sha256:b662501bda39d0e4acd986e3e07fa7103f15a38c9fb665aa40f5199706e04c88"
     },
     {
       "schema_version": "1.0.0",

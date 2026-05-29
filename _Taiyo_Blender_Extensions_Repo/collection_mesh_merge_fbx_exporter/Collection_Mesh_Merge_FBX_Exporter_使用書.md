@@ -1,4 +1,4 @@
-# Collection Mesh Merge FBX Exporter v0.3 使用書
+# Collection Mesh Merge FBX Exporter v0.3.1 使用書
 
 ## 1. このアドオンの目的
 
@@ -143,6 +143,8 @@ Single Combined File  対象コレクションをまとめて1ファイル
 ```
 
 `Single Combined File` の場合は `Combined File Name` にまとめ書き出し用のファイル名を指定します。
+
+まとめ書き出しでは、元シーン内にコレクション名と同じ名前のオブジェクトがある場合でも、書き出し用の統合オブジェクト名に `.001` などが付かないようにしています。既存オブジェクト名は書き出し中だけ一時的に退避し、出力後に元へ戻します。
 
 ---
 
@@ -522,13 +524,12 @@ Blendファイルの自動保存は行いません。
 
 ## 11. このバージョンの変更点
 
-v0.3では、以下を調整しています。
+v0.3.1では、以下を調整しています。
 
 ```text
-Export FormatでFBX / USD / Alembicを選択可能
-Output Modeで個別ファイル / まとめ書き出しを選択可能
-まとめ書き出し用のCombined File Nameを追加
-従来の非破壊処理、進捗表示、Previewを維持
+まとめ書き出し時の統合オブジェクト名に.001などが付かないように修正
+既存同名オブジェクトは書き出し中だけ一時退避し、出力後に復元
+Export FormatとOutput Modeはv0.3の仕様を維持
 ```
 
 ---
