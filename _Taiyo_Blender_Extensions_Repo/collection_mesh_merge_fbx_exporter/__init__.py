@@ -1,10 +1,10 @@
 bl_info = {
     "name": "Collection Mesh Merge FBX Exporter",
     "author": "Taiyo",
-    "version": (0, 2, 0),
+    "version": (0, 3, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > CMFE",
-    "description": "Export each target collection as one merged FBX, non-destructively, with chunked progress.",
+    "description": "Export target collections as merged FBX, USD, or Alembic files, non-destructively.",
     "category": "Import-Export",
 }
 
@@ -34,6 +34,19 @@ from bpy.types import AddonPreferences, Operator, Panel, PropertyGroup
 
 INVALID_FILENAME_CHARS = r'[\\/:*?"<>|]'
 TEMP_COLLECTION_NAME = "__CMFE_TEMP_EXPORT__"
+DEFAULT_COMBINED_FILE_NAME = "CMFE_Combined_Export"
+
+EXPORT_EXTENSIONS = {
+    "FBX": ".fbx",
+    "USD": ".usd",
+    "ABC": ".abc",
+}
+
+EXPORT_FORMAT_LABELS = {
+    "FBX": "FBX",
+    "USD": "USD",
+    "ABC": "Alembic",
+}
 
 
 def sanitize_filename(name: str) -> str:
@@ -49,6 +62,23 @@ def ensure_export_folder(path: str) -> str:
     abs_path = bpy.path.abspath(path)
     os.makedirs(abs_path, exist_ok=True)
     return abs_path
+
+
+def export_extension(export_format: str) -> str:
+    return EXPORT_EXTENSIONS.get(export_format, ".fbx")
+
+
+def export_format_label(export_format: str) -> str:
+    return EXPORT_FORMAT_LABELS.get(export_format, "FBX")
+
+
+def output_filename_for_collection(collection: bpy.types.Collection, props) -> str:
+    return sanitize_filename(collection.name) + export_extension(props.export_format)
+
+
+def combined_output_filename(props) -> str:
+    base_name = sanitize_filename(props.combined_file_name or DEFAULT_COMBINED_FILE_NAME)
+    return base_name + export_extension(props.export_format)
 
 
 def is_collection_asset(collection: bpy.types.Collection) -> bool:
@@ -323,6 +353,84 @@ def export_fbx_selected(filepath: str, context):
         return bpy.ops.export_scene.fbx(**fallback)
 
 
+def export_usd_selected(filepath: str, context):
+    """USD export wrapper for selected temporary merged meshes."""
+    if not hasattr(bpy.ops.wm, "usd_export"):
+        raise RuntimeError("USD export operator is not available in this Blender build.")
+
+    kwargs = dict(
+        filepath=filepath,
+        check_existing=False,
+        selected_objects_only=True,
+        visible_objects_only=False,
+        export_animation=False,
+        export_meshes=True,
+        export_materials=True,
+        export_textures=False,
+    )
+    try:
+        return bpy.ops.wm.usd_export(**kwargs)
+    except TypeError:
+        fallback = dict(
+            filepath=filepath,
+            selected_objects_only=True,
+        )
+        return bpy.ops.wm.usd_export(**fallback)
+
+
+def export_alembic_selected(filepath: str, context):
+    """Alembic export wrapper for selected temporary merged meshes."""
+    if not hasattr(bpy.ops.wm, "alembic_export"):
+        raise RuntimeError("Alembic export operator is not available in this Blender build.")
+
+    frame = context.scene.frame_current
+    kwargs = dict(
+        filepath=filepath,
+        check_existing=False,
+        selected=True,
+        visible_objects_only=False,
+        start=frame,
+        end=frame,
+        xsamples=1,
+        gsamples=1,
+        global_scale=1.0,
+        flatten=False,
+        uvs=True,
+        normals=True,
+        vcolors=True,
+        face_sets=False,
+    )
+    try:
+        return bpy.ops.wm.alembic_export(**kwargs)
+    except TypeError:
+        fallback = dict(
+            filepath=filepath,
+            selected=True,
+        )
+        return bpy.ops.wm.alembic_export(**fallback)
+
+
+def export_selected_objects(filepath: str, context, export_format: str):
+    if export_format == "USD":
+        return export_usd_selected(filepath, context)
+    if export_format == "ABC":
+        return export_alembic_selected(filepath, context)
+    return export_fbx_selected(filepath, context)
+
+
+def select_only_objects(context, objects):
+    deselect_all(context)
+    first_obj = None
+    for obj in objects:
+        if obj is None:
+            continue
+        obj.select_set(True)
+        if first_obj is None:
+            first_obj = obj
+    if first_obj is not None:
+        context.view_layer.objects.active = first_obj
+
+
 def append_source_to_bmesh(bm, material_slots, source, depsgraph, apply_modifiers: bool, keep_material_slots: bool):
     obj = source["object"]
     matrix = source["matrix"]
@@ -431,7 +539,7 @@ class CMFE_Properties(PropertyGroup):
     export_folder: StringProperty(
         name="Export Folder",
         subtype='DIR_PATH',
-        description="Folder where FBX files will be exported",
+        description="Folder where export files will be written",
     )
     root_collection: PointerProperty(
         name="Search Root Collection",
@@ -509,10 +617,32 @@ class CMFE_Properties(PropertyGroup):
         default=True,
         description="Copy source material slots to the merged mesh. If disabled, exported mesh has no material slots",
     )
+    export_format: EnumProperty(
+        name="Export Format",
+        default="FBX",
+        items=[
+            ("FBX", "FBX (.fbx)", "Export selected merged mesh objects as FBX"),
+            ("USD", "USD (.usd)", "Export selected merged mesh objects as USD"),
+            ("ABC", "Alembic (.abc)", "Export selected merged mesh objects as Alembic"),
+        ],
+    )
+    export_output_mode: EnumProperty(
+        name="Output Mode",
+        default="INDIVIDUAL",
+        items=[
+            ("INDIVIDUAL", "Individual Files", "Export one file per target collection"),
+            ("COMBINED", "Single Combined File", "Export all target collections into one file"),
+        ],
+    )
+    combined_file_name: StringProperty(
+        name="Combined File Name",
+        default=DEFAULT_COMBINED_FILE_NAME,
+        description="File name used when Output Mode is Single Combined File",
+    )
     overwrite_existing: BoolProperty(
-        name="Overwrite Existing FBX",
+        name="Overwrite Existing Files",
         default=True,
-        description="Overwrite FBX files with the same name",
+        description="Overwrite export files with the same name",
     )
     skip_empty_collections: BoolProperty(
         name="Skip Empty Collections",
@@ -572,6 +702,14 @@ class CMFE_OT_refresh_preview(Operator):
         total_modifiers = 0
         ready_count = 0
         skipped_count = 0
+        combined_file = combined_output_filename(props)
+        combined_output_path = os.path.join(folder, combined_file) if folder else combined_file
+        combined_file_blocked = (
+            props.export_output_mode == "COMBINED"
+            and folder
+            and os.path.exists(combined_output_path)
+            and not props.overwrite_existing
+        )
 
         for coll in targets:
             sources = collect_mesh_sources_from_collection(coll, props)
@@ -579,8 +717,11 @@ class CMFE_OT_refresh_preview(Operator):
             modifier_count = count_modifiers_in_sources(sources)
             asset_ok = is_collection_asset(coll)
             name_ok = name_filter_match(coll.name, props.name_filter, props.name_match_rule, props.name_case_sensitive)
-            safe_name = sanitize_filename(coll.name)
-            out_file = safe_name + ".fbx"
+            out_file = (
+                output_filename_for_collection(coll, props)
+                if props.export_output_mode == "INDIVIDUAL"
+                else combined_file
+            )
             output_path = os.path.join(folder, out_file) if folder else out_file
 
             status = "Ready"
@@ -589,7 +730,15 @@ class CMFE_OT_refresh_preview(Operator):
             if mesh_count == 0 and props.skip_empty_collections:
                 status = "Skipped"
                 reason = "No mesh objects found"
-            elif folder and os.path.exists(output_path) and not props.overwrite_existing:
+            elif props.export_output_mode == "COMBINED" and combined_file_blocked:
+                status = "Skipped"
+                reason = "Combined output file already exists"
+            elif (
+                props.export_output_mode == "INDIVIDUAL"
+                and folder
+                and os.path.exists(output_path)
+                and not props.overwrite_existing
+            ):
                 status = "Skipped"
                 reason = "Output file already exists"
 
@@ -612,9 +761,9 @@ class CMFE_OT_refresh_preview(Operator):
             item.asset_registered = asset_ok
             item.name_match = name_ok
             item.output_file = out_file
-            if filename_counts.get(out_file, 0) > 1:
+            if props.export_output_mode == "INDIVIDUAL" and filename_counts.get(out_file, 0) > 1:
                 item.status = "Warning"
-                item.reason = "Duplicate FBX filename"
+                item.reason = "Duplicate export filename"
             else:
                 item.status = status
                 item.reason = reason
@@ -625,7 +774,11 @@ class CMFE_OT_refresh_preview(Operator):
         scene.cmfe_exported_count = 0
         scene.cmfe_skipped_count = skipped_count
         scene.cmfe_current_collection = ""
-        scene.cmfe_status = f"Preview: {ready_count} collections, {total_meshes} mesh objects, {total_modifiers} modifiers"
+        mode_label = "individual files" if props.export_output_mode == "INDIVIDUAL" else f"single file: {combined_file}"
+        scene.cmfe_status = (
+            f"Preview: {ready_count} collections, {total_meshes} mesh objects, "
+            f"{total_modifiers} modifiers, {export_format_label(props.export_format)} / {mode_label}"
+        )
         scene.cmfe_progress = 0.0
 
         self.report({'INFO'}, scene.cmfe_status)
@@ -645,8 +798,8 @@ class CMFE_OT_cancel_export(Operator):
 
 class CMFE_OT_export_modal(Operator):
     bl_idname = "cmfe.export_modal"
-    bl_label = "Export FBX"
-    bl_description = "Export each target collection as one merged FBX using a modal, chunked process"
+    bl_label = "Export Files"
+    bl_description = "Export target collections as merged files using a modal, chunked process"
     bl_options = {'REGISTER'}
 
     _timer = None
@@ -659,6 +812,10 @@ class CMFE_OT_export_modal(Operator):
     _processed_sources = 0
     _total_sources = 0
     _export_folder = ""
+    _export_format = "FBX"
+    _export_output_mode = "INDIVIDUAL"
+    _combined_filepath = ""
+    _created_objects = None
     _original_active = None
     _original_selected_names = None
     _errors = None
@@ -686,13 +843,30 @@ class CMFE_OT_export_modal(Operator):
 
         targets = target_collections(props.root_collection, props)
         jobs = []
+        self._export_format = props.export_format
+        self._export_output_mode = props.export_output_mode
+        self._combined_filepath = ""
+        self._created_objects = []
+
+        if props.export_output_mode == "COMBINED":
+            self._combined_filepath = os.path.join(self._export_folder, combined_output_filename(props))
+            if os.path.exists(self._combined_filepath) and not props.overwrite_existing:
+                self.report({'ERROR'}, "Combined output file already exists.")
+                return {'CANCELLED'}
 
         for coll in targets:
             sources = collect_mesh_sources_from_collection(coll, props)
             if len(sources) == 0 and props.skip_empty_collections:
                 continue
-            filepath = os.path.join(self._export_folder, sanitize_filename(coll.name) + ".fbx")
-            if os.path.exists(filepath) and not props.overwrite_existing:
+            if props.export_output_mode == "INDIVIDUAL":
+                filepath = os.path.join(self._export_folder, output_filename_for_collection(coll, props))
+            else:
+                filepath = self._combined_filepath
+            if (
+                props.export_output_mode == "INDIVIDUAL"
+                and os.path.exists(filepath)
+                and not props.overwrite_existing
+            ):
                 continue
             jobs.append({
                 "collection": coll,
@@ -727,7 +901,7 @@ class CMFE_OT_export_modal(Operator):
         scene.cmfe_exported_count = 0
         scene.cmfe_skipped_count = 0
         scene.cmfe_current_collection = jobs[0]["name"]
-        scene.cmfe_status = "Export started"
+        scene.cmfe_status = f"Export started: {export_format_label(self._export_format)}"
 
         context.window_manager.progress_begin(0, max(1, self._total_sources))
         self._timer = context.window_manager.event_timer_add(0.05, window=context.window)
@@ -802,10 +976,10 @@ class CMFE_OT_export_modal(Operator):
             f"Remaining objects: {scene.cmfe_remaining_objects}"
         )
 
-        # If this collection is done, create one merged object and export it.
+        # If this collection is done, create one merged object and export it now
+        # or keep it selected later for a single combined file.
         if self._source_index >= len(sources):
-            self._export_current_job(context, job)
-            scene.cmfe_exported_count += 1
+            self._finish_current_job(context, job)
             self._job_index += 1
             self._bm = None
             self._materials = None
@@ -813,8 +987,10 @@ class CMFE_OT_export_modal(Operator):
 
             if self._job_index < len(self._jobs):
                 scene.cmfe_current_collection = self._jobs[self._job_index]["name"]
+            elif self._export_output_mode == "COMBINED":
+                self._export_combined_jobs(context)
 
-    def _export_current_job(self, context, job):
+    def _finish_current_job(self, context, job):
         scene = context.scene
         obj = None
         try:
@@ -822,14 +998,27 @@ class CMFE_OT_export_modal(Operator):
             self._bm.free()
             self._bm = None
 
-            deselect_all(context)
-            obj.select_set(True)
-            context.view_layer.objects.active = obj
+            if self._export_output_mode == "COMBINED":
+                self._created_objects.append(obj)
+                scene.cmfe_status = f"Prepared {job['name']} for combined export"
+                return
 
-            export_fbx_selected(job["filepath"], context)
+            select_only_objects(context, [obj])
+            export_selected_objects(job["filepath"], context, self._export_format)
+            scene.cmfe_exported_count += 1
         finally:
-            remove_object_and_mesh(obj)
-            cleanup_temp_collection_if_empty()
+            if self._export_output_mode == "INDIVIDUAL":
+                remove_object_and_mesh(obj)
+                cleanup_temp_collection_if_empty()
+
+    def _export_combined_jobs(self, context):
+        if not self._created_objects:
+            return
+        scene = context.scene
+        scene.cmfe_status = f"Writing combined {export_format_label(self._export_format)} file"
+        select_only_objects(context, self._created_objects)
+        export_selected_objects(self._combined_filepath, context, self._export_format)
+        scene.cmfe_exported_count = 1
 
     def _restore_selection(self, context):
         try:
@@ -864,6 +1053,10 @@ class CMFE_OT_export_modal(Operator):
                 pass
             self._bm = None
 
+        for obj in self._created_objects or []:
+            remove_object_and_mesh(obj)
+        self._created_objects = []
+
         self._restore_selection(context)
         cleanup_temp_collection_if_empty()
 
@@ -876,7 +1069,8 @@ class CMFE_OT_export_modal(Operator):
             scene.cmfe_status = "Export cancelled"
             self.report({'WARNING'}, "Export cancelled.")
         else:
-            scene.cmfe_status = f"Export completed: {scene.cmfe_exported_count} FBX files"
+            format_label = export_format_label(self._export_format)
+            scene.cmfe_status = f"Export completed: {scene.cmfe_exported_count} {format_label} file(s)"
             self.report({'INFO'}, scene.cmfe_status)
 
 
@@ -885,7 +1079,7 @@ class CMFE_OT_export_modal(Operator):
 # -----------------------------------------------------------------------------
 
 class CMFE_PT_panel(Panel):
-    bl_label = "Collection FBX Exporter"
+    bl_label = "Collection Mesh Exporter"
     bl_idname = "CMFE_PT_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -902,6 +1096,11 @@ class CMFE_PT_panel(Panel):
             box.prop(props, "export_folder")
             box.prop(props, "root_collection")
             box.prop(props, "include_root_collection")
+            box.separator()
+            box.prop(props, "export_format")
+            box.prop(props, "export_output_mode")
+            if props.export_output_mode == "COMBINED":
+                box.prop(props, "combined_file_name")
 
         self.draw_foldout(layout, props, "show_filter", "2. Filter")
         if props.show_filter:
@@ -933,7 +1132,10 @@ class CMFE_PT_panel(Panel):
             box.prop(props, "objects_per_tick")
             box.prop(props, "preview_sample_limit")
             box.label(text="Auto Save: OFF", icon='FILE_TICK')
-            box.label(text="FBX Axis: -Z Forward / Y Up", icon='EXPORT')
+            if props.export_format == "FBX":
+                box.label(text="FBX Axis: -Z Forward / Y Up", icon='EXPORT')
+            else:
+                box.label(text=f"Format: {export_format_label(props.export_format)}", icon='EXPORT')
 
         # Main actions are intentionally outside any foldout so the export button
         # is always visible, even when preview/settings sections are collapsed.
@@ -945,7 +1147,7 @@ class CMFE_PT_panel(Panel):
         if scene.cmfe_running:
             row.operator("cmfe.cancel_export", icon='CANCEL')
         else:
-            row.operator("cmfe.export_modal", icon='EXPORT')
+            row.operator("cmfe.export_modal", text=f"Export {props.export_format}", icon='EXPORT')
 
         action_box.label(text=scene.cmfe_status or "Ready. Set Export Folder and Search Root Collection.")
         if scene.cmfe_running:

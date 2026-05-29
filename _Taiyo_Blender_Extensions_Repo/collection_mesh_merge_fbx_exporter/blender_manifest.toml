@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
 id = "collection_mesh_merge_fbx_exporter"
-version = "0.2.0"
+version = "0.3.0"
 name = "Collection Mesh Merge FBX Exporter"
-tagline = "Export each target collection as one merged FBX"
+tagline = "Export target collections as merged FBX, USD, or Alembic files"
 maintainer = "Taiyo"
 type = "add-on"
 blender_version_min = "4.2.0"

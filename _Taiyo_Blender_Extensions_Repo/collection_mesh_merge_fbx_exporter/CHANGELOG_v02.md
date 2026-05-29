@@ -1,4 +1,12 @@
-# CHANGELOG v0.2
+# CHANGELOG
+
+## v0.3
+
+- `Export Format` を追加し、`FBX (.fbx)` / `USD (.usd)` / `Alembic (.abc)` を選択できるようにしました。
+- `Output Mode` を追加し、対象コレクションごとの個別ファイル出力と、全対象を1ファイルにまとめる出力を選択できるようにしました。
+- `Single Combined File` 用に `Combined File Name` を追加しました。
+- Previewで選択形式の拡張子とまとめ出力ファイル名を反映するようにしました。
+- 従来の非破壊処理、モディファイヤー適用、マテリアルスロット保持、分割処理、進捗表示は維持しています。
 
 ## v0.2
 
