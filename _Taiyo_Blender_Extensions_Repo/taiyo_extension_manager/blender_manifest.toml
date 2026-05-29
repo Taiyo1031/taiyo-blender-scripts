@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
 id = "taiyo_extension_manager"
-version = "1.0.0"
+version = "1.0.1"
 name = "Taiyo Extension Manager"
-tagline = "Install and uninstall Taiyo Blender Extensions from a side panel"
+tagline = "Search, install, update, and uninstall Taiyo Blender Extensions"
 maintainer = "Taiyo"
 type = "add-on"
 blender_version_min = "4.2.0"

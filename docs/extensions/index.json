@@ -176,8 +176,8 @@
       "schema_version": "1.0.0",
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
-      "tagline": "Install and uninstall Taiyo Blender Extensions from a side panel",
-      "version": "1.0.0",
+      "tagline": "Search, install, update, and uninstall Taiyo Blender Extensions",
+      "version": "1.0.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -185,9 +185,9 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.0.zip",
-      "archive_size": 6156,
-      "archive_hash": "sha256:56cf97de0192a99ed9d721e339d81fb2336cd1a24ae85142857c6bb432e004a5"
+      "archive_url": "./taiyo_extension_manager-1.0.1.zip",
+      "archive_size": 8695,
+      "archive_hash": "sha256:c1e6ab2c19a695de3636f47311ccb2211a53a1959e95b7df7d163983a3a2e310"
     },
     {
       "schema_version": "1.0.0",
