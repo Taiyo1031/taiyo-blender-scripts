@@ -55,7 +55,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 
 このコマンドは以下を行います。
 
-- `_Taiyo_Blender_Extensions_Repo` 内の15個のパッケージを validate
+- `_Taiyo_Blender_Extensions_Repo` 内の16個のパッケージを validate
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `docs/extensions/index.json` と `docs/extensions/index.html` を生成
 
@@ -77,6 +77,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 | `taiyo_extension_manager` | Taiyo Extension Manager | Taiyo製Extensionをサイドバーから管理 |
 | `uv_channel_placement_tool` | UV Channel Placement Tool | UVをスロット配置 |
 | `unreal_bridge_tools` | Unreal Bridge Tools | Unreal Engine用CSVを書き出し |
+| `vertex_color_material_painter` | Vertex Color Material Painter | 選択面にマテリアルIDカラーをペイント |
 | `viewport_export_selected_meshes` | Viewport Export Selected Meshes | 選択メッシュを画像化 |
 
 ## GitHub Pages

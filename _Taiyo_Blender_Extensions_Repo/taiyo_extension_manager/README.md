@@ -16,7 +16,8 @@ View3D > Sidebar(N) > Taiyo > Taiyo Add-on Manager
 - リポジトリ未登録時に、Taiyo repositoryを追加
 - Remote RepositoryのmanifestからExtension一覧を動的に取得
 - 名前、ID、説明、推定タグで検索
-- `csv`、`export`、`uv`、`unreal` などのタグで絞り込み
+- `csv`、`export`、`uv`、`unreal`、`名前整理`、`衝突` などのタグで絞り込み
+- `All`、`Installed`、`Enabled`、`Disabled`、`Available`、`Updates` で状態フィルター
 - 管理対象Extensionの日本語/英語説明をコンパクトに表示
 - 各Extensionのインストール状態を表示
 - 新しいversionがある場合はUpdateボタンを表示
@@ -32,7 +33,7 @@ View3D > Sidebar(N) > Taiyo > Taiyo Add-on Manager
 2. 3D Viewで `N` キーを押してサイドバーを開きます。
 3. `Taiyo` タブを開きます。
 4. Repositoryが未登録の場合は `Add Repository` を押します。
-5. 必要に応じてSearch欄またはTag欄で絞り込みます。
+5. 必要に応じてSearch欄、Tag欄、Status欄で絞り込みます。
 6. 必要なExtensionの `Install`、`Update`、`Uninstall` を押します。
 
 ## Search Tags
@@ -48,6 +49,10 @@ collection
 instance
 scale
 viewport
+名前整理
+書き出し
+衝突
+寸法
 ```
 
 ## Remote Repository URL

@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 1),
+    "version": (1, 0, 2),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -28,21 +28,70 @@ DOCUMENTATION_URL = (
 SELF_ID = "taiyo_extension_manager"
 
 TAG_ALIASES = {
-    "attribute_csv_exporter": ("attribute", "csv", "export", "mesh", "data"),
-    "collection_mesh_merge_fbx_exporter": ("collection", "merge", "fbx", "usd", "alembic", "export"),
-    "collection_number_to_mesh_name": ("collection", "number", "rename", "mesh"),
-    "export_selected_names_csv": ("csv", "export", "selected", "name"),
-    "gn_parameter_csv_exporter": ("geometry-nodes", "gn", "parameter", "csv", "export"),
-    "instance_name_fixer": ("instance", "collection", "name", "fix"),
-    "move_selected_to_own_collections": ("collection", "move", "selected", "organize"),
-    "overlap_selector": ("overlap", "select", "detect", "review"),
-    "proportional_dimensions": ("dimensions", "scale", "proportion", "size"),
-    "rb_instance_helper": ("rigid-body", "instance", "collection", "physics"),
-    "replace_selected_with_active": ("replace", "selected", "active", "copy"),
-    "taiyo_extension_manager": ("manager", "install", "update", "uninstall"),
-    "unreal_bridge_tools": ("unreal", "pcg", "collision", "transform", "csv", "export"),
-    "uv_channel_placement_tool": ("uv", "channel", "placement", "grid"),
-    "viewport_export_selected_meshes": ("viewport", "image", "render", "export", "mesh"),
+    "attribute_csv_exporter": (
+        "attribute", "attributes", "csv", "data", "export", "mesh", "spreadsheet",
+        "table", "属性", "書き出し", "メッシュ", "表",
+    ),
+    "collection_mesh_merge_fbx_exporter": (
+        "alembic", "abc", "collection", "combine", "export", "fbx", "merge", "usd",
+        "asset", "batch", "pipeline", "統合", "書き出し", "コレクション", "アセット",
+    ),
+    "collection_number_to_mesh_name": (
+        "collection", "cleanup", "mesh", "name", "number", "rename", "renaming",
+        "整理", "番号", "名前", "名前整理", "リネーム", "メッシュ",
+    ),
+    "export_selected_names_csv": (
+        "csv", "export", "list", "name", "names", "object", "selected", "spreadsheet",
+        "一覧", "選択", "名前", "書き出し", "リスト",
+    ),
+    "gn_parameter_csv_exporter": (
+        "csv", "export", "geometry-nodes", "gn", "modifier", "nodes", "parameter",
+        "spreadsheet", "ジオメトリノード", "ノード", "パラメータ", "書き出し",
+    ),
+    "instance_name_fixer": (
+        "collection", "fix", "instance", "name", "rename", "sync", "cleanup",
+        "インスタンス", "コレクション", "名前", "名前整理", "修正",
+    ),
+    "move_selected_to_own_collections": (
+        "collection", "move", "organize", "selected", "sort", "cleanup",
+        "移動", "整理", "選択", "コレクション", "片付け",
+    ),
+    "overlap_selector": (
+        "collision", "detect", "overlap", "review", "select", "selection", "check",
+        "重なり", "衝突", "選択", "検出", "確認",
+    ),
+    "proportional_dimensions": (
+        "dimensions", "measure", "proportion", "scale", "size", "transform",
+        "寸法", "比率", "スケール", "サイズ", "変形",
+    ),
+    "rb_instance_helper": (
+        "collection", "instance", "physics", "rb", "rigid-body", "simulation",
+        "物理", "剛体", "リジッドボディ", "インスタンス", "シミュレーション",
+    ),
+    "replace_selected_with_active": (
+        "active", "copy", "duplicate", "replace", "selected", "swap",
+        "置換", "選択", "アクティブ", "コピー", "差し替え",
+    ),
+    "taiyo_extension_manager": (
+        "available", "filter", "install", "installed", "manager", "search", "tag",
+        "uninstall", "update", "管理", "検索", "タグ", "インストール", "更新",
+    ),
+    "unreal_bridge_tools": (
+        "collision", "csv", "export", "pcg", "transform", "ue", "ue5", "unreal",
+        "engine", "bridge", "アンリアル", "衝突", "コリジョン", "書き出し",
+    ),
+    "uv_channel_placement_tool": (
+        "channel", "grid", "island", "placement", "slot", "uv", "uvs",
+        "uv配置", "グリッド", "スロット", "島", "配置",
+    ),
+    "vertex_color_material_painter": (
+        "color", "edit-mode", "face", "id", "material", "paint", "painter",
+        "vertex", "vertex-color", "カラー", "頂点カラー", "マテリアル", "ペイント", "面",
+    ),
+    "viewport_export_selected_meshes": (
+        "camera", "export", "image", "mesh", "render", "screenshot", "thumbnail",
+        "viewport", "画像", "書き出し", "ビューポート", "サムネイル", "レンダー",
+    ),
 }
 
 DESCRIPTION_ALIASES = {
@@ -101,6 +150,10 @@ DESCRIPTION_ALIASES = {
     "uv_channel_placement_tool": {
         "ja": "選択UVやメッシュ島をプリセットのグリッド位置へ配置します。",
         "en": "Place selected UVs or mesh islands into predefined grid slots.",
+    },
+    "vertex_color_material_painter": {
+        "ja": "編集モードで選択面にマテリアルIDカラーをペイントします。",
+        "en": "Paint selected edit-mode faces with material ID colors.",
     },
     "viewport_export_selected_meshes": {
         "ja": "選択メッシュを現在のビューポートから1つずつ画像出力します。",
@@ -272,6 +325,51 @@ def _repo_manifests(repo):
         return {}, {}
 
 
+def _refresh_repo_cache(repo, force=True):
+    if repo is None:
+        return False
+
+    try:
+        from bl_pkg import repo_cache_store_ensure
+        from bl_pkg.bl_extension_ops import repo_cache_store_refresh_from_prefs
+
+        repo_cache_store = repo_cache_store_ensure()
+        repo_cache_store_refresh_from_prefs(repo_cache_store)
+        repo_cache_store.refresh_local_from_directory(
+            directory=repo.directory,
+            error_fn=print,
+            ignore_missing=True,
+        )
+        repo_cache_store.refresh_remote_from_directory(
+            directory=repo.directory,
+            error_fn=print,
+            force=force,
+        )
+        return True
+    except Exception as ex:
+        print("Taiyo Extension Manager: cache refresh skipped:", ex)
+        return False
+
+
+def _sync_repo_safely(context, repo, repo_index, report_fn=None):
+    if repo is None or repo_index < 0:
+        return False
+
+    synced = False
+    try:
+        if bpy.ops.extensions.repo_sync.poll():
+            bpy.ops.extensions.repo_sync(repo_index=repo_index)
+            synced = True
+    except Exception as ex:
+        if report_fn:
+            report_fn({"WARNING"}, "Remote sync skipped: {:s}".format(ex))
+        else:
+            print("Taiyo Extension Manager: remote sync skipped:", ex)
+
+    _refresh_repo_cache(repo, force=True)
+    return synced
+
+
 def _package_rows(repo):
     local_manifest, remote_manifest = _repo_manifests(repo)
     pkg_ids = sorted(set(local_manifest.keys()) | set(remote_manifest.keys()))
@@ -307,12 +405,28 @@ def _package_rows(repo):
     return rows
 
 
-def _filtered_rows(rows, search, tag_filter):
+def _status_matches(row, status_filter):
+    if status_filter == "INSTALLED":
+        return row["installed"]
+    if status_filter == "ENABLED":
+        return row["installed"] and row["enabled"]
+    if status_filter == "DISABLED":
+        return row["installed"] and not row["enabled"]
+    if status_filter == "AVAILABLE":
+        return not row["installed"]
+    if status_filter == "UPDATES":
+        return row["outdated"]
+    return True
+
+
+def _filtered_rows(rows, search, tag_filter, status_filter):
     search = (search or "").strip().casefold()
     tag_terms = [term.casefold() for term in (tag_filter or "").replace(",", " ").split() if term.strip()]
 
     visible = []
     for row in rows:
+        if not _status_matches(row, status_filter):
+            continue
         if search and search not in row["search_text"]:
             continue
         if tag_terms and not all(any(term in tag for tag in row["tags"]) for term in tag_terms):
@@ -417,12 +531,26 @@ class TAYMAN_OT_AddRepository(Operator):
             _repo, repo_index = _find_taiyo_repo(context)
 
         if repo_index >= 0:
-            try:
-                bpy.ops.extensions.repo_sync(repo_index=repo_index)
-            except Exception:
-                pass
+            _sync_repo_safely(context, repo, repo_index, self.report)
 
         self.report({"INFO"}, "Taiyo repository is ready.")
+        return {"FINISHED"}
+
+
+class TAYMAN_OT_RefreshRepository(Operator):
+    bl_idname = "tayman.refresh_repository"
+    bl_label = "Refresh Taiyo Repository"
+    bl_description = "Safely sync and reload the Taiyo repository package list"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        repo, repo_index = _find_taiyo_repo(context)
+        if repo is None or repo_index < 0:
+            self.report({"ERROR"}, "Taiyo repository is not registered.")
+            return {"CANCELLED"}
+
+        _sync_repo_safely(context, repo, repo_index, self.report)
+        self.report({"INFO"}, "Reloaded Taiyo repository.")
         return {"FINISHED"}
 
 
@@ -541,15 +669,20 @@ class TAYMAN_PT_Manager(Panel):
             return
 
         row.label(text="Ready", icon="CHECKMARK")
-        refresh = row.operator("extensions.repo_sync", text="", icon="FILE_REFRESH")
-        refresh.repo_index = repo_index
+        row.operator("tayman.refresh_repository", text="", icon="FILE_REFRESH")
 
         filters = layout.box()
         filters.prop(wm, "tayman_search", text="", icon="VIEWZOOM")
         filters.prop(wm, "tayman_tag_filter", text="Tag")
+        filters.prop(wm, "tayman_status_filter", text="Status")
 
         rows = _package_rows(repo)
-        visible_rows = _filtered_rows(rows, wm.tayman_search, wm.tayman_tag_filter)
+        visible_rows = _filtered_rows(
+            rows,
+            wm.tayman_search,
+            wm.tayman_tag_filter,
+            wm.tayman_status_filter,
+        )
         installed_count = sum(1 for row_data in rows if row_data["installed"])
         update_count = sum(1 for row_data in rows if row_data["outdated"])
 
@@ -652,6 +785,7 @@ class TAYMAN_PT_Manager(Panel):
 classes = (
     TAYMAN_AddonPreferences,
     TAYMAN_OT_AddRepository,
+    TAYMAN_OT_RefreshRepository,
     TAYMAN_OT_CopyRepositoryURL,
     TAYMAN_OT_SetAddonEnabled,
     TAYMAN_OT_UninstallPackage,
@@ -670,8 +804,21 @@ def register():
     )
     bpy.types.WindowManager.tayman_tag_filter = StringProperty(
         name="Tag",
-        description="Filter by tags such as csv, export, uv, unreal, collection",
+        description="Filter by tags such as csv, export, uv, unreal, collection, 名前整理, 衝突",
         default="",
+    )
+    bpy.types.WindowManager.tayman_status_filter = EnumProperty(
+        name="Status",
+        description="Filter extensions by install/update state",
+        items=[
+            ("ALL", "All", "Show all extensions"),
+            ("INSTALLED", "Installed", "Show installed extensions"),
+            ("ENABLED", "Enabled", "Show installed and enabled extensions"),
+            ("DISABLED", "Disabled", "Show installed but disabled extensions"),
+            ("AVAILABLE", "Available", "Show extensions not installed yet"),
+            ("UPDATES", "Updates", "Show installed extensions with updates"),
+        ],
+        default="ALL",
     )
 
     if not bpy.app.background:
@@ -679,6 +826,8 @@ def register():
 
 
 def unregister():
+    if hasattr(bpy.types.WindowManager, "tayman_status_filter"):
+        del bpy.types.WindowManager.tayman_status_filter
     if hasattr(bpy.types.WindowManager, "tayman_tag_filter"):
         del bpy.types.WindowManager.tayman_tag_filter
     if hasattr(bpy.types.WindowManager, "tayman_search"):

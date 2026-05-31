@@ -32,6 +32,10 @@ repo/
 - `_legacy_single_file_addons` は旧形式の単体 `.py` インストール用アドオンの保管場所です。Remote Repository運用では使いません。ユーザーから明示されない限り、ここを積極的に更新しなくて構いません。
 - 日本語の使用書やREADMEは利用者向けの大事なドキュメントです。コード変更で操作や表示場所が変わったら、該当READMEも更新してください。
 - Blender API依存の変更では、対象Blenderバージョンを `blender_manifest.toml` とREADMEの両方で確認してください。
+- 新しいExtensionを追加したら、`_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/__init__.py` の `TAG_ALIASES` と `DESCRIPTION_ALIASES` にも追加してください。マネージャーのタグ検索はRemote Repositoryのmanifestから動的に一覧を作りますが、日本語タグ、用途タグ、短い日英説明はここで補強します。
+- Extension追加時のタグは、英語の用途語だけでなく、日本語の検索語も入れます。例: `csv`, `export`, `collection`, `uv`, `unreal`, `名前整理`, `書き出し`, `衝突`, `寸法`。
+- 新しいExtensionの `blender_manifest.toml` には、`website` をREADMEまたは使用書へ向けてください。Taiyo Extension Managerの `Manual` ボタンはこのURLを使います。`GitHub` ボタンはExtension IDからソースフォルダURLを自動生成します。
+- Taiyo Extension Manager自体を変更した場合は、`bl_info`、`blender_manifest.toml`、`docs/extensions/index.json`、配布zip名のversionを揃え、古いmanager zipを残さないでください。
 
 ## 配布ビルド手順
 
@@ -43,7 +47,7 @@ repo/
 
 このスクリプトは以下を行います。
 
-- 15個の Extensions パッケージを `blender --command extension validate` で検証
+- 16個の Extensions パッケージを `blender --command extension validate` で検証
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `blender --command extension server-generate --repo-dir docs/extensions --html` で `index.json` と `index.html` を生成
 
@@ -57,7 +61,7 @@ repo/
 ## 配布前チェック
 
 - `find . -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store'` で不要物を確認します。
-- `docs/extensions/` にzipが15個あることを確認します。
+- `docs/extensions/` にzipが16個あることを確認します。
 - `docs/extensions/index.json` と `docs/extensions/index.html` が生成されていることを確認します。
 - 可能ならBlenderのPreferencesからRemote Repositoryに `index.json` URLを追加して確認します。
 

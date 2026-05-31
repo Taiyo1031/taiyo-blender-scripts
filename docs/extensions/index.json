@@ -193,8 +193,8 @@
       "schema_version": "1.0.0",
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
-      "tagline": "Search, install, update, and uninstall Taiyo Blender Extensions",
-      "version": "1.0.1",
+      "tagline": "Filter, tag-search, install, update, and uninstall Taiyo Extensions",
+      "version": "1.0.2",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -202,9 +202,9 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.1.zip",
-      "archive_size": 8695,
-      "archive_hash": "sha256:c1e6ab2c19a695de3636f47311ccb2211a53a1959e95b7df7d163983a3a2e310"
+      "archive_url": "./taiyo_extension_manager-1.0.2.zip",
+      "archive_size": 9918,
+      "archive_hash": "sha256:e5a66a7ed3ac5f73df38f5fbcc2788511ee3d14c2c0ea93ae098c76c06b74794"
     },
     {
       "schema_version": "1.0.0",

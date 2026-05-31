@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
 id = "taiyo_extension_manager"
-version = "1.0.1"
+version = "1.0.2"
 name = "Taiyo Extension Manager"
-tagline = "Search, install, update, and uninstall Taiyo Blender Extensions"
+tagline = "Filter, tag-search, install, update, and uninstall Taiyo Extensions"
 maintainer = "Taiyo"
 type = "add-on"
 blender_version_min = "4.2.0"
