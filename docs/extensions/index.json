@@ -157,6 +157,23 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "taiyo_extension_manager",
+      "name": "Taiyo Extension Manager",
+      "tagline": "Filter, tag-search, install, update, and uninstall Taiyo Extensions",
+      "version": "1.0.2",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
+      "archive_url": "./taiyo_extension_manager-1.0.2.zip",
+      "archive_size": 9918,
+      "archive_hash": "sha256:e5a66a7ed3ac5f73df38f5fbcc2788511ee3d14c2c0ea93ae098c76c06b74794"
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "attribute_csv_exporter",
       "name": "Attribute CSV Exporter",
       "tagline": "Export selected mesh attributes to CSV (TRANSPOSED). Rows=index",
@@ -186,25 +203,8 @@
       "blender_version_min": "4.5.9",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/vertex_color_material_painter/README.md",
       "archive_url": "./vertex_color_material_painter-1.0.0.zip",
-      "archive_size": 5464,
-      "archive_hash": "sha256:c94dc2c5914f84dbeb6cd4cd4ae534617706ffa4f4b3653f920eea35bd8c5a51"
-    },
-    {
-      "schema_version": "1.0.0",
-      "id": "taiyo_extension_manager",
-      "name": "Taiyo Extension Manager",
-      "tagline": "Filter, tag-search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.2",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.2.0",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.2.zip",
-      "archive_size": 9918,
-      "archive_hash": "sha256:e5a66a7ed3ac5f73df38f5fbcc2788511ee3d14c2c0ea93ae098c76c06b74794"
+      "archive_size": 7500,
+      "archive_hash": "sha256:1b554af01f8ef8332e67480c742aac013aa1a633002c459c6c69782232531cf1"
     },
     {
       "schema_version": "1.0.0",
