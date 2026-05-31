@@ -82,6 +82,25 @@ def _ensure_float_corner_attribute(mesh, bm, attribute_name):
     return layer, True
 
 
+def _ensure_object_color_attribute(mesh, attribute_name):
+    attribute = mesh.color_attributes.get(attribute_name)
+
+    if attribute is None:
+        attribute = mesh.color_attributes.new(
+            name=attribute_name,
+            type='FLOAT_COLOR',
+            domain='CORNER',
+        )
+        return attribute, True
+
+    if attribute.domain != 'CORNER' or attribute.data_type != 'FLOAT_COLOR':
+        raise ValueError(
+            f"'{attribute_name}' は FLOAT_COLOR / CORNER ではありません。"
+        )
+
+    return attribute, False
+
+
 def _paint_selected_faces(obj, attribute_name, color):
     mesh = obj.data
     bm = bmesh.from_edit_mesh(mesh)
@@ -100,6 +119,55 @@ def _paint_selected_faces(obj, attribute_name, color):
     bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
 
     return len(selected_faces), created
+
+
+def _object_mode_mesh_targets(context):
+    selected_objects = getattr(context, "selected_editable_objects", None)
+
+    if selected_objects is None:
+        selected_objects = context.selected_objects
+
+    return [
+        obj for obj in selected_objects
+        if obj is not None and obj.type == 'MESH' and obj.data is not None
+    ]
+
+
+def _paint_object_mode_meshes(objects, attribute_name, color):
+    targets = [obj for obj in objects if len(obj.data.polygons) > 0]
+
+    if not targets:
+        return 0, 0, 0
+
+    for obj in targets:
+        attribute = obj.data.color_attributes.get(attribute_name)
+
+        if attribute is not None:
+            if attribute.domain != 'CORNER' or attribute.data_type != 'FLOAT_COLOR':
+                raise ValueError(
+                    f"{obj.name}: '{attribute_name}' は FLOAT_COLOR / CORNER ではありません。"
+                )
+
+    object_count = 0
+    face_count = 0
+    created_count = 0
+
+    for obj in targets:
+        mesh = obj.data
+        attribute, created = _ensure_object_color_attribute(mesh, attribute_name)
+
+        for polygon in mesh.polygons:
+            for loop_index in polygon.loop_indices:
+                attribute.data[loop_index].color = color
+
+        mesh.update()
+        object_count += 1
+        face_count += len(mesh.polygons)
+
+        if created:
+            created_count += 1
+
+    return object_count, face_count, created_count
 
 
 class VCMP_ColorItem(PropertyGroup):
@@ -225,19 +293,13 @@ class VCMP_OT_move_color(Operator):
 
 class VCMP_OT_apply_color(Operator):
     bl_idname = "vcmp.apply_color"
-    bl_label = "Apply To Selected Faces"
-    bl_description = "選択中のEdit Mode面へカラーを塗ります"
+    bl_label = "Apply Color"
+    bl_description = "Edit Modeでは選択面、Object Modeでは選択中Mesh全体へカラーを塗ります"
     bl_options = {'REGISTER', 'UNDO'}
 
     index: IntProperty(default=-1)
 
     def execute(self, context):
-        obj, error = _active_mesh_edit_object(context)
-
-        if error:
-            self.report({'ERROR'}, error)
-            return {'CANCELLED'}
-
         item, error = _get_color_item(context, self.index)
 
         if error:
@@ -245,6 +307,43 @@ class VCMP_OT_apply_color(Operator):
             return {'CANCELLED'}
 
         attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
+
+        if context.mode == 'OBJECT':
+            objects = _object_mode_mesh_targets(context)
+
+            if not objects:
+                self.report({'ERROR'}, "選択中のメッシュオブジェクトがありません。")
+                return {'CANCELLED'}
+
+            try:
+                object_count, face_count, created_count = _paint_object_mode_meshes(
+                    objects=objects,
+                    attribute_name=attribute_name,
+                    color=item.color,
+                )
+            except ValueError as error:
+                self.report({'ERROR'}, str(error))
+                return {'CANCELLED'}
+
+            if face_count == 0:
+                self.report({'ERROR'}, "塗れる面を持つメッシュオブジェクトがありません。")
+                return {'CANCELLED'}
+
+            self.report(
+                {'INFO'},
+                (
+                    f"{object_count}個のMesh / {face_count}面に '{item.name}' を適用しました。"
+                    f" Attribute: {attribute_name}, 作成: {created_count}"
+                ),
+            )
+
+            return {'FINISHED'}
+
+        obj, error = _active_mesh_edit_object(context)
+
+        if error:
+            self.report({'ERROR'}, error)
+            return {'CANCELLED'}
 
         try:
             face_count, created = _paint_selected_faces(
@@ -368,7 +467,8 @@ class VCMP_PT_panel(Panel):
         if obj is None or obj.type != 'MESH':
             layout.label(text="メッシュを選択してください。", icon='INFO')
         elif context.mode != 'EDIT_MESH':
-            layout.label(text="面を塗るには Edit Mode に入ってください。", icon='INFO')
+            mesh_count = len(_object_mode_mesh_targets(context))
+            layout.label(text=f"Object Mode: 選択Mesh {mesh_count}個へ全体適用", icon='INFO')
         else:
             layout.label(text=f"Active Mesh: {obj.name}", icon='MESH_DATA')
 
