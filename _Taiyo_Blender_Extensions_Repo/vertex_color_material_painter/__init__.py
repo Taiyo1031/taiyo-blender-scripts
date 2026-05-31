@@ -17,6 +17,7 @@ from bpy.types import Operator, Panel, PropertyGroup, UIList
 DEFAULT_ATTRIBUTE_NAME = "mat_color"
 DEFAULT_NEW_COLOR_NAME = "Wood"
 DEFAULT_NEW_COLOR = (0.45, 0.24, 0.09, 1.0)
+COLOR_MATCH_TOLERANCE = 0.0001
 
 
 def _active_mesh_edit_object(context):
@@ -121,6 +122,49 @@ def _paint_selected_faces(obj, attribute_name, color):
     return len(selected_faces), created
 
 
+def _colors_match(color_a, color_b):
+    return all(
+        abs(float(color_a[index]) - float(color_b[index])) <= COLOR_MATCH_TOLERANCE
+        for index in range(4)
+    )
+
+
+def _select_faces_by_color(obj, attribute_name, color):
+    mesh = obj.data
+    attribute = mesh.color_attributes.get(attribute_name)
+
+    if attribute is None:
+        raise ValueError(f"Color Attribute がありません: {attribute_name}")
+
+    if attribute.domain != 'CORNER' or attribute.data_type != 'FLOAT_COLOR':
+        raise ValueError(
+            f"'{attribute_name}' は FLOAT_COLOR / CORNER ではありません。"
+        )
+
+    bm = bmesh.from_edit_mesh(mesh)
+    bm.faces.ensure_lookup_table()
+    color_layer = bm.loops.layers.float_color.get(attribute_name)
+
+    if color_layer is None:
+        raise ValueError(f"Color Attribute がありません: {attribute_name}")
+
+    selected_count = 0
+
+    for face in bm.faces:
+        face_matches = bool(face.loops) and all(
+            _colors_match(loop[color_layer], color)
+            for loop in face.loops
+        )
+        face.select_set(face_matches)
+
+        if face_matches:
+            selected_count += 1
+
+    bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
+
+    return selected_count
+
+
 def _object_mode_mesh_targets(context):
     selected_objects = getattr(context, "selected_editable_objects", None)
 
@@ -210,6 +254,13 @@ class VCMP_UL_color_items(UIList):
                 VCMP_OT_apply_color.bl_idname,
                 text="",
                 icon='BRUSH_DATA',
+                emboss=True,
+            )
+            op.index = index
+            op = row.operator(
+                VCMP_OT_select_by_color.bl_idname,
+                text="",
+                icon='RESTRICT_SELECT_OFF',
                 emboss=True,
             )
             op.index = index
@@ -368,6 +419,53 @@ class VCMP_OT_apply_color(Operator):
         return {'FINISHED'}
 
 
+class VCMP_OT_select_by_color(Operator):
+    bl_idname = "vcmp.select_by_color"
+    bl_label = "Select Painted Faces"
+    bl_description = "Edit Modeで、このカラーが塗られている面を選択します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    index: IntProperty(default=-1)
+
+    def execute(self, context):
+        obj, error = _active_mesh_edit_object(context)
+
+        if error:
+            self.report({'ERROR'}, error)
+            return {'CANCELLED'}
+
+        item, error = _get_color_item(context, self.index)
+
+        if error:
+            self.report({'ERROR'}, error)
+            return {'CANCELLED'}
+
+        attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
+
+        try:
+            selected_count = _select_faces_by_color(
+                obj=obj,
+                attribute_name=attribute_name,
+                color=item.color,
+            )
+        except ValueError as error:
+            self.report({'ERROR'}, str(error))
+            return {'CANCELLED'}
+
+        context.tool_settings.mesh_select_mode = (False, False, True)
+
+        if selected_count == 0:
+            self.report({'WARNING'}, f"'{item.name}' の色で塗られた面は見つかりませんでした。")
+            return {'FINISHED'}
+
+        self.report(
+            {'INFO'},
+            f"'{item.name}' の色で塗られた {selected_count}面を選択しました。",
+        )
+
+        return {'FINISHED'}
+
+
 class VCMP_OT_ensure_attribute(Operator):
     bl_idname = "vcmp.ensure_attribute"
     bl_label = "Ensure Color Attribute"
@@ -455,6 +553,7 @@ class VCMP_PT_panel(Panel):
 
         apply_row = box.row()
         apply_row.operator(VCMP_OT_apply_color.bl_idname, icon='BRUSH_DATA')
+        apply_row.operator(VCMP_OT_select_by_color.bl_idname, icon='RESTRICT_SELECT_OFF')
 
         box = layout.box()
         box.label(text="Add New Color", icon='ADD')
@@ -480,6 +579,7 @@ classes = (
     VCMP_OT_remove_color,
     VCMP_OT_move_color,
     VCMP_OT_apply_color,
+    VCMP_OT_select_by_color,
     VCMP_OT_ensure_attribute,
     VCMP_PT_panel,
 )

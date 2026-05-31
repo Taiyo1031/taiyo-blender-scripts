@@ -16,6 +16,7 @@ Edit Mode で選択している面、または Object Mode で選択している
 - 作成する Color Attribute は `FLOAT_COLOR` / `CORNER` です。
 - カラーリストは `.blend` ファイル内の Scene プロパティとして保存されます。
 - Edit Mode ではアクティブな Mesh の選択面だけを塗ります。
+- Edit Mode では、カラー行ごとの選択ボタンで同じ色の面を再選択できます。
 - Object Mode では選択中の Mesh オブジェクトそれぞれの全フェイスを塗ります。
 
 ## Edit Mode で面だけ塗る
@@ -26,6 +27,13 @@ Edit Mode で選択している面、または Object Mode で選択している
 4. `VC Painter` パネルで Color Attribute 名を確認します。
 5. `Add New Color` で用途名と色を追加します。
 6. リスト行のブラシボタン、または `Apply Color` を押します。
+
+## Edit Mode で塗った色の面を選択する
+
+1. Mesh オブジェクトを Edit Mode にします。
+2. `VC Painter` パネルで Color Attribute 名を確認します。
+3. カラーリスト行の選択ボタン、または `Select Painted Faces` を押します。
+4. そのカラーと一致する面だけが選択されます。
 
 ## Object Mode で複数オブジェクト全体を塗る
 
@@ -38,4 +46,5 @@ Edit Mode で選択している面、または Object Mode で選択している
 
 - Object Mode では面選択状態は使わず、選択中 Mesh オブジェクトの全フェイスに塗ります。
 - Vertex / Edge Select でも、Blender 側で `face.select` が立っている面だけを塗ります。
+- 色で選択するときは、指定色と面の全ループカラーが一致する面だけを選択します。
 - 同名の Color Attribute が `FLOAT_COLOR` / `CORNER` 以外で存在する場合は、上書きせずエラーにします。
