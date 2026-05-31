@@ -19,4 +19,5 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 - `taiyo_extension_manager`: Taiyo Extension Manager
 - `uv_channel_placement_tool`: UV Channel Placement Tool
 - `unreal_bridge_tools`: Unreal Bridge Tools
+- `vertex_color_material_painter`: Vertex Color Material Painter
 - `viewport_export_selected_meshes`: Viewport Export Selected Meshes

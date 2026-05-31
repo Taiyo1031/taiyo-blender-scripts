@@ -140,6 +140,23 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "collection_mesh_merge_fbx_exporter",
+      "name": "Collection Mesh Merge FBX Exporter",
+      "tagline": "Export target collections as merged FBX, USD, or Alembic files",
+      "version": "0.3.1",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/collection_mesh_merge_fbx_exporter/Collection_Mesh_Merge_FBX_Exporter_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./collection_mesh_merge_fbx_exporter-0.3.1.zip",
+      "archive_size": 19251,
+      "archive_hash": "sha256:b662501bda39d0e4acd986e3e07fa7103f15a38c9fb665aa40f5199706e04c88"
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "attribute_csv_exporter",
       "name": "Attribute CSV Exporter",
       "tagline": "Export selected mesh attributes to CSV (TRANSPOSED). Rows=index",
@@ -157,20 +174,20 @@
     },
     {
       "schema_version": "1.0.0",
-      "id": "replace_selected_with_active",
-      "name": "Replace Selected with Active",
-      "tagline": "Replace selected objects with copies of the active object",
-      "version": "3.0.1",
+      "id": "vertex_color_material_painter",
+      "name": "Vertex Color Material Painter",
+      "tagline": "Paint selected edit-mode faces with material ID colors",
+      "version": "1.0.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
-      "blender_version_min": "4.2.0",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/replace_selected_with_active/Replace_Selected_with_Active_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./replace_selected_with_active-3.0.1.zip",
-      "archive_size": 10313,
-      "archive_hash": "sha256:8cfc27ce0e25dba37f5292ec7dcf9ecec3c81e1e067bf79f3f83752ed4b9852a"
+      "blender_version_min": "4.5.9",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/vertex_color_material_painter/README.md",
+      "archive_url": "./vertex_color_material_painter-1.0.0.zip",
+      "archive_size": 4825,
+      "archive_hash": "sha256:ea298f9f58d93fe3433181fa4270ecaa048bad74da4211dd69cd5b5789c88709"
     },
     {
       "schema_version": "1.0.0",
@@ -188,6 +205,23 @@
       "archive_url": "./taiyo_extension_manager-1.0.1.zip",
       "archive_size": 8695,
       "archive_hash": "sha256:c1e6ab2c19a695de3636f47311ccb2211a53a1959e95b7df7d163983a3a2e310"
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "replace_selected_with_active",
+      "name": "Replace Selected with Active",
+      "tagline": "Replace selected objects with copies of the active object",
+      "version": "3.0.1",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/replace_selected_with_active/Replace_Selected_with_Active_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./replace_selected_with_active-3.0.1.zip",
+      "archive_size": 10313,
+      "archive_hash": "sha256:8cfc27ce0e25dba37f5292ec7dcf9ecec3c81e1e067bf79f3f83752ed4b9852a"
     },
     {
       "schema_version": "1.0.0",
@@ -222,23 +256,6 @@
       "archive_url": "./uv_channel_placement_tool-2.6.2.zip",
       "archive_size": 9992,
       "archive_hash": "sha256:009d7d3493cbb1640e6ad65f1e9e1c98dff4b232538bb03b6980d105886288d2"
-    },
-    {
-      "schema_version": "1.0.0",
-      "id": "collection_mesh_merge_fbx_exporter",
-      "name": "Collection Mesh Merge FBX Exporter",
-      "tagline": "Export target collections as merged FBX, USD, or Alembic files",
-      "version": "0.3.1",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.2.0",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/collection_mesh_merge_fbx_exporter/Collection_Mesh_Merge_FBX_Exporter_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./collection_mesh_merge_fbx_exporter-0.3.1.zip",
-      "archive_size": 19251,
-      "archive_hash": "sha256:b662501bda39d0e4acd986e3e07fa7103f15a38c9fb665aa40f5199706e04c88"
     },
     {
       "schema_version": "1.0.0",
