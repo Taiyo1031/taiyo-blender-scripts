@@ -186,8 +186,8 @@
       "blender_version_min": "4.5.9",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/vertex_color_material_painter/README.md",
       "archive_url": "./vertex_color_material_painter-1.0.0.zip",
-      "archive_size": 6031,
-      "archive_hash": "sha256:b97389e0b52f5778ab6915eebbc17a8f3acd6a7f03228500ce1f95f4aefea5db"
+      "archive_size": 7500,
+      "archive_hash": "sha256:81c21960ce77a50c48d051912b6c53f606d6c359432df4f5b40414293873671b"
     },
     {
       "schema_version": "1.0.0",
