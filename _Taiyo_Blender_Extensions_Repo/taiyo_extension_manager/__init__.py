@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 2),
+    "version": (1, 0, 3),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -352,17 +352,17 @@ def _refresh_repo_cache(repo, force=True):
 
 
 def _sync_repo_safely(context, repo, repo_index, report_fn=None):
-    if repo is None or repo_index < 0:
+    if repo is None:
         return False
 
     synced = False
     try:
         if bpy.ops.extensions.repo_sync.poll():
-            bpy.ops.extensions.repo_sync(repo_index=repo_index)
+            bpy.ops.extensions.repo_sync(repo_directory=repo.directory)
             synced = True
     except Exception as ex:
         if report_fn:
-            report_fn({"WARNING"}, "Remote sync skipped: {:s}".format(ex))
+            report_fn({"WARNING"}, "Remote sync skipped: {:s}".format(str(ex)))
         else:
             print("Taiyo Extension Manager: remote sync skipped:", ex)
 
@@ -449,14 +449,10 @@ def _auto_sync_once():
         return None
 
     repo, repo_index = _find_taiyo_repo(context)
-    if repo is None or repo_index < 0:
+    if repo is None:
         return None
 
-    try:
-        if bpy.ops.extensions.repo_sync.poll():
-            bpy.ops.extensions.repo_sync(repo_index=repo_index)
-    except Exception as ex:
-        print("Taiyo Extension Manager: auto sync skipped:", ex)
+    _sync_repo_safely(context, repo, repo_index)
 
     return None
 
@@ -530,7 +526,7 @@ class TAYMAN_OT_AddRepository(Operator):
             _save_user_preferences()
             _repo, repo_index = _find_taiyo_repo(context)
 
-        if repo_index >= 0:
+        if repo is not None:
             _sync_repo_safely(context, repo, repo_index, self.report)
 
         self.report({"INFO"}, "Taiyo repository is ready.")
@@ -545,7 +541,7 @@ class TAYMAN_OT_RefreshRepository(Operator):
 
     def execute(self, context):
         repo, repo_index = _find_taiyo_repo(context)
-        if repo is None or repo_index < 0:
+        if repo is None:
             self.report({"ERROR"}, "Taiyo repository is not registered.")
             return {"CANCELLED"}
 
@@ -624,11 +620,11 @@ class TAYMAN_OT_UninstallPackage(Operator):
             return {"CANCELLED"}
 
         repo, repo_index = _find_taiyo_repo(context)
-        if repo is None or repo_index < 0:
+        if repo is None:
             self.report({"ERROR"}, "Taiyo repository is not registered.")
             return {"CANCELLED"}
 
-        result = bpy.ops.extensions.package_uninstall(repo_index=repo_index, pkg_id=self.pkg_id)
+        result = bpy.ops.extensions.package_uninstall(repo_directory=repo.directory, pkg_id=self.pkg_id)
         _save_user_preferences()
         return result
 
@@ -701,9 +697,9 @@ class TAYMAN_PT_Manager(Panel):
             return
 
         for row_data in visible_rows:
-            self._draw_package(layout, repo_index, row_data, prefs)
+            self._draw_package(layout, repo, row_data, prefs)
 
-    def _draw_package(self, layout, repo_index, row_data, prefs):
+    def _draw_package(self, layout, repo, row_data, prefs):
         item = row_data["item"]
         pkg_id = row_data["id"]
         installed = row_data["installed"]
@@ -754,7 +750,7 @@ class TAYMAN_PT_Manager(Panel):
         if installed:
             if outdated:
                 op = actions.operator("extensions.package_install", text="Update", icon="IMPORT")
-                op.repo_index = repo_index
+                op.repo_directory = repo.directory
                 op.pkg_id = pkg_id
                 op.enable_on_install = True
 
@@ -773,7 +769,7 @@ class TAYMAN_PT_Manager(Panel):
                 actions.label(text="Manager", icon="LOCKED")
         else:
             op = actions.operator("extensions.package_install", text="Install", icon="IMPORT")
-            op.repo_index = repo_index
+            op.repo_directory = repo.directory
             op.pkg_id = pkg_id
             op.enable_on_install = True
 

@@ -25,6 +25,7 @@ View3D > Sidebar(N) > Taiyo > Taiyo Add-on Manager
 - インストール済みExtensionのEnable / Disableを切り替え
 - GitHub sourceリンクとUser Manualリンクを表示
 - Blender起動後に一度だけTaiyo repositoryを自動同期
+- RefreshはRepository directory指定で安全に再読み込み
 - Auto、日本語、Englishの表示切り替え
 
 ## 使い方 / Usage
