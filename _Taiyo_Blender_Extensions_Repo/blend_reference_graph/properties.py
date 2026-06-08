@@ -1,6 +1,9 @@
 import bpy
-from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
-from bpy.types import PropertyGroup
+from bpy.props import EnumProperty, IntProperty, StringProperty
+from bpy.types import AddonPreferences, PropertyGroup
+
+
+ADDON_ID = __package__
 
 
 SCAN_MODE_ITEMS = (
@@ -28,42 +31,35 @@ class BRG_Settings(PropertyGroup):
         max=5,
     )
 
-    include_objects: BoolProperty(name="Object", default=True)
-    include_meshes: BoolProperty(name="Mesh", default=True)
-    include_collections: BoolProperty(name="Collection", default=True)
-    include_armatures: BoolProperty(name="Armature", default=True)
-    include_bones: BoolProperty(name="Bone", default=True)
-    include_constraints: BoolProperty(name="Constraint", default=True)
-    include_geonodes: BoolProperty(name="Geometry Nodes", default=True)
-    include_node_groups: BoolProperty(name="Node Group", default=True)
-    include_materials: BoolProperty(name="Material", default=False)
-    include_images: BoolProperty(name="Image", default=False)
-
-    output_folder: StringProperty(
-        name="Output Folder",
-        description="Folder where graph_data.js is written",
-        default="//blend_reference_graph/",
-        subtype="DIR_PATH",
-    )
-    viewer_file: StringProperty(name="Viewer File", default="viewer.html")
     status_message: StringProperty(default="No graph data generated yet.")
     last_update: StringProperty(name="Last Update", default="-")
     node_count: IntProperty(name="Nodes", default=0, min=0)
     edge_count: IntProperty(name="Edges", default=0, min=0)
+    resolved_output_path: StringProperty(name="Resolved Output Path", default="-")
 
 
-def filters_from_settings(settings):
-    return {
-        "OBJECT": settings.include_objects,
-        "MESH": settings.include_meshes,
-        "COLLECTION": settings.include_collections,
-        "ARMATURE": settings.include_armatures,
-        "BONE": settings.include_bones,
-        "CONSTRAINT": settings.include_constraints,
-        "MODIFIER": settings.include_geonodes,
-        "GEONODES": settings.include_geonodes,
-        "NODEGROUP": settings.include_node_groups,
-        "MATERIAL": settings.include_materials,
-        "IMAGE": settings.include_images,
-        "WARNING": True,
-    }
+class BRG_AddonPreferences(AddonPreferences):
+    bl_idname = ADDON_ID
+
+    output_mode: EnumProperty(
+        name="Output Location",
+        description="Choose where temporary viewer files are written",
+        items=(
+            ("TEMP", "System Temp", "Use a process-specific folder in the operating system temp directory"),
+            ("CUSTOM", "Custom Folder", "Use a persistent custom output folder"),
+        ),
+        default="TEMP",
+    )
+    custom_output_folder: StringProperty(
+        name="Custom Folder",
+        description="Folder where graph_data.js and viewer files are written",
+        default="",
+        subtype="DIR_PATH",
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, "output_mode")
+        if self.output_mode == "CUSTOM":
+            layout.prop(self, "custom_output_folder")
+        layout.label(text="Viewer files are replaced each time graph data is updated.", icon="INFO")

@@ -1,3 +1,6 @@
+from .path_utils import object_collection_paths
+
+
 def object_id(obj):
     return f"Object:{obj.name}"
 
@@ -21,15 +24,23 @@ def _allowed(filters, node_type):
 def add_object_node(graph, obj, filters):
     if not _allowed(filters, "OBJECT"):
         return
+    paths = object_collection_paths(obj)
     details = {
         "object_type": obj.type,
         "data": obj.data.name if obj.data else "",
         "parent": obj.parent.name if obj.parent else "",
-        "collections": [collection.name for collection in obj.users_collection],
+        "collections": paths,
         "modifiers": [modifier.name for modifier in obj.modifiers],
         "constraints": [constraint.name for constraint in obj.constraints],
     }
-    graph.add_node(object_id(obj), "OBJECT", obj.name, f"OBJ {obj.name}", details=details)
+    graph.add_node(
+        object_id(obj),
+        "OBJECT",
+        obj.name,
+        f"OBJ {obj.name}",
+        path=paths[0] if paths else "",
+        details=details,
+    )
 
 
 def add_mesh_node(graph, mesh, filters):

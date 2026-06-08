@@ -1,8 +1,23 @@
 import bpy
 
-from ..properties import filters_from_settings
 from ..scanner import collection_scanner, constraint_scanner, geonodes_scanner, object_scanner
 from .graph_model import GraphData
+
+
+ALL_FILTERS = {
+    "OBJECT": True,
+    "MESH": True,
+    "COLLECTION": True,
+    "ARMATURE": True,
+    "BONE": True,
+    "CONSTRAINT": True,
+    "MODIFIER": True,
+    "GEONODES": True,
+    "NODEGROUP": True,
+    "MATERIAL": True,
+    "IMAGE": True,
+    "WARNING": True,
+}
 
 
 def _find_target(settings):
@@ -27,7 +42,7 @@ def _allowed(filters, node_type):
 
 def build_graph(context, settings):
     graph = GraphData()
-    filters = filters_from_settings(settings)
+    filters = ALL_FILTERS
     mode = settings.scan_mode
     depth = max(1, settings.depth)
     target_kind, target_obj, target_bone = _find_target(settings)

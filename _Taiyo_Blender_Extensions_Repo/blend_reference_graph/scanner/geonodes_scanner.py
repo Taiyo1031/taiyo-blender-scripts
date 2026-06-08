@@ -1,5 +1,6 @@
 import bpy
 
+from .collection_scanner import add_collection_node, collection_id
 from .object_scanner import object_id
 
 
@@ -87,8 +88,8 @@ def _add_socket_reference(graph, node_group, node, socket, value, filters):
         )
         graph.add_edge(node_group_id(node_group), object_id(value), "references_object", edge_label)
     elif isinstance(value, bpy.types.Collection) and _allowed(filters, "COLLECTION"):
-        target_id = f"Collection:{value.name}"
-        graph.add_node(target_id, "COLLECTION", value.name, f"COL {value.name}")
+        target_id = collection_id(value)
+        add_collection_node(graph, value, filters)
         graph.add_edge(node_group_id(node_group), target_id, "references_collection", edge_label)
     elif isinstance(value, bpy.types.Material) and _allowed(filters, "MATERIAL"):
         target_id = f"Material:{value.name}"

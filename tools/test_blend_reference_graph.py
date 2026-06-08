@@ -1,5 +1,8 @@
+import os
 import sys
+import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import bpy
 
@@ -10,6 +13,7 @@ sys.path.insert(0, str(SOURCE_ROOT))
 
 import blend_reference_graph
 from blend_reference_graph.graph import build_graph
+from blend_reference_graph.graph.graph_exporter import resolve_output_folder
 
 
 PREFIX = "BRG_Test_"
@@ -50,9 +54,16 @@ def create_fixture():
     child = new_object("Child", child_mesh)
     child.parent = source
 
+    parent_collection_a = bpy.data.collections.new(PREFIX + "ParentA")
+    parent_collection_b = bpy.data.collections.new(PREFIX + "ParentB")
     collection = bpy.data.collections.new(PREFIX + "Collection")
-    bpy.context.scene.collection.children.link(collection)
+    bpy.context.scene.collection.children.link(parent_collection_a)
+    bpy.context.scene.collection.children.link(parent_collection_b)
+    parent_collection_a.children.link(collection)
+    parent_collection_b.children.link(collection)
     collection.objects.link(source)
+    second_scene = bpy.data.scenes.new(PREFIX + "SecondScene")
+    second_scene.collection.children.link(collection)
 
     constraint = source.constraints.new("COPY_LOCATION")
     constraint.name = PREFIX + "CopyLocation"
@@ -122,6 +133,9 @@ def create_fixture():
         "mesh": mesh,
         "child_mesh": child_mesh,
         "collection": collection,
+        "parent_collection_a": parent_collection_a,
+        "parent_collection_b": parent_collection_b,
+        "second_scene": second_scene,
         "node_group": node_group,
         "sub_group": sub_group,
         "material": material,
@@ -142,16 +156,6 @@ def configure(settings, target, depth=1):
     settings.target_id = f"Object:{target.name}"
     settings.scan_mode = "BOTH"
     settings.depth = depth
-    settings.include_objects = True
-    settings.include_meshes = True
-    settings.include_collections = True
-    settings.include_armatures = True
-    settings.include_bones = True
-    settings.include_constraints = True
-    settings.include_geonodes = True
-    settings.include_node_groups = True
-    settings.include_materials = True
-    settings.include_images = True
 
 
 def test_object_graph(fixture):
@@ -166,6 +170,7 @@ def test_object_graph(fixture):
     constraint_id = f"Constraint:{source_id}:{PREFIX}CopyLocation"
     modifier_id = f"Modifier:{fixture['source'].name}:{PREFIX}GeometryNodes"
     node_group_id = f"NodeGroup:{fixture['node_group'].name}"
+    collection_id = f"Collection:{fixture['collection'].name}"
 
     for node_id in (
         source_id,
@@ -183,6 +188,7 @@ def test_object_graph(fixture):
         f"Material:{fixture['material'].name}",
         f"Image:{fixture['image'].name}",
         f"NodeGroup:{fixture['sub_group'].name}",
+        collection_id,
     ):
         assert_node(graph, node_id)
 
@@ -198,6 +204,30 @@ def test_object_graph(fixture):
         "references_object",
     )
     assert_edge(graph, mesh_id, f"Object:{fixture['shared_user'].name}", "used_by_object")
+    collection_node = graph.nodes[collection_id]
+    expected_paths = {
+        " / ".join((
+            bpy.context.scene.name,
+            bpy.context.scene.collection.name,
+            fixture["parent_collection_a"].name,
+            fixture["collection"].name,
+        )),
+        " / ".join((
+            bpy.context.scene.name,
+            bpy.context.scene.collection.name,
+            fixture["parent_collection_b"].name,
+            fixture["collection"].name,
+        )),
+        " / ".join((
+            fixture["second_scene"].name,
+            fixture["second_scene"].collection.name,
+            fixture["collection"].name,
+        )),
+    }
+    assert set(collection_node["details"]["paths"]) == expected_paths
+    assert collection_node["path"] == sorted(expected_paths)[0]
+    source_node = graph.nodes[source_id]
+    assert expected_paths.issubset(set(source_node["details"]["collections"]))
     assert f"Warning:Constraint:{source_id}:{PREFIX}LimitLocation:MissingTarget" not in graph.nodes
     assert f"Mesh:{fixture['child_mesh'].name}" not in graph.nodes, "Depth 1 expanded child references"
     assert_no_dangling_edges(graph)
@@ -208,16 +238,22 @@ def test_object_graph(fixture):
     assert_no_dangling_edges(graph)
 
 
-def test_filters(fixture):
+def test_removed_filters_and_full_scan(fixture):
     settings = bpy.context.scene.brg_settings
     configure(settings, fixture["source"], depth=1)
-    settings.include_objects = False
-    settings.include_materials = False
-    settings.include_images = False
     graph = build_graph(bpy.context, settings)
-    assert all(node["type"] != "OBJECT" for node in graph.nodes.values())
-    assert all(node["type"] != "MATERIAL" for node in graph.nodes.values())
-    assert all(node["type"] != "IMAGE" for node in graph.nodes.values())
+    for property_name in (
+        "include_objects",
+        "include_meshes",
+        "include_collections",
+        "include_materials",
+        "include_images",
+        "output_folder",
+        "viewer_file",
+    ):
+        assert not hasattr(settings, property_name), f"Removed property still exists: {property_name}"
+    assert f"Material:{fixture['material'].name}" in graph.nodes
+    assert f"Image:{fixture['image'].name}" in graph.nodes
     assert_no_dangling_edges(graph)
 
 
@@ -226,10 +262,6 @@ def test_bone_graph(fixture):
     settings.target_type = "BONE"
     settings.target_name = f"{fixture['armature'].name} / {fixture['child_bone']}"
     settings.target_id = f"Bone:{fixture['armature'].name}:{fixture['child_bone']}"
-    settings.include_objects = True
-    settings.include_armatures = True
-    settings.include_bones = True
-    settings.include_constraints = True
     graph = build_graph(bpy.context, settings)
 
     bone_id = f"Bone:{fixture['armature'].name}:{fixture['child_bone']}"
@@ -253,13 +285,57 @@ def test_bone_graph(fixture):
     assert_no_dangling_edges(graph)
 
 
+def test_output_folders():
+    temp_preferences = SimpleNamespace(output_mode="TEMP", custom_output_folder="")
+    output = resolve_output_folder(bpy.context, temp_preferences)
+    expected = Path(tempfile.gettempdir()).resolve() / "blend_reference_graph" / str(os.getpid())
+    assert output == expected
+    assert output.is_dir()
+    result = bpy.ops.brg.update_graph_data()
+    assert "FINISHED" in result
+    assert Path(bpy.context.scene.brg_settings.resolved_output_path) == expected
+    for filename in ("graph_data.js", "viewer.html", "viewer.css", "viewer.js"):
+        assert (expected / filename).is_file(), f"Missing generated viewer file: {filename}"
+
+    with tempfile.TemporaryDirectory() as custom_directory:
+        custom_preferences = SimpleNamespace(
+            output_mode="CUSTOM",
+            custom_output_folder=custom_directory,
+        )
+        custom_output = resolve_output_folder(bpy.context, custom_preferences)
+        assert custom_output == Path(custom_directory).resolve()
+
+    empty_preferences = SimpleNamespace(output_mode="CUSTOM", custom_output_folder="")
+    try:
+        resolve_output_folder(bpy.context, empty_preferences)
+    except ValueError as exc:
+        assert "not set" in str(exc)
+    else:
+        raise AssertionError("Empty custom output folder did not fail")
+
+    with tempfile.TemporaryDirectory() as custom_directory:
+        file_path = Path(custom_directory) / "not_a_directory"
+        file_path.write_text("x", encoding="utf-8")
+        invalid_preferences = SimpleNamespace(
+            output_mode="CUSTOM",
+            custom_output_folder=str(file_path),
+        )
+        try:
+            resolve_output_folder(bpy.context, invalid_preferences)
+        except OSError as exc:
+            assert "not writable" in str(exc)
+        else:
+            raise AssertionError("Non-directory custom output path did not fail")
+
+
 def main():
     blend_reference_graph.register()
     try:
         fixture = create_fixture()
         test_object_graph(fixture)
-        test_filters(fixture)
+        test_removed_filters_and_full_scan(fixture)
         test_bone_graph(fixture)
+        test_output_folders()
         print("Blend Reference Graph integration tests passed")
     finally:
         blend_reference_graph.unregister()

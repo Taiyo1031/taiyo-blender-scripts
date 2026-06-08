@@ -1,10 +1,10 @@
 :root {
   color-scheme: dark;
-  --bg: #17191d;
-  --panel: #20242a;
-  --line: #343a43;
+  --bg: #15181d;
+  --panel: #1d2229;
+  --line: #363e49;
   --text: #edf1f5;
-  --muted: #aab3bf;
+  --muted: #9da8b7;
   --accent: #5eb4ff;
 }
 
@@ -69,7 +69,7 @@ input {
 
 main {
   display: grid;
-  grid-template-columns: 230px minmax(0, 1fr) 280px;
+  grid-template-columns: 210px minmax(0, 1fr) 320px;
   height: calc(100vh - 52px);
 }
 
@@ -86,9 +86,15 @@ aside {
 }
 
 #graph-wrap {
+  position: relative;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    var(--bg);
+  background-size: 24px 24px;
 }
 
 #graph {
@@ -99,6 +105,18 @@ aside {
 
 #graph.dragging {
   cursor: grabbing;
+}
+
+#graph.box-selecting {
+  cursor: crosshair;
+}
+
+#selection-box {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+  border: 1px solid #7cc4ff;
+  background: rgba(94, 180, 255, 0.14);
 }
 
 .meta {
@@ -117,41 +135,66 @@ aside {
 }
 
 .swatch {
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 18px;
   border-radius: 3px;
 }
 
 .edge {
-  stroke: #7b8593;
-  stroke-width: 1.6;
+  fill: none;
+  stroke: #687586;
+  stroke-width: 1.5;
   marker-end: url(#arrow);
 }
 
-.node rect {
-  stroke: rgba(255, 255, 255, 0.3);
+.node .node-body {
+  fill: #232a33;
+  stroke: #465261;
   stroke-width: 1;
   rx: 6;
 }
 
-.node text {
-  fill: #101318;
-  font-size: 12px;
+.node .node-accent {
+  stroke: none;
+}
+
+.node .node-type {
+  fill: #aab4c2;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.node .node-name {
+  fill: #f4f7fa;
+  font-size: 13px;
   font-weight: 650;
+}
+
+.node .node-path {
+  fill: #8995a4;
+  font-size: 10px;
+}
+
+.node text {
   pointer-events: none;
 }
 
 .node.dim {
-  opacity: 0.18;
+  opacity: 0.14;
 }
 
-.node.selected rect {
+.node.selected .node-body {
   stroke: #ffffff;
-  stroke-width: 2.5;
+  stroke-width: 2;
 }
 
 .edge.dim {
-  opacity: 0.12;
+  opacity: 0.08;
+}
+
+.edge.selected {
+  stroke: #a7d8ff;
+  stroke-width: 2;
 }
 
 .detail-row {
@@ -162,4 +205,19 @@ aside {
 
 .detail-key {
   color: var(--muted);
+}
+
+.detail-list {
+  margin: 5px 0 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 900px) {
+  main {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+
+  #details {
+    display: none;
+  }
 }

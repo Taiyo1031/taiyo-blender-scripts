@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Blend Reference Graph",
     "author": "Taiyo",
-    "version": (0, 1, 0),
+    "version": (0, 1, 1),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Blend Ref Graph",
     "description": "Visualize Blender object, mesh, collection, constraint, and Geometry Nodes references.",
@@ -15,6 +15,7 @@ from . import operators, panels, properties
 
 
 classes = (
+    properties.BRG_AddonPreferences,
     properties.BRG_Settings,
     operators.BRG_OT_use_selected,
     operators.BRG_OT_update_graph_data,

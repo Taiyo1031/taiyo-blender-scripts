@@ -1,4 +1,5 @@
 from .object_scanner import object_id
+from .path_utils import collection_paths
 
 
 def collection_id(collection):
@@ -12,14 +13,17 @@ def _allowed(filters, node_type):
 def add_collection_node(graph, collection, filters):
     if not _allowed(filters, "COLLECTION"):
         return
+    paths = collection_paths(collection)
     graph.add_node(
         collection_id(collection),
         "COLLECTION",
         collection.name,
         f"COL {collection.name}",
+        path=paths[0] if paths else "",
         details={
             "objects": [obj.name for obj in collection.objects],
             "children": [child.name for child in collection.children],
+            "paths": paths,
         },
     )
 

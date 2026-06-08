@@ -7,7 +7,7 @@ from pathlib import Path
 import bpy
 from bpy.types import Operator
 
-from .graph import build_graph, export_graph_data
+from .graph import build_graph, export_graph_data, resolve_output_folder
 
 
 def _addon_dir():
@@ -66,24 +66,31 @@ class BRG_OT_update_graph_data(Operator):
         if not settings.target_name:
             _set_active_target(context, settings)
 
-        graph = build_graph(context, settings)
-        generated_at = time.strftime("%Y-%m-%d %H:%M:%S")
-        meta = {
-            "addon_name": "Blend Reference Graph",
-            "version": "0.1.0",
-            "generated_at": generated_at,
-            "blend_file": bpy.path.basename(bpy.data.filepath) if bpy.data.filepath else "Unsaved",
-            "target_id": settings.target_id,
-            "target_name": settings.target_name,
-            "mode": settings.scan_mode,
-            "depth": settings.depth,
-        }
-        output_path, payload = export_graph_data(graph, meta, settings.output_folder)
-        viewer_path = _copy_viewer_files(os.path.dirname(output_path))
+        try:
+            output_folder = resolve_output_folder(context)
+            graph = build_graph(context, settings)
+            generated_at = time.strftime("%Y-%m-%d %H:%M:%S")
+            meta = {
+                "addon_name": "Blend Reference Graph",
+                "version": "0.1.1",
+                "generated_at": generated_at,
+                "blend_file": bpy.path.basename(bpy.data.filepath) if bpy.data.filepath else "Unsaved",
+                "target_id": settings.target_id,
+                "target_name": settings.target_name,
+                "mode": settings.scan_mode,
+                "depth": settings.depth,
+            }
+            output_path, payload = export_graph_data(graph, meta, output_folder)
+            viewer_path = _copy_viewer_files(os.path.dirname(output_path))
+        except (OSError, ValueError) as exc:
+            settings.status_message = str(exc)
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
 
         settings.last_update = generated_at
         settings.node_count = payload["meta"]["node_count"]
         settings.edge_count = payload["meta"]["edge_count"]
+        settings.resolved_output_path = str(output_folder)
         settings.status_message = f"Wrote {os.path.basename(output_path)}"
         self.report({"INFO"}, f"Graph data updated: {viewer_path}")
         return {"FINISHED"}
@@ -97,11 +104,17 @@ class BRG_OT_open_viewer(Operator):
 
     def execute(self, context):
         settings = context.scene.brg_settings
-        output_folder = bpy.path.abspath(settings.output_folder)
-        viewer_path = os.path.join(output_folder, settings.viewer_file or "viewer.html")
-        if not os.path.exists(viewer_path):
-            _copy_viewer_files(output_folder)
+        try:
+            output_folder = resolve_output_folder(context)
+            viewer_path = os.path.join(output_folder, "viewer.html")
+            if not os.path.exists(viewer_path):
+                _copy_viewer_files(output_folder)
+        except (OSError, ValueError) as exc:
+            settings.status_message = str(exc)
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
         webbrowser.open(Path(viewer_path).resolve().as_uri())
+        settings.resolved_output_path = str(output_folder)
         settings.status_message = "Opened viewer."
         return {"FINISHED"}
 

@@ -27,20 +27,6 @@ class VIEW3D_PT_blend_reference_graph(Panel):
         box.prop(settings, "depth")
 
         box = layout.box()
-        box.label(text="Filters", icon="FILTER")
-        col = box.column(align=True)
-        col.prop(settings, "include_objects")
-        col.prop(settings, "include_meshes")
-        col.prop(settings, "include_collections")
-        col.prop(settings, "include_armatures")
-        col.prop(settings, "include_bones")
-        col.prop(settings, "include_constraints")
-        col.prop(settings, "include_geonodes")
-        col.prop(settings, "include_node_groups")
-        col.prop(settings, "include_materials")
-        col.prop(settings, "include_images")
-
-        box = layout.box()
         box.label(text="Actions", icon="PLAY")
         box.operator("brg.update_and_open_viewer", icon="FILE_REFRESH")
         row = box.row(align=True)
@@ -48,13 +34,12 @@ class VIEW3D_PT_blend_reference_graph(Panel):
         row.operator("brg.open_viewer", icon="URL")
 
         box = layout.box()
-        box.label(text="Output", icon="FILE_FOLDER")
-        box.prop(settings, "output_folder")
-        box.prop(settings, "viewer_file")
-
-        box = layout.box()
         box.label(text="Status", icon="INFO")
         box.label(text=f"Last Update: {settings.last_update}")
         box.label(text=f"Nodes: {settings.node_count}  Edges: {settings.edge_count}")
+        box.label(text="Output:")
+        row = box.row()
+        row.enabled = False
+        row.prop(settings, "resolved_output_path", text="")
         if settings.status_message:
             box.label(text=settings.status_message)

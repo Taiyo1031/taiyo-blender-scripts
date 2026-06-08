@@ -1,16 +1,17 @@
 (function () {
   const graphData = window.BRG_GRAPH_DATA || { meta: {}, nodes: [], edges: [] };
   const svg = document.getElementById("graph");
+  const graphWrap = document.getElementById("graph-wrap");
+  const selectionBox = document.getElementById("selection-box");
   const meta = document.getElementById("meta");
   const details = document.getElementById("details");
-  const filters = document.getElementById("filters");
   const legend = document.getElementById("legend");
   const search = document.getElementById("search");
 
   const colors = {
+    COLLECTION: "#f5c65b",
     OBJECT: "#72b7ff",
     MESH: "#c49aff",
-    COLLECTION: "#f5c65b",
     ARMATURE: "#ff7b79",
     BONE: "#ff9ad5",
     CONSTRAINT: "#f59b54",
@@ -21,14 +22,35 @@
     IMAGE: "#76d9ea",
     WARNING: "#ff6262",
   };
-  const activeTypes = new Set(graphData.nodes.map((node) => node.type));
+  const typeOrder = [
+    "COLLECTION",
+    "OBJECT",
+    "MESH",
+    "ARMATURE",
+    "BONE",
+    "CONSTRAINT",
+    "MODIFIER",
+    "GEONODES",
+    "NODEGROUP",
+    "MATERIAL",
+    "IMAGE",
+    "WARNING",
+  ];
   const nodeById = new Map(graphData.nodes.map((node) => [node.id, node]));
-  const state = { scale: 1, tx: 0, ty: 0, selected: null, query: "" };
+  const selectedIds = new Set();
+  const state = {
+    scale: 1,
+    tx: 0,
+    ty: 0,
+    query: "",
+    spaceDown: false,
+    boxMode: false,
+  };
 
   let root;
   let edgeLayer;
   let nodeLayer;
-  let draggedNode = null;
+  let interaction = null;
 
   function init() {
     meta.textContent = [
@@ -38,61 +60,82 @@
       `Edges: ${graphData.edges.length}`,
       graphData.meta.generated_at || "",
     ].filter(Boolean).join("   ");
-    buildFilters();
+    buildLegend();
     render();
     fitView();
+    updateDetails();
   }
 
-  function buildFilters() {
-    const types = [...new Set(graphData.nodes.map((node) => node.type))].sort();
-    filters.innerHTML = "";
+  function buildLegend() {
+    const present = new Set(graphData.nodes.map((node) => node.type));
     legend.innerHTML = "";
-    for (const type of types) {
-      const row = document.createElement("label");
+    for (const type of typeOrder) {
+      if (!present.has(type)) continue;
+      const row = document.createElement("div");
       row.className = "filter";
-      row.innerHTML = `<input type="checkbox" checked data-type="${type}"><span class="swatch" style="background:${colors[type] || "#aaa"}"></span>${type}`;
-      row.querySelector("input").addEventListener("change", (event) => {
-        if (event.target.checked) activeTypes.add(type);
-        else activeTypes.delete(type);
-        applyVisibility();
-      });
-      filters.appendChild(row);
-
-      const leg = document.createElement("div");
-      leg.className = "filter";
-      leg.innerHTML = `<span class="swatch" style="background:${colors[type] || "#aaa"}"></span>${type}`;
-      legend.appendChild(leg);
+      row.innerHTML = `<span class="swatch" style="background:${colors[type] || "#aaa"}"></span>${type}`;
+      legend.appendChild(row);
     }
   }
 
   function layoutNodes() {
-    const nodes = graphData.nodes;
-    const index = new Map(nodes.map((node, i) => [node.id, i]));
-    const outgoing = new Map(nodes.map((node) => [node.id, 0]));
-    const incoming = new Map(nodes.map((node) => [node.id, 0]));
-    for (const edge of graphData.edges) {
-      outgoing.set(edge.from, (outgoing.get(edge.from) || 0) + 1);
-      incoming.set(edge.to, (incoming.get(edge.to) || 0) + 1);
+    const targetId = graphData.meta.target_id || (graphData.nodes[0] && graphData.nodes[0].id);
+    const levels = new Map();
+    if (targetId && nodeById.has(targetId)) {
+      levels.set(targetId, 0);
+      const queue = [targetId];
+      while (queue.length) {
+        const current = queue.shift();
+        const currentLevel = levels.get(current);
+        for (const edge of graphData.edges) {
+          let next;
+          let proposed;
+          if (edge.from === current) {
+            next = edge.to;
+            proposed = currentLevel + 1;
+          } else if (edge.to === current) {
+            next = edge.from;
+            proposed = currentLevel - 1;
+          } else {
+            continue;
+          }
+          if (!levels.has(next)) {
+            levels.set(next, proposed);
+            queue.push(next);
+          }
+        }
+      }
     }
-    const targetId = graphData.meta.target_id || (nodes[0] && nodes[0].id);
-    for (const node of nodes) {
-      const i = index.get(node.id);
-      let column = 0;
-      if (node.id === targetId) column = 0;
-      else if ((incoming.get(node.id) || 0) > (outgoing.get(node.id) || 0)) column = 1;
-      else column = -1;
-      if (node.type === "COLLECTION") column = Math.min(column, -1);
-      if (node.type === "MESH" || node.type === "MODIFIER" || node.type === "NODEGROUP") column = Math.max(column, 1);
-      node.x = 360 + column * 280;
-      node.y = 120 + (i % 12) * 84 + Math.floor(i / 12) * 34;
-      node.w = Math.max(150, Math.min(260, String(node.label || node.name).length * 7 + 54));
-      node.h = 38;
+
+    const columns = new Map();
+    for (const node of graphData.nodes) {
+      let level = levels.get(node.id);
+      if (level === undefined) level = 2;
+      if (node.type === "COLLECTION") level = Math.min(level, -1);
+      if (["MESH", "MODIFIER", "GEONODES", "NODEGROUP", "MATERIAL", "IMAGE"].includes(node.type)) {
+        level = Math.max(level, 1);
+      }
+      if (!columns.has(level)) columns.set(level, []);
+      columns.get(level).push(node);
+    }
+
+    for (const [level, nodes] of columns) {
+      nodes.sort((a, b) => `${a.type}:${a.name}`.localeCompare(`${b.type}:${b.name}`));
+      const nodeHeight = 82;
+      const gap = 32;
+      const totalHeight = nodes.length * nodeHeight + Math.max(0, nodes.length - 1) * gap;
+      nodes.forEach((node, index) => {
+        node.x = 500 + level * 380;
+        node.y = 400 - totalHeight / 2 + index * (nodeHeight + gap);
+        node.w = 286;
+        node.h = node.type === "COLLECTION" && node.path ? 88 : 70;
+      });
     }
   }
 
   function render() {
     layoutNodes();
-    svg.innerHTML = `<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#7b8593"></path></marker></defs>`;
+    svg.innerHTML = `<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#687586"></path></marker></defs>`;
     root = makeSvg("g", { id: "viewport" });
     edgeLayer = makeSvg("g", {});
     nodeLayer = makeSvg("g", {});
@@ -103,35 +146,104 @@
       const from = nodeById.get(edge.from);
       const to = nodeById.get(edge.to);
       if (!from || !to) continue;
-      const line = makeSvg("line", {
-        class: "edge",
-        x1: from.x + from.w,
-        y1: from.y + from.h / 2,
-        x2: to.x,
-        y2: to.y + to.h / 2,
-        "data-from": edge.from,
-        "data-to": edge.to,
-      });
-      edgeLayer.appendChild(line);
+      edgeLayer.appendChild(makeEdge(edge, from, to));
     }
 
     for (const node of graphData.nodes) {
-      const group = makeSvg("g", { class: "node", transform: `translate(${node.x},${node.y})`, "data-id": node.id, "data-type": node.type });
-      group.appendChild(makeSvg("rect", { width: node.w, height: node.h, fill: colors[node.type] || "#c8ccd2" }));
-      const text = makeSvg("text", { x: 13, y: 24 });
-      text.textContent = node.label || node.name;
-      group.appendChild(text);
-      group.addEventListener("pointerdown", (event) => beginNodeDrag(event, node, group));
-      group.addEventListener("click", (event) => {
-        event.stopPropagation();
-        selectNode(node.id);
-      });
-      nodeLayer.appendChild(group);
+      nodeLayer.appendChild(makeNode(node));
     }
 
-    wirePanZoom();
+    wireInteractions();
     applyTransform();
-    applyVisibility();
+    applySearch();
+    refreshSelection();
+  }
+
+  function makeEdge(edge, from, to) {
+    const path = makeSvg("path", {
+      class: "edge",
+      d: edgePath(from, to),
+      "data-from": edge.from,
+      "data-to": edge.to,
+    });
+    const title = makeSvg("title", {});
+    title.textContent = edge.label || edge.relation;
+    path.appendChild(title);
+    return path;
+  }
+
+  function edgePath(from, to) {
+    const fromX = from.x + from.w;
+    const fromY = from.y + from.h / 2;
+    const toX = to.x;
+    const toY = to.y + to.h / 2;
+    const bend = Math.max(70, Math.abs(toX - fromX) * 0.42);
+    return `M ${fromX} ${fromY} C ${fromX + bend} ${fromY}, ${toX - bend} ${toY}, ${toX} ${toY}`;
+  }
+
+  function makeNode(node) {
+    const group = makeSvg("g", {
+      class: "node",
+      transform: `translate(${node.x},${node.y})`,
+      "data-id": node.id,
+      "data-type": node.type,
+    });
+    group.appendChild(makeSvg("rect", { class: "node-body", width: node.w, height: node.h }));
+    group.appendChild(makeSvg("rect", {
+      class: "node-accent",
+      width: 7,
+      height: node.h,
+      rx: 4,
+      fill: colors[node.type] || "#aab3bf",
+    }));
+
+    const typeText = makeSvg("text", { class: "node-type", x: 18, y: 17 });
+    typeText.textContent = node.type;
+    group.appendChild(typeText);
+
+    const nameLines = wrapText(node.name, 34, 2);
+    nameLines.forEach((line, index) => {
+      const text = makeSvg("text", { class: "node-name", x: 18, y: 39 + index * 16 });
+      text.textContent = line;
+      group.appendChild(text);
+    });
+
+    if (node.type === "COLLECTION" && node.path) {
+      const pathText = makeSvg("text", { class: "node-path", x: 18, y: node.h - 10 });
+      pathText.textContent = truncateMiddle(node.path, 47);
+      group.appendChild(pathText);
+    }
+
+    const title = makeSvg("title", {});
+    title.textContent = node.path ? `${node.name}\n${node.path}` : node.name;
+    group.appendChild(title);
+    group.addEventListener("pointerdown", (event) => beginNodeDrag(event, node));
+    return group;
+  }
+
+  function wrapText(value, maxChars, maxLines) {
+    const text = String(value || "");
+    if (text.length <= maxChars) return [text];
+    const lines = [];
+    let rest = text;
+    while (rest && lines.length < maxLines) {
+      if (lines.length === maxLines - 1) {
+        lines.push(rest.length > maxChars ? `${rest.slice(0, maxChars - 1)}…` : rest);
+        break;
+      }
+      let split = rest.lastIndexOf("_", maxChars);
+      if (split < Math.floor(maxChars * 0.55)) split = maxChars;
+      lines.push(rest.slice(0, split));
+      rest = rest.slice(split).replace(/^_/, "");
+    }
+    return lines;
+  }
+
+  function truncateMiddle(value, maxChars) {
+    const text = String(value || "");
+    if (text.length <= maxChars) return text;
+    const side = Math.floor((maxChars - 1) / 2);
+    return `${text.slice(0, side)}…${text.slice(-side)}`;
   }
 
   function makeSvg(tag, attrs) {
@@ -140,38 +252,242 @@
     return el;
   }
 
-  function selectNode(id) {
-    state.selected = id;
-    const node = nodeById.get(id);
-    document.querySelectorAll(".node").forEach((el) => el.classList.toggle("selected", el.dataset.id === id));
-    if (!node) return;
-    const rows = Object.entries(node.details || {}).map(([key, value]) => {
-      const display = Array.isArray(value) ? value.join(", ") : String(value);
-      return `<div class="detail-row"><div class="detail-key">${escapeHtml(key)}</div><div>${escapeHtml(display || "-")}</div></div>`;
-    }).join("");
-    details.innerHTML = `<h2>Details</h2><div class="detail-row"><div class="detail-key">Type</div><div>${escapeHtml(node.type)}</div></div><div class="detail-row"><div class="detail-key">Name</div><div>${escapeHtml(node.name)}</div></div>${rows}`;
+  function beginNodeDrag(event, node) {
+    if (event.button !== 0) return;
+    event.stopPropagation();
+    if (event.shiftKey) {
+      if (selectedIds.has(node.id)) selectedIds.delete(node.id);
+      else selectedIds.add(node.id);
+    } else if (!selectedIds.has(node.id)) {
+      selectedIds.clear();
+      selectedIds.add(node.id);
+    }
+    if (!selectedIds.has(node.id)) {
+      refreshSelection();
+      return;
+    }
+    interaction = {
+      type: "nodes",
+      startX: event.clientX,
+      startY: event.clientY,
+      positions: [...selectedIds].map((id) => {
+        const selected = nodeById.get(id);
+        return { node: selected, x: selected.x, y: selected.y };
+      }),
+    };
+    svg.setPointerCapture(event.pointerId);
+    refreshSelection();
   }
 
-  function applyVisibility() {
+  function beginBoxSelection(event) {
+    interaction = {
+      type: "box",
+      startX: event.clientX,
+      startY: event.clientY,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      additive: event.shiftKey,
+    };
+    svg.setPointerCapture(event.pointerId);
+    svg.classList.add("box-selecting");
+    updateSelectionBox();
+  }
+
+  function beginPan(event) {
+    interaction = {
+      type: "pan",
+      startX: event.clientX,
+      startY: event.clientY,
+      tx: state.tx,
+      ty: state.ty,
+    };
+    svg.setPointerCapture(event.pointerId);
+    svg.classList.add("dragging");
+  }
+
+  function wireInteractions() {
+    svg.onpointerdown = (event) => {
+      if (event.button === 1 || (event.button === 0 && state.spaceDown)) {
+        event.preventDefault();
+        beginPan(event);
+      } else if (event.button === 0) {
+        beginBoxSelection(event);
+      }
+    };
+    svg.onpointermove = (event) => {
+      if (!interaction) return;
+      if (interaction.type === "nodes") {
+        const dx = (event.clientX - interaction.startX) / state.scale;
+        const dy = (event.clientY - interaction.startY) / state.scale;
+        for (const item of interaction.positions) {
+          item.node.x = item.x + dx;
+          item.node.y = item.y + dy;
+          const group = nodeElement(item.node.id);
+          if (group) group.setAttribute("transform", `translate(${item.node.x},${item.node.y})`);
+          updateEdgesForNode(item.node);
+        }
+      } else if (interaction.type === "pan") {
+        state.tx = interaction.tx + event.clientX - interaction.startX;
+        state.ty = interaction.ty + event.clientY - interaction.startY;
+        applyTransform();
+      } else if (interaction.type === "box") {
+        interaction.currentX = event.clientX;
+        interaction.currentY = event.clientY;
+        updateSelectionBox();
+      }
+    };
+    svg.onpointerup = (event) => finishInteraction(event);
+    svg.onpointercancel = () => cancelInteraction();
+    svg.onwheel = (event) => {
+      event.preventDefault();
+      const rect = svg.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+      const graphX = (mouseX - state.tx) / state.scale;
+      const graphY = (mouseY - state.ty) / state.scale;
+      const factor = event.deltaY > 0 ? 0.9 : 1.1;
+      const nextScale = Math.max(0.2, Math.min(2.5, state.scale * factor));
+      state.tx = mouseX - graphX * nextScale;
+      state.ty = mouseY - graphY * nextScale;
+      state.scale = nextScale;
+      applyTransform();
+    };
+
+    window.addEventListener("keydown", (event) => {
+      if (event.code === "Space") {
+        state.spaceDown = true;
+        if (document.activeElement !== search) event.preventDefault();
+      } else if (event.key.toLowerCase() === "b" && document.activeElement !== search) {
+        state.boxMode = true;
+        svg.classList.add("box-selecting");
+      } else if (event.key === "Escape") {
+        cancelInteraction();
+        state.boxMode = false;
+        svg.classList.remove("box-selecting");
+      }
+    });
+    window.addEventListener("keyup", (event) => {
+      if (event.code === "Space") state.spaceDown = false;
+    });
+  }
+
+  function finishInteraction(event) {
+    if (!interaction) return;
+    if (interaction.type === "box") {
+      interaction.currentX = event.clientX;
+      interaction.currentY = event.clientY;
+      const moved = Math.abs(interaction.currentX - interaction.startX) > 3
+        || Math.abs(interaction.currentY - interaction.startY) > 3;
+      if (moved) applyBoxSelection();
+      else selectedIds.clear();
+      selectionBox.style.display = "none";
+      svg.classList.remove("box-selecting");
+      state.boxMode = false;
+      refreshSelection();
+    }
+    svg.classList.remove("dragging");
+    interaction = null;
+  }
+
+  function cancelInteraction() {
+    if (interaction && interaction.type === "nodes") {
+      for (const item of interaction.positions) {
+        item.node.x = item.x;
+        item.node.y = item.y;
+        const group = nodeElement(item.node.id);
+        if (group) group.setAttribute("transform", `translate(${item.x},${item.y})`);
+        updateEdgesForNode(item.node);
+      }
+    }
+    interaction = null;
+    selectionBox.style.display = "none";
+    svg.classList.remove("dragging", "box-selecting");
+  }
+
+  function updateSelectionBox() {
+    if (!interaction || interaction.type !== "box") return;
+    const rect = graphWrap.getBoundingClientRect();
+    const left = Math.min(interaction.startX, interaction.currentX) - rect.left;
+    const top = Math.min(interaction.startY, interaction.currentY) - rect.top;
+    selectionBox.style.display = "block";
+    selectionBox.style.left = `${left}px`;
+    selectionBox.style.top = `${top}px`;
+    selectionBox.style.width = `${Math.abs(interaction.currentX - interaction.startX)}px`;
+    selectionBox.style.height = `${Math.abs(interaction.currentY - interaction.startY)}px`;
+  }
+
+  function applyBoxSelection() {
+    const svgRect = svg.getBoundingClientRect();
+    const left = (Math.min(interaction.startX, interaction.currentX) - svgRect.left - state.tx) / state.scale;
+    const right = (Math.max(interaction.startX, interaction.currentX) - svgRect.left - state.tx) / state.scale;
+    const top = (Math.min(interaction.startY, interaction.currentY) - svgRect.top - state.ty) / state.scale;
+    const bottom = (Math.max(interaction.startY, interaction.currentY) - svgRect.top - state.ty) / state.scale;
+    const hits = graphData.nodes.filter((node) => (
+      node.x < right
+      && node.x + node.w > left
+      && node.y < bottom
+      && node.y + node.h > top
+    ));
+    if (!interaction.additive) selectedIds.clear();
+    for (const node of hits) {
+      if (interaction.additive && selectedIds.has(node.id)) selectedIds.delete(node.id);
+      else selectedIds.add(node.id);
+    }
+  }
+
+  function refreshSelection() {
+    document.querySelectorAll(".node").forEach((el) => {
+      el.classList.toggle("selected", selectedIds.has(el.dataset.id));
+    });
+    document.querySelectorAll(".edge").forEach((el) => {
+      el.classList.toggle(
+        "selected",
+        selectedIds.has(el.dataset.from) && selectedIds.has(el.dataset.to),
+      );
+    });
+    updateDetails();
+  }
+
+  function updateDetails() {
+    const selected = [...selectedIds].map((id) => nodeById.get(id)).filter(Boolean);
+    if (!selected.length) {
+      details.innerHTML = "<h2>Details</h2><p>Select a node or drag a selection box.</p>";
+      return;
+    }
+    if (selected.length > 1) {
+      const counts = {};
+      for (const node of selected) counts[node.type] = (counts[node.type] || 0) + 1;
+      const types = Object.entries(counts).map(([type, count]) => `${type}: ${count}`).join(", ");
+      const names = selected.map((node) => `<li>${escapeHtml(node.name)}</li>`).join("");
+      details.innerHTML = `<h2>Selection</h2><div class="detail-row"><div class="detail-key">Nodes</div><div>${selected.length}</div></div><div class="detail-row"><div class="detail-key">Types</div><div>${escapeHtml(types)}</div></div><div class="detail-row"><div class="detail-key">Names</div><ul class="detail-list">${names}</ul></div>`;
+      return;
+    }
+    const node = selected[0];
+    const rows = Object.entries(node.details || {}).map(([key, value]) => {
+      const display = Array.isArray(value) ? value.join("\n") : String(value);
+      return `<div class="detail-row"><div class="detail-key">${escapeHtml(key)}</div><div>${escapeHtml(display || "-").replace(/\n/g, "<br>")}</div></div>`;
+    }).join("");
+    const pathRow = node.path
+      ? `<div class="detail-row"><div class="detail-key">Path</div><div>${escapeHtml(node.path)}</div></div>`
+      : "";
+    details.innerHTML = `<h2>Details</h2><div class="detail-row"><div class="detail-key">Type</div><div>${escapeHtml(node.type)}</div></div><div class="detail-row"><div class="detail-key">Name</div><div>${escapeHtml(node.name)}</div></div>${pathRow}${rows}`;
+  }
+
+  function applySearch() {
     const query = state.query.toLowerCase();
     document.querySelectorAll(".node").forEach((el) => {
       const node = nodeById.get(el.dataset.id);
-      const typeVisible = activeTypes.has(el.dataset.type);
       const text = JSON.stringify(node || {}).toLowerCase();
-      const searchVisible = !query || text.includes(query);
-      el.classList.toggle("dim", !typeVisible || !searchVisible);
+      el.classList.toggle("dim", Boolean(query) && !text.includes(query));
     });
     document.querySelectorAll(".edge").forEach((el) => {
-      const fromVisible = isNodeVisible(el.dataset.from);
-      const toVisible = isNodeVisible(el.dataset.to);
-      el.classList.toggle("dim", !fromVisible || !toVisible);
+      const from = nodeById.get(el.dataset.from);
+      const to = nodeById.get(el.dataset.to);
+      const visible = !query
+        || JSON.stringify(from || {}).toLowerCase().includes(query)
+        || JSON.stringify(to || {}).toLowerCase().includes(query);
+      el.classList.toggle("dim", !visible);
     });
-  }
-
-  function isNodeVisible(id) {
-    const node = nodeById.get(id);
-    if (!node || !activeTypes.has(node.type)) return false;
-    return !state.query || JSON.stringify(node).toLowerCase().includes(state.query.toLowerCase());
   }
 
   function fitView() {
@@ -181,7 +497,10 @@
     const maxX = Math.max(...graphData.nodes.map((node) => node.x + node.w));
     const minY = Math.min(...graphData.nodes.map((node) => node.y));
     const maxY = Math.max(...graphData.nodes.map((node) => node.y + node.h));
-    state.scale = Math.min(1.2, Math.max(0.35, Math.min((box.width - 80) / (maxX - minX || 1), (box.height - 80) / (maxY - minY || 1))));
+    state.scale = Math.min(1.15, Math.max(0.22, Math.min(
+      (box.width - 100) / (maxX - minX || 1),
+      (box.height - 100) / (maxY - minY || 1),
+    )));
     state.tx = (box.width - (minX + maxX) * state.scale) / 2;
     state.ty = (box.height - (minY + maxY) * state.scale) / 2;
     applyTransform();
@@ -191,62 +510,17 @@
     if (root) root.setAttribute("transform", `translate(${state.tx},${state.ty}) scale(${state.scale})`);
   }
 
-  function beginNodeDrag(event, node, group) {
-    event.stopPropagation();
-    draggedNode = {
-      node,
-      group,
-      startX: event.clientX,
-      startY: event.clientY,
-      nodeX: node.x,
-      nodeY: node.y,
-    };
-    group.setPointerCapture(event.pointerId);
+  function nodeElement(id) {
+    return [...document.querySelectorAll(".node")].find((el) => el.dataset.id === id);
   }
 
   function updateEdgesForNode(node) {
-    document.querySelectorAll(`.edge[data-from="${CSS.escape(node.id)}"]`).forEach((line) => {
-      line.setAttribute("x1", node.x + node.w);
-      line.setAttribute("y1", node.y + node.h / 2);
+    document.querySelectorAll(".edge").forEach((path) => {
+      if (path.dataset.from !== node.id && path.dataset.to !== node.id) return;
+      const from = nodeById.get(path.dataset.from);
+      const to = nodeById.get(path.dataset.to);
+      path.setAttribute("d", edgePath(from, to));
     });
-    document.querySelectorAll(`.edge[data-to="${CSS.escape(node.id)}"]`).forEach((line) => {
-      line.setAttribute("x2", node.x);
-      line.setAttribute("y2", node.y + node.h / 2);
-    });
-  }
-
-  function wirePanZoom() {
-    let start = null;
-    svg.onpointerdown = (event) => {
-      start = { x: event.clientX, y: event.clientY, tx: state.tx, ty: state.ty };
-      svg.classList.add("dragging");
-    };
-    svg.onpointermove = (event) => {
-      if (draggedNode) {
-        const dx = (event.clientX - draggedNode.startX) / state.scale;
-        const dy = (event.clientY - draggedNode.startY) / state.scale;
-        draggedNode.node.x = draggedNode.nodeX + dx;
-        draggedNode.node.y = draggedNode.nodeY + dy;
-        draggedNode.group.setAttribute("transform", `translate(${draggedNode.node.x},${draggedNode.node.y})`);
-        updateEdgesForNode(draggedNode.node);
-        return;
-      }
-      if (!start) return;
-      state.tx = start.tx + event.clientX - start.x;
-      state.ty = start.ty + event.clientY - start.y;
-      applyTransform();
-    };
-    svg.onpointerup = svg.onpointerleave = () => {
-      draggedNode = null;
-      start = null;
-      svg.classList.remove("dragging");
-    };
-    svg.onwheel = (event) => {
-      event.preventDefault();
-      const delta = event.deltaY > 0 ? 0.9 : 1.1;
-      state.scale = Math.max(0.2, Math.min(2.5, state.scale * delta));
-      applyTransform();
-    };
   }
 
   function escapeHtml(value) {
@@ -263,7 +537,7 @@
   document.getElementById("fit").addEventListener("click", fitView);
   search.addEventListener("input", (event) => {
     state.query = event.target.value;
-    applyVisibility();
+    applySearch();
   });
 
   init();
