@@ -62,3 +62,12 @@ class VIEW3D_PT_map_link_tools(Panel):
             box.separator(factor=0.5)
             box.prop(settings, "matching_mesh_collection", text="Mesh Collection")
             box.operator("maplink.replace_collection_instances_with_matching_mesh", icon="MESH_DATA")
+
+        if draw_foldout(layout, settings, "show_helper", "Helper"):
+            box = layout.box()
+            box.prop(settings, "helper_collection", text="Collection")
+            box.prop(settings, "helper_make_selectable")
+            box.operator("maplink.unhide_helper_collection", icon="HIDE_OFF")
+            box.operator("maplink.make_helper_collection_selectable", icon="RESTRICT_SELECT_OFF")
+            if settings.helper_result_message:
+                box.label(text=settings.helper_result_message, icon="INFO")

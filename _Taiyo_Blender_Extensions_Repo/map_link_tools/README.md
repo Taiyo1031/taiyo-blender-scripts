@@ -10,7 +10,7 @@
 
 - 本体フォルダ: `map_link_tools`
 - 表示場所: `View3D > Sidebar (N) > Map Link Tools`
-- バージョン: `0.2.0`
+- バージョン: `0.2.1`
 - 対応Blender目安: `4.5.0` 以降
 - カテゴリ: `Object`
 
@@ -49,6 +49,17 @@
   - 選択中のCollection Instance Objectを、指定Collection内の同名Mesh Objectへ置換します。
   - 名前比較では選択Object名と候補Mesh Object名の末尾 `.001` などを無視します。
   - 候補が見つからない場合、または同名候補が複数ある場合はスキップして通知します。
+
+## Helper
+
+- `Unhide Collection + Objects`
+  - 指定Collectionと子Collectionを表示状態に戻します。
+  - 指定Collection配下のObjectも表示状態に戻します。
+  - 現在のView Layerに存在するLayer Collectionも `exclude` / `hide_viewport` を解除します。
+- `Make Selectable Too`
+  - ONの場合、`Unhide Collection + Objects` 実行時にCollectionとObjectを選択可能にも戻します。
+- `Make Collection + Objects Selectable`
+  - 表示状態は変えず、指定Collectionツリーと配下Objectを選択可能に戻します。
 
 ## 導入手順
 

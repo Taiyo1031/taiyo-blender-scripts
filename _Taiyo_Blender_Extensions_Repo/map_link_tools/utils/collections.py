@@ -20,6 +20,28 @@ def iter_collection_objects(collection):
     yield from walk(collection)
 
 
+def iter_collection_tree(collection):
+    if collection is None:
+        return
+    yield collection
+    for child in collection.children:
+        yield from iter_collection_tree(child)
+
+
+def iter_layer_collections_for_collection(context, collection):
+    root = getattr(context.view_layer, "layer_collection", None)
+    if root is None or collection is None:
+        return
+
+    def walk(layer_collection):
+        if layer_collection.collection == collection:
+            yield layer_collection
+        for child in layer_collection.children:
+            yield from walk(child)
+
+    yield from walk(root)
+
+
 def mesh_objects_in_collection(collection):
     return [
         obj for obj in iter_collection_objects(collection)
