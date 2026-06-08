@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import BoolProperty, PointerProperty, StringProperty
+from bpy.props import BoolProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
 from bpy.types import PropertyGroup
 
 
@@ -54,3 +54,11 @@ class MapLinkToolsSettings(PropertyGroup):
     )
     check_result_message: StringProperty(default="")
     helper_result_message: StringProperty(default="")
+
+    is_running: BoolProperty(default=False)
+    cancel_requested: BoolProperty(default=False)
+    operation_name: StringProperty(default="")
+    operation_message: StringProperty(default="")
+    processed_count: IntProperty(default=0, min=0)
+    total_count: IntProperty(default=0, min=0)
+    progress_percent: FloatProperty(default=0.0, min=0.0, max=100.0)

@@ -10,7 +10,7 @@
 
 - 本体フォルダ: `map_link_tools`
 - 表示場所: `View3D > Sidebar (N) > Map Link Tools`
-- バージョン: `0.2.1`
+- バージョン: `0.2.2`
 - 対応Blender目安: `4.5.0` 以降
 - カテゴリ: `Object`
 
@@ -30,9 +30,11 @@
 ## Check
 
 - `Collection A` と `Collection B` を指定します。
+- Collection pickerはCollectionの `color_tag` に合わせた色付きアイコンを表示します。
 - `Check Mesh Links` で、2つのCollection間に同じMesh Dataを共有しているObjectがあるか確認します。
 - 各Collection横の `Select Unlinked` で、相手CollectionとMesh Dataを共有していないObjectを選択します。
 - Collection内のObjectは子Collectionも含めて走査します。
+- `Check Mesh Links` と `Select Unlinked` はmodal/timer処理で数ティックに分けて実行します。
 
 ## Replace
 
@@ -56,6 +58,7 @@
   - 指定Collectionと子Collectionを表示状態に戻します。
   - 指定Collection配下のObjectも表示状態に戻します。
   - 現在のView Layerに存在するLayer Collectionも `exclude` / `hide_viewport` を解除します。
+  - 大きなCollectionでも固まりにくいよう、modal/timer処理で数ティックに分けて実行します。
 - `Make Selectable Too`
   - ONの場合、`Unhide Collection + Objects` 実行時にCollectionとObjectを選択可能にも戻します。
 - `Make Collection + Objects Selectable`

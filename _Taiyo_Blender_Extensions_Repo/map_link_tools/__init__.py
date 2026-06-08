@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Map Link Tools",
     "author": "Generated for production map workflow",
-    "version": (0, 2, 1),
+    "version": (0, 2, 2),
     "blender": (4, 5, 0),
     "location": "View3D > Sidebar > Map Link Tools",
     "description": "Minimal map layout tools for renaming, checking mesh links, and replacing objects.",
@@ -14,7 +14,7 @@ import bpy
 from bpy.props import PointerProperty
 
 from . import properties
-from .operators import check_ops, helper_ops, rename_ops, replace_ops
+from .operators import async_ops, check_ops, helper_ops, rename_ops, replace_ops
 from .ui import panels
 
 
@@ -31,6 +31,7 @@ classes = (
     replace_ops.MAPLINK_OT_replace_collection_instances_with_matching_mesh,
     helper_ops.MAPLINK_OT_unhide_helper_collection,
     helper_ops.MAPLINK_OT_make_helper_collection_selectable,
+    async_ops.MAPLINK_OT_cancel_operation,
     panels.VIEW3D_PT_map_link_tools,
 )
 
