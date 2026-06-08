@@ -296,6 +296,11 @@ def test_output_folders():
     assert Path(bpy.context.scene.brg_settings.resolved_output_path) == expected
     for filename in ("graph_data.js", "viewer.html", "viewer.css", "viewer.js"):
         assert (expected / filename).is_file(), f"Missing generated viewer file: {filename}"
+    viewer_js = (expected / "viewer.js").read_text(encoding="utf-8")
+    viewer_css = (expected / "viewer.css").read_text(encoding="utf-8")
+    assert 'class: "edge-label"' in viewer_js
+    assert 'class: "node-selected-badge"' in viewer_js
+    assert ".node.selected .node-selection-halo" in viewer_css
 
     with tempfile.TemporaryDirectory() as custom_directory:
         custom_preferences = SimpleNamespace(

@@ -160,25 +160,50 @@
   }
 
   function makeEdge(edge, from, to) {
-    const path = makeSvg("path", {
-      class: "edge",
-      d: edgePath(from, to),
+    const geometry = edgeGeometry(from, to);
+    const relation = edge.label || edge.relation || "reference";
+    const displayRelation = truncateMiddle(relation, 28);
+    const labelWidth = Math.min(184, Math.max(44, displayRelation.length * 6.4 + 16));
+    const group = makeSvg("g", {
+      class: "edge-group",
       "data-from": edge.from,
       "data-to": edge.to,
     });
+    const path = makeSvg("path", {
+      class: "edge",
+      d: geometry.d,
+    });
+    const label = makeSvg("g", {
+      class: "edge-label",
+      transform: `translate(${geometry.labelX},${geometry.labelY})`,
+    });
+    label.appendChild(makeSvg("rect", {
+      x: -labelWidth / 2,
+      y: -10,
+      width: labelWidth,
+      height: 20,
+      rx: 4,
+    }));
+    const labelText = makeSvg("text", { x: 0, y: 4 });
+    labelText.textContent = displayRelation;
+    label.appendChild(labelText);
     const title = makeSvg("title", {});
-    title.textContent = edge.label || edge.relation;
-    path.appendChild(title);
-    return path;
+    title.textContent = relation;
+    group.append(path, label, title);
+    return group;
   }
 
-  function edgePath(from, to) {
+  function edgeGeometry(from, to) {
     const fromX = from.x + from.w;
     const fromY = from.y + from.h / 2;
     const toX = to.x;
     const toY = to.y + to.h / 2;
     const bend = Math.max(70, Math.abs(toX - fromX) * 0.42);
-    return `M ${fromX} ${fromY} C ${fromX + bend} ${fromY}, ${toX - bend} ${toY}, ${toX} ${toY}`;
+    return {
+      d: `M ${fromX} ${fromY} C ${fromX + bend} ${fromY}, ${toX - bend} ${toY}, ${toX} ${toY}`,
+      labelX: (fromX + toX) / 2,
+      labelY: (fromY + toY) / 2,
+    };
   }
 
   function makeNode(node) {
@@ -187,7 +212,16 @@
       transform: `translate(${node.x},${node.y})`,
       "data-id": node.id,
       "data-type": node.type,
+      style: `--node-color:${colors[node.type] || "#aab3bf"}`,
     });
+    group.appendChild(makeSvg("rect", {
+      class: "node-selection-halo",
+      x: -5,
+      y: -5,
+      width: node.w + 10,
+      height: node.h + 10,
+      rx: 10,
+    }));
     group.appendChild(makeSvg("rect", { class: "node-body", width: node.w, height: node.h }));
     group.appendChild(makeSvg("rect", {
       class: "node-accent",
@@ -200,6 +234,16 @@
     const typeText = makeSvg("text", { class: "node-type", x: 18, y: 17 });
     typeText.textContent = node.type;
     group.appendChild(typeText);
+
+    const selectedBadge = makeSvg("g", {
+      class: "node-selected-badge",
+      transform: `translate(${node.w - 82},7)`,
+    });
+    selectedBadge.appendChild(makeSvg("rect", { width: 74, height: 19, rx: 4 }));
+    const selectedText = makeSvg("text", { x: 37, y: 13 });
+    selectedText.textContent = "SELECTED";
+    selectedBadge.appendChild(selectedText);
+    group.appendChild(selectedBadge);
 
     const nameLines = wrapText(node.name, 34, 2);
     nameLines.forEach((line, index) => {
@@ -439,10 +483,10 @@
     document.querySelectorAll(".node").forEach((el) => {
       el.classList.toggle("selected", selectedIds.has(el.dataset.id));
     });
-    document.querySelectorAll(".edge").forEach((el) => {
+    document.querySelectorAll(".edge-group").forEach((el) => {
       el.classList.toggle(
         "selected",
-        selectedIds.has(el.dataset.from) && selectedIds.has(el.dataset.to),
+        selectedIds.has(el.dataset.from) || selectedIds.has(el.dataset.to),
       );
     });
     updateDetails();
@@ -480,7 +524,7 @@
       const text = JSON.stringify(node || {}).toLowerCase();
       el.classList.toggle("dim", Boolean(query) && !text.includes(query));
     });
-    document.querySelectorAll(".edge").forEach((el) => {
+    document.querySelectorAll(".edge-group").forEach((el) => {
       const from = nodeById.get(el.dataset.from);
       const to = nodeById.get(el.dataset.to);
       const visible = !query
@@ -515,11 +559,16 @@
   }
 
   function updateEdgesForNode(node) {
-    document.querySelectorAll(".edge").forEach((path) => {
-      if (path.dataset.from !== node.id && path.dataset.to !== node.id) return;
-      const from = nodeById.get(path.dataset.from);
-      const to = nodeById.get(path.dataset.to);
-      path.setAttribute("d", edgePath(from, to));
+    document.querySelectorAll(".edge-group").forEach((group) => {
+      if (group.dataset.from !== node.id && group.dataset.to !== node.id) return;
+      const from = nodeById.get(group.dataset.from);
+      const to = nodeById.get(group.dataset.to);
+      const geometry = edgeGeometry(from, to);
+      group.querySelector(".edge").setAttribute("d", geometry.d);
+      group.querySelector(".edge-label").setAttribute(
+        "transform",
+        `translate(${geometry.labelX},${geometry.labelY})`,
+      );
     });
   }
 

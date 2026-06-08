@@ -147,6 +147,36 @@ aside {
   marker-end: url(#arrow);
 }
 
+.edge-group {
+  transition: opacity 120ms ease;
+}
+
+.edge-label {
+  pointer-events: none;
+}
+
+.edge-label rect {
+  fill: #20262e;
+  stroke: #4c5867;
+  stroke-width: 1;
+}
+
+.edge-label text {
+  fill: #c3ccd7;
+  font-size: 10px;
+  font-weight: 650;
+  text-anchor: middle;
+}
+
+.node .node-selection-halo {
+  fill: none;
+  stroke: var(--node-color);
+  stroke-width: 5;
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px var(--node-color));
+}
+
 .node .node-body {
   fill: #232a33;
   stroke: #465261;
@@ -175,6 +205,25 @@ aside {
   font-size: 10px;
 }
 
+.node .node-selected-badge {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.node .node-selected-badge rect {
+  fill: var(--node-color);
+  stroke: #ffffff;
+  stroke-width: 1;
+}
+
+.node .node-selected-badge text {
+  fill: #11161c;
+  font-size: 9px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
 .node text {
   pointer-events: none;
 }
@@ -186,15 +235,39 @@ aside {
 .node.selected .node-body {
   stroke: #ffffff;
   stroke-width: 2;
+  fill: #2b3540;
 }
 
-.edge.dim {
+.node.selected .node-selection-halo,
+.node.selected .node-selected-badge {
+  opacity: 1;
+  visibility: visible;
+}
+
+.node.selected .node-name {
+  fill: #ffffff;
+}
+
+.edge-group.dim {
   opacity: 0.08;
 }
 
-.edge.selected {
+.edge-group.selected {
+  opacity: 1;
+}
+
+.edge-group.selected .edge {
   stroke: #a7d8ff;
-  stroke-width: 2;
+  stroke-width: 2.5;
+}
+
+.edge-group.selected .edge-label rect {
+  fill: #2b4052;
+  stroke: #8fd0ff;
+}
+
+.edge-group.selected .edge-label text {
+  fill: #ffffff;
 }
 
 .detail-row {

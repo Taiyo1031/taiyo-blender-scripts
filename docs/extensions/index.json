@@ -24,7 +24,7 @@
       "id": "blend_reference_graph",
       "name": "Blend Reference Graph",
       "tagline": "View Blender reference graphs in HTML",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -37,9 +37,9 @@
         "Scene",
         "Pipeline"
       ],
-      "archive_url": "./blend_reference_graph-0.1.1.zip",
-      "archive_size": 20074,
-      "archive_hash": "sha256:051a60b8d05ecfedfde7153fb17f56cce8fb05fa44a25ee664a0f0c95d94d2da"
+      "archive_url": "./blend_reference_graph-0.1.2.zip",
+      "archive_size": 20697,
+      "archive_hash": "sha256:b062a2ca0436a2921c958a208be92fc7ded9c916a9ae419fa2357760e6de082c"
     },
     {
       "schema_version": "1.0.0",
