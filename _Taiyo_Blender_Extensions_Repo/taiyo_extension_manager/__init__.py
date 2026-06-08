@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 5),
+    "version": (1, 0, 6),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -44,6 +44,11 @@ TAG_ALIASES = {
     "collection_number_to_mesh_name": (
         "collection", "cleanup", "mesh", "name", "number", "rename", "renaming",
         "整理", "番号", "名前", "名前整理", "リネーム", "メッシュ",
+    ),
+    "custom_properties_batch_editor": (
+        "asset", "batch", "custom-property", "data", "metadata", "object", "mesh",
+        "material", "preset", "property", "search", "tag",
+        "一括編集", "検索", "カスタムプロパティ", "メタデータ", "タグ", "素材",
     ),
     "export_selected_names_csv": (
         "csv", "export", "list", "name", "names", "object", "selected", "spreadsheet",
@@ -120,6 +125,10 @@ DESCRIPTION_ALIASES = {
     "collection_number_to_mesh_name": {
         "ja": "コレクション番号を付け、メッシュデータ名を整理します。",
         "en": "Number collections and rename their mesh data.",
+    },
+    "custom_properties_batch_editor": {
+        "ja": "Object、Mesh、MaterialのCustom Propertiesを一括編集・検索します。",
+        "en": "Batch edit and search custom properties on objects, meshes, and materials.",
     },
     "export_selected_names_csv": {
         "ja": "選択オブジェクト名をCSVに書き出します。",

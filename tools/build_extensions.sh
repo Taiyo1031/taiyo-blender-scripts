@@ -27,6 +27,7 @@ packages=(
   "blend_reference_graph"
   "collection_number_to_mesh_name"
   "collection_mesh_merge_fbx_exporter"
+  "custom_properties_batch_editor"
   "export_selected_names_csv"
   "gn_parameter_csv_exporter"
   "instance_name_fixer"

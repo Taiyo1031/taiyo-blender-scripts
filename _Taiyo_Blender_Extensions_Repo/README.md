@@ -9,6 +9,7 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 - `blend_reference_graph`: Blend Reference Graph
 - `collection_number_to_mesh_name`: Collection Number To Mesh Name
 - `collection_mesh_merge_fbx_exporter`: Collection Mesh Merge FBX Exporter
+- `custom_properties_batch_editor`: Custom Properties Batch Editor
 - `gn_parameter_csv_exporter`: GN Parameter CSV Exporter
 - `export_selected_names_csv`: Export Selected Object Names to CSV
 - `instance_name_fixer`: Instance Name Fixer

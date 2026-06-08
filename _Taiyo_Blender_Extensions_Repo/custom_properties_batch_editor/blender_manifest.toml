@@ -1,0 +1,19 @@
+schema_version = "1.0.0"
+
+id = "custom_properties_batch_editor"
+version = "1.0.0"
+name = "Custom Properties Batch Editor"
+tagline = "Batch edit and search custom properties"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.4.0"
+website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/custom_properties_batch_editor/README.md"
+license = ["SPDX:GPL-3.0-or-later"]
+tags = ["Object", "Scene", "Pipeline"]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "*.zip",
+]

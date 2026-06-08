@@ -77,6 +77,28 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "custom_properties_batch_editor",
+      "name": "Custom Properties Batch Editor",
+      "tagline": "Batch edit and search custom properties",
+      "version": "1.0.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.4.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/custom_properties_batch_editor/README.md",
+      "tags": [
+        "Object",
+        "Scene",
+        "Pipeline"
+      ],
+      "archive_url": "./custom_properties_batch_editor-1.0.0.zip",
+      "archive_size": 15346,
+      "archive_hash": "sha256:bfad01376e47e516dfc26a6c9fb6daa3eeb73415fbd7d766aba73c730c768e41"
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "export_selected_names_csv",
       "name": "Export Selected Object Names to CSV",
       "tagline": "Export selected object names to CSV file",
@@ -238,7 +260,7 @@
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
       "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.5",
+      "version": "1.0.6",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -246,9 +268,9 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.5.zip",
-      "archive_size": 10170,
-      "archive_hash": "sha256:528cd5977decfca936729b5741b73ce5984e4dcccf221b13479e0525b8caf75f"
+      "archive_url": "./taiyo_extension_manager-1.0.6.zip",
+      "archive_size": 10354,
+      "archive_hash": "sha256:48f3f29bf14aee0da3bd28402c1392740050ae14cdc95e9b037f868abc0b11c2"
     },
     {
       "schema_version": "1.0.0",

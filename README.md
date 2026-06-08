@@ -55,7 +55,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 
 このコマンドは以下を行います。
 
-- `_Taiyo_Blender_Extensions_Repo` 内の18個のパッケージを validate
+- `_Taiyo_Blender_Extensions_Repo` 内の19個のパッケージを validate
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `docs/extensions/index.json` と `docs/extensions/index.html` を生成
 
@@ -64,8 +64,10 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 | Extension ID | 表示名 | ひとことで |
 |---|---|---|
 | `attribute_csv_exporter` | Attribute CSV Exporter | メッシュ属性をCSV化 |
+| `blend_reference_graph` | Blend Reference Graph | Blender内の参照関係をHTMLグラフで確認 |
 | `collection_number_to_mesh_name` | Collection Number To Mesh Name | コレクション番号でMeshデータ名を整理 |
 | `collection_mesh_merge_fbx_exporter` | Collection Mesh Merge FBX Exporter | コレクションごとに統合FBXを書き出し |
+| `custom_properties_batch_editor` | Custom Properties Batch Editor | Custom Propertiesを一括編集・検索 |
 | `export_selected_names_csv` | Export Selected Object Names to CSV | 選択名をCSV化 |
 | `gn_parameter_csv_exporter` | GN Parameter CSV Exporter | Geometry Nodes入力値をCSV化 |
 | `instance_name_fixer` | Instance Name Fixer | インスタンス名を整理 |

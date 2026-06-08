@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "presets": [
+    {
+      "name": "Unreal Static Mesh Export",
+      "properties": [
+        {
+          "name": "export_target",
+          "type": "BOOL",
+          "value": true
+        },
+        {
+          "name": "asset_type",
+          "type": "STRING",
+          "value": "StaticMesh"
+        },
+        {
+          "name": "collision_type",
+          "type": "STRING",
+          "value": "Simple"
+        },
+        {
+          "name": "lod_group",
+          "type": "STRING",
+          "value": "Environment"
+        }
+      ]
+    },
+    {
+      "name": "Breakable Object",
+      "properties": [
+        {
+          "name": "breakable",
+          "type": "BOOL",
+          "value": true
+        },
+        {
+          "name": "rbd_group",
+          "type": "STRING",
+          "value": "Wood"
+        },
+        {
+          "name": "fracture_level",
+          "type": "INT",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "name": "School Environment",
+      "properties": [
+        {
+          "name": "stage",
+          "type": "STRING",
+          "value": "School"
+        },
+        {
+          "name": "category",
+          "type": "STRING",
+          "value": "Environment"
+        },
+        {
+          "name": "sub_category",
+          "type": "STRING",
+          "value": "Wood"
+        }
+      ]
+    }
+  ]
+}
