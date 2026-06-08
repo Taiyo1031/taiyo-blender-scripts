@@ -57,6 +57,7 @@ repo/
 - GitHub Pagesの公開元は `main` branch の `/docs` を想定します。
 - Private repositoryでGitHub Pagesが使えない場合は、BlenderからRemote Repositoryとして使う目的を優先してPublicに切り替えます。
 - GitHub CLIの認証が切れている場合は、`gh auth login -h github.com` を先に実行してください。
+- ユーザーから「pushしない」「コミットしない」などの明示的な指定がない場合、実装・検証後はcommitしてpushまで進めます。作業ツリーに無関係な差分がある場合は混ぜず、必要なら対象範囲を確認してから進めます。
 
 ## 配布前チェック
 
