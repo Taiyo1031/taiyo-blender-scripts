@@ -1,0 +1,33 @@
+from .object_scanner import object_id
+
+
+def collection_id(collection):
+    return f"Collection:{collection.name}"
+
+
+def _allowed(filters, node_type):
+    return filters.get(node_type, True)
+
+
+def add_collection_node(graph, collection, filters):
+    if not _allowed(filters, "COLLECTION"):
+        return
+    graph.add_node(
+        collection_id(collection),
+        "COLLECTION",
+        collection.name,
+        f"COL {collection.name}",
+        details={
+            "objects": [obj.name for obj in collection.objects],
+            "children": [child.name for child in collection.children],
+        },
+    )
+
+
+def add_object_collections(graph, obj, filters):
+    for collection in obj.users_collection:
+        add_collection_node(graph, collection, filters)
+        graph.add_edge(collection_id(collection), object_id(obj), "contains", "contains")
+        for child in collection.children:
+            add_collection_node(graph, child, filters)
+            graph.add_edge(collection_id(collection), collection_id(child), "child_collection", "child collection")

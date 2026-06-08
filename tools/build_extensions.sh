@@ -4,10 +4,27 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_ROOT="$ROOT_DIR/_Taiyo_Blender_Extensions_Repo"
 OUTPUT_DIR="$ROOT_DIR/docs/extensions"
+
+if [[ -z "${BLENDER_BIN:-}" ]]; then
+  blender_candidates=(
+    "/Applications/Blender.app/Contents/MacOS/Blender"
+    "C:/Program Files/Blender Foundation/Blender 4.5/blender.exe"
+    "C:/Program Files/Blender Foundation/Blender 4.4/blender.exe"
+    "C:/Program Files/Blender Foundation/Blender 4.3/blender.exe"
+    "C:/Program Files/Blender Foundation/Blender 4.2/blender.exe"
+  )
+  for candidate in "${blender_candidates[@]}"; do
+    if [[ -x "$candidate" ]]; then
+      BLENDER_BIN="$candidate"
+      break
+    fi
+  done
+fi
 BLENDER_BIN="${BLENDER_BIN:-/Applications/Blender.app/Contents/MacOS/Blender}"
 
 packages=(
   "attribute_csv_exporter"
+  "blend_reference_graph"
   "collection_number_to_mesh_name"
   "collection_mesh_merge_fbx_exporter"
   "export_selected_names_csv"

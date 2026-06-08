@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blend Reference Graph</title>
+  <link rel="stylesheet" href="viewer.css">
+</head>
+<body>
+  <header>
+    <h1>Blend Reference Graph</h1>
+    <div class="meta" id="meta"></div>
+    <button id="reload">Reload Data</button>
+    <button id="fit">Fit View</button>
+  </header>
+  <main>
+    <aside>
+      <input id="search" type="search" placeholder="Search nodes">
+      <section>
+        <h2>Node Types</h2>
+        <div id="filters"></div>
+      </section>
+      <section>
+        <h2>Legend</h2>
+        <div id="legend"></div>
+      </section>
+    </aside>
+    <section id="graph-wrap">
+      <svg id="graph" aria-label="Reference graph"></svg>
+    </section>
+    <aside id="details">
+      <h2>Details</h2>
+      <p>Select a node.</p>
+    </aside>
+  </main>
+  <script src="graph_data.js"></script>
+  <script src="viewer.js"></script>
+</body>
+</html>

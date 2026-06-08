@@ -21,6 +21,28 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "blend_reference_graph",
+      "name": "Blend Reference Graph",
+      "tagline": "View Blender reference graphs in HTML",
+      "version": "0.1.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/blend_reference_graph/README.md",
+      "tags": [
+        "Object",
+        "Scene",
+        "Pipeline"
+      ],
+      "archive_url": "./blend_reference_graph-0.1.0.zip",
+      "archive_size": 16479,
+      "archive_hash": "sha256:c338b7d43bae1fbc6ad1ea57333c90be484f132724e4aa727d54311fc8edd54d"
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "collection_mesh_merge_fbx_exporter",
       "name": "Collection Mesh Merge FBX Exporter",
       "tagline": "Export target collections as merged FBX, USD, or Alembic files",
@@ -216,7 +238,7 @@
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
       "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -224,9 +246,9 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.4.zip",
-      "archive_size": 9969,
-      "archive_hash": "sha256:cc65720fa938aacaa417786b52b760063e159c0ac37b7c10c845a8f6668d1acf"
+      "archive_url": "./taiyo_extension_manager-1.0.5.zip",
+      "archive_size": 10170,
+      "archive_hash": "sha256:528cd5977decfca936729b5741b73ce5984e4dcccf221b13479e0525b8caf75f"
     },
     {
       "schema_version": "1.0.0",

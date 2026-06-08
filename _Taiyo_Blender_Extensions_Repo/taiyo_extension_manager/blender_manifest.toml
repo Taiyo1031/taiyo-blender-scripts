@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "taiyo_extension_manager"
-version = "1.0.4"
+version = "1.0.5"
 name = "Taiyo Extension Manager"
 tagline = "Search, install, update, and uninstall Taiyo Extensions"
 maintainer = "Taiyo"

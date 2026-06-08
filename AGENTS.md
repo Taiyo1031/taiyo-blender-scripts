@@ -47,7 +47,7 @@ repo/
 
 このスクリプトは以下を行います。
 
-- 17個の Extensions パッケージを `blender --command extension validate` で検証
+- 18個の Extensions パッケージを `blender --command extension validate` で検証
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `blender --command extension server-generate --repo-dir docs/extensions --html` で `index.json` と `index.html` を生成
 
@@ -62,7 +62,7 @@ repo/
 ## 配布前チェック
 
 - `find . -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store'` で不要物を確認します。
-- `docs/extensions/` にzipが17個あることを確認します。
+- `docs/extensions/` にzipが18個あることを確認します。
 - `docs/extensions/index.json` と `docs/extensions/index.html` が生成されていることを確認します。
 - 可能ならBlenderのPreferencesからRemote Repositoryに `index.json` URLを追加して確認します。
 
@@ -73,3 +73,5 @@ repo/
 - Codexのsandbox内で `./tools/build_extensions.sh` からBlenderを子プロセス起動すると、環境によってMetal初期化でセグフォすることがあります。同じ `blender --background --command extension ...` を直接実行すると通る場合があります。
 - `./tools/build_extensions.sh` は最初に `docs/extensions/*.zip`、`index.json`、`index.html` を削除してから validate/build を始めます。途中でBlenderがセグフォした場合、配布フォルダが空になるので、そのままコミットしないでください。必要なら `git archive` や `git checkout` で既存の `docs/extensions` を復元してから作業を続けます。
 - 一部アドオンだけ手動で配布更新する場合は、対象zipを作り直したあと、`docs/extensions/index.json` の `archive_size` と `archive_hash` を実ファイルの `wc -c` / `shasum -a 256` に合わせます。`index.html` のサイズ表示とBuilt時刻も更新し、最後にindexの値と実zipが一致することを確認してください。
+- Windowsの標準インストールでは `C:/Program Files/Blender Foundation/Blender 4.5/blender.exe` を利用できます。`tools/build_extensions.sh` はmacOS版に加えてBlender 4.2〜4.5のWindows標準パスも探索します。
+- Blend Reference Graphの統合テストは `blender --background --python tools/test_blend_reference_graph.py` で実行します。

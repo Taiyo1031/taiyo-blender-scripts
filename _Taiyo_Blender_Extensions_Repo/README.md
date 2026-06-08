@@ -6,6 +6,7 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 
 ## パッケージ一覧
 - `attribute_csv_exporter`: Attribute CSV Exporter
+- `blend_reference_graph`: Blend Reference Graph
 - `collection_number_to_mesh_name`: Collection Number To Mesh Name
 - `collection_mesh_merge_fbx_exporter`: Collection Mesh Merge FBX Exporter
 - `gn_parameter_csv_exporter`: GN Parameter CSV Exporter

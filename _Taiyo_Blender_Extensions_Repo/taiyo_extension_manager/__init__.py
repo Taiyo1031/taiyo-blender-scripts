@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 4),
+    "version": (1, 0, 5),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -31,6 +31,11 @@ TAG_ALIASES = {
     "attribute_csv_exporter": (
         "attribute", "attributes", "csv", "data", "export", "mesh", "spreadsheet",
         "table", "属性", "書き出し", "メッシュ", "表",
+    ),
+    "blend_reference_graph": (
+        "asset", "bone", "collection", "constraint", "dependency", "graph", "geometry-nodes",
+        "mesh", "node", "reference", "viewer", "visualize",
+        "参照", "依存", "グラフ", "ノード", "メッシュ", "コレクション", "制約", "確認",
     ),
     "collection_mesh_merge_fbx_exporter": (
         "alembic", "abc", "collection", "combine", "export", "fbx", "merge", "usd",
@@ -103,6 +108,10 @@ DESCRIPTION_ALIASES = {
     "attribute_csv_exporter": {
         "ja": "選択メッシュの属性をCSVに書き出します。",
         "en": "Export selected mesh attributes to CSV.",
+    },
+    "blend_reference_graph": {
+        "ja": "Object、Mesh、Collection、Constraint、Geometry Nodesの参照関係をHTMLグラフで確認します。",
+        "en": "Visualize object, mesh, collection, constraint, and Geometry Nodes references as an HTML graph.",
     },
     "collection_mesh_merge_fbx_exporter": {
         "ja": "対象コレクションを統合し、FBX/USD/Alembicで書き出します。",

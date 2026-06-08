@@ -55,7 +55,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 
 このコマンドは以下を行います。
 
-- `_Taiyo_Blender_Extensions_Repo` 内の17個のパッケージを validate
+- `_Taiyo_Blender_Extensions_Repo` 内の18個のパッケージを validate
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `docs/extensions/index.json` と `docs/extensions/index.html` を生成
 
