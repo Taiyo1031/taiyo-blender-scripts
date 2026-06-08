@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
 id = "map_link_tools"
-version = "0.1.0"
+version = "0.2.0"
 name = "Map Link Tools"
-tagline = "Rename and manage linked map objects and shared mesh data"
+tagline = "Minimal rename, check, and replace tools for map layouts"
 maintainer = "Taiyo"
 type = "add-on"
 blender_version_min = "4.5.0"

@@ -2,39 +2,55 @@
 
 ## 概要
 
-`Map Link Tools` は、マップ・環境制作で大量に配置したリンク複製、共有Mesh、Collection Instanceを整理するためのBlender Extensionです。
+`Map Link Tools` は、マップ・環境制作で使う名前整理、共有Meshチェック、置換作業だけに絞ったBlender Extensionです。
 
-オブジェクト名とMesh Data名の整理、`.001` suffixの変換、共有Meshの確認、同じMesh Dataを使うオブジェクトの選択、Collection Instanceのリネームなどを、3D ViewportのNパネルからまとめて実行できます。
+今後ツールを一つずつ追加しやすいように、機能は `Rename` / `Check` / `Replace` の3ジャンルに分けています。
 
 ## 基本情報
 
-- 本体ファイル: `__init__.py`
+- 本体フォルダ: `map_link_tools`
 - 表示場所: `View3D > Sidebar (N) > Map Link Tools`
-- バージョン: `0.1.0`
+- バージョン: `0.2.0`
 - 対応Blender目安: `4.5.0` 以降
 - カテゴリ: `Object`
 
-## 主な機能
+## Rename
 
-- 選択中オブジェクトの概要表示
-- Object名 / Mesh Data名 / 両方を対象にした名前整理
-- `.001`, `.002` などのBlender numeric suffix削除
-- `.001` を `_01` 形式へ変換
-- Pattern Rename、Find and Replace、Prefix/Suffix追加・削除
-- Active Object名を基準にしたリネーム
-- Object名からMesh Data名への同期
-- Mesh Data名からObject名への同期
-- 共有Mesh Dataの警告と既定スキップ
-- Collection Instanceを参照元Collection名からリネーム
-- 同じMesh Dataを使うオブジェクトを選択
-- 同じCollectionを参照するCollection Instanceを選択
-- Mesh user数の確認
-- 選択MeshのSingle User化
-- 変更前のSafety Preview
-- 大量処理向けのmodal/timer分割処理
-- 進捗、残数、キャンセル表示
+- `Remove .001 From Selected Objects`
+  - 選択Object名の末尾 `.001`, `.002` などを削除します。
+  - 削除後の名前が既に存在する場合はリネームせず、スキップとして通知します。
+  - `_01` のような別suffixは作りません。
+- `Object Name -> Mesh Name`
+  - 選択Mesh ObjectのMesh Data名をObject名に合わせます。
+  - Mesh Data名が衝突する場合はスキップして通知します。
+- `Mesh Name -> Object Name`
+  - 選択Mesh ObjectのObject名をMesh Data名に合わせます。
+  - Object名が衝突する場合はスキップして通知します。
 
-## 最短手順
+## Check
+
+- `Collection A` と `Collection B` を指定します。
+- `Check Mesh Links` で、2つのCollection間に同じMesh Dataを共有しているObjectがあるか確認します。
+- 各Collection横の `Select Unlinked` で、相手CollectionとMesh Dataを共有していないObjectを選択します。
+- Collection内のObjectは子Collectionも含めて走査します。
+
+## Replace
+
+- `Replace Selected With Active Object`
+  - 選択ObjectをActive Mesh Objectに置換します。
+  - 元ObjectのTransform、名前、所属Collectionを保持します。
+  - `Use Mesh Instance` ON: Active ObjectのMesh Dataを共有します。
+  - `Use Mesh Instance` OFF: Active ObjectのMesh Dataをコピーします。
+- `Replace Selected With Collection Instance`
+  - 選択Objectを指定CollectionのCollection Instance Emptyに置換します。
+  - 元ObjectのTransform、名前、所属Collectionを保持します。
+  - `Set` ボタンでActive Layer Collectionを指定欄へ入れられます。
+- `Replace Collection Instances With Matching Mesh`
+  - 選択中のCollection Instance Objectを、指定Collection内の同名Mesh Objectへ置換します。
+  - 名前比較では選択Object名と候補Mesh Object名の末尾 `.001` などを無視します。
+  - 候補が見つからない場合、または同名候補が複数ある場合はスキップして通知します。
+
+## 導入手順
 
 1. Blenderで `Edit > Preferences > Add-ons` を開きます。
 2. `Install from Disk` から、このExtensionのzipまたはフォルダをインストールします。
@@ -42,54 +58,9 @@
 4. 3D Viewportを開きます。
 5. `N` キーでSidebarを開きます。
 6. `Map Link Tools` タブを開きます。
-7. `Selection Overview` の `Refresh Selection Info` で選択状態を確認します。
-8. `Preview` ボタンで変更内容を確認してから `Apply` します。
-
-## 代表的な使い方
-
-### `.001` を `_01` に変換する
-
-1. 対象オブジェクトを選択します。
-2. `Quick Clean` を開きます。
-3. `Target` を `Object Names` または `Object + Mesh Data Names` にします。
-4. `Preview .001 to _01` を押します。
-5. `Safety Preview` で結果を確認します。
-6. `Apply Previewed Operation` または `Apply .001 to _01` を押します。
-
-### Object名をMesh Data名へ同期する
-
-1. 対象Mesh Objectを選択します。
-2. `Object / Mesh Name Sync` を開きます。
-3. `Direction` を `Object Name -> Mesh Data Name` にします。
-4. 共有Meshを保護したい場合は `Shared Mesh` を `Skip Shared Mesh Data` のままにします。
-5. `Preview Sync` で確認します。
-6. 問題なければ `Apply Sync` を押します。
-
-### 同じMesh Dataを使うオブジェクトを選択する
-
-1. 基準にしたいMesh ObjectをActive Objectにします。
-2. `Link / Mesh Sharing Tools` を開きます。
-3. `Select Same Mesh` を押します。
-
-### Collection Instanceを参照元名でリネームする
-
-1. Collection InstanceのEmptyを選択します。
-2. `Collection Instance Tools` を開きます。
-3. 必要に応じて `Pattern` を調整します。
-4. `Preview Rename Instances` を押します。
-5. `Safety Preview` で確認してから適用します。
-
-## 安全設計
-
-- 通常は選択中オブジェクトだけを処理します。
-- 外部リンクされたObjectやMesh Dataは既定でスキップします。
-- 共有Mesh Dataのリネームは既定でスキップします。
-- 変更はSafety Previewで確認できます。
-- 大量処理はmodal/timerで分割し、Nパネルに進捗を表示します。
-- 長い処理は `Cancel Current Operation` でキャンセルできます。
 
 ## 注意点
 
-- キャンセルしても、すでに処理済みの項目は自動では戻しません。必要に応じてBlenderのUndoを使ってください。
-- `Make Selected Mesh Single User` はMesh Dataを複製するため、ファイルサイズが増える場合があります。
-- Collection Instanceの選択・Mesh共有選択はScene内を走査します。非常に大きいSceneでは進捗表示を見ながら処理してください。
+- 直接実行型のツールです。必要に応じてBlenderのUndoで戻してください。
+- リンク判定は、同じMesh Dataを共有しているかどうかで行います。
+- 外部リンクされたデータを編集する場合はBlender側の制約で失敗することがあります。その場合はスキップとして通知されます。

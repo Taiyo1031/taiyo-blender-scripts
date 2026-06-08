@@ -108,8 +108,8 @@
       "schema_version": "1.0.0",
       "id": "map_link_tools",
       "name": "Map Link Tools",
-      "tagline": "Rename and manage linked map objects and shared mesh data",
-      "version": "0.1.0",
+      "tagline": "Minimal rename, check, and replace tools for map layouts",
+      "version": "0.2.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -122,9 +122,9 @@
         "Scene",
         "Pipeline"
       ],
-      "archive_url": "./map_link_tools-0.1.0.zip",
-      "archive_size": 16640,
-      "archive_hash": "sha256:d9053a014570e422d76ecd26ea3c74b23b30c0319d0de8b9584b285d1df62346"
+      "archive_url": "./map_link_tools-0.2.0.zip",
+      "archive_size": 9575,
+      "archive_hash": "sha256:791a3c42f1e127c5bd2f50475455155f1670d89a538e25cebf5d18815645f4e5"
     },
     {
       "schema_version": "1.0.0",
