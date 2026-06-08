@@ -1,0 +1,19 @@
+schema_version = "1.0.0"
+
+id = "map_link_tools"
+version = "0.1.0"
+name = "Map Link Tools"
+tagline = "Rename and manage linked map objects and shared mesh data"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.5.0"
+website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/map_link_tools/README.md"
+license = ["SPDX:GPL-3.0-or-later"]
+tags = ["Object", "Scene", "Pipeline"]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "*.zip",
+]

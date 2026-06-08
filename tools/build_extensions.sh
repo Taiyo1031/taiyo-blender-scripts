@@ -13,6 +13,7 @@ packages=(
   "export_selected_names_csv"
   "gn_parameter_csv_exporter"
   "instance_name_fixer"
+  "map_link_tools"
   "move_selected_to_own_collections"
   "overlap_selector"
   "proportional_dimensions"

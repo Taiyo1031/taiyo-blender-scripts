@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 3),
+    "version": (1, 0, 4),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -51,6 +51,11 @@ TAG_ALIASES = {
     "instance_name_fixer": (
         "collection", "fix", "instance", "name", "rename", "sync", "cleanup",
         "インスタンス", "コレクション", "名前", "名前整理", "修正",
+    ),
+    "map_link_tools": (
+        "batch", "cleanup", "collection", "duplicate", "instance", "link", "map",
+        "mesh", "name", "rename", "shared", "sync", "users",
+        "マップ", "リンク", "共有", "インスタンス", "名前", "名前整理", "メッシュ", "リネーム",
     ),
     "move_selected_to_own_collections": (
         "collection", "move", "organize", "selected", "sort", "cleanup",
@@ -118,6 +123,10 @@ DESCRIPTION_ALIASES = {
     "instance_name_fixer": {
         "ja": "コレクションインスタンス名をインスタンス元に揃えます。",
         "en": "Match collection instance names to their source collections.",
+    },
+    "map_link_tools": {
+        "ja": "マップ制作向けにリンク配置、共有Mesh、Collection Instance、名前整理をまとめて扱います。",
+        "en": "Organize linked map objects, shared mesh data, collection instances, and names.",
     },
     "move_selected_to_own_collections": {
         "ja": "選択オブジェクトを名前に対応した子コレクションへ移動します。",

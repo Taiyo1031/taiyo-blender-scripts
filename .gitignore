@@ -7,6 +7,7 @@ __pycache__/
 
 # Local editor and tool caches
 .cache/
+.codex-tools/
 .vscode/
 .idea/
 
