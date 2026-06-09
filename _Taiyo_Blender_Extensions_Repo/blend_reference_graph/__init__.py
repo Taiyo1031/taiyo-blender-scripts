@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Blend Reference Graph",
     "author": "Taiyo",
-    "version": (0, 1, 3),
+    "version": (0, 1, 4),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > Blend Ref Graph",
     "description": "Visualize Blender object, mesh, collection, constraint, and Geometry Nodes references.",

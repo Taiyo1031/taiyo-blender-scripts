@@ -24,7 +24,8 @@ https://taiyo1031.github.io/taiyo-blender-scripts/extensions/index.json
 1. 3D Viewで整理したいオブジェクトを選択します。
 2. 右側のSidebarを開きます。表示されていない場合は `N` キーを押します。
 3. `Collection Tools` タブを開きます。
-4. `Move to Own Collections` を押します。
+4. 移動先コレクションに色を付けたい場合は、`Set Collection Color` を有効にして `Collection Color` を選びます。
+5. `Move to Own Collections` を押します。
 
 ## 実行例
 `Assets` コレクションの中に `Chair`、`Table`、`Lamp` がある状態で実行すると、次のように整理されます。
@@ -44,6 +45,7 @@ Assets
 - 基準になる元コレクションは、オブジェクトの最初の所属コレクションです。
 - 元コレクション直下に同名の子コレクションがある場合は、それを使います。
 - 元コレクション直下にない場合は、同名の既存コレクションデータをリンクするか、新しく作成します。
+- `Set Collection Color` が有効な場合は、移動先コレクションのOutliner色を指定した色に設定します。既存コレクションを再利用した場合も、その色に更新されます。
 - 移動後、オブジェクトは移動先以外のコレクションから外されます。
 
 ## 注意点

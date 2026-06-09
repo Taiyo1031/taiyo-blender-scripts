@@ -1,6 +1,14 @@
 import bpy
 
-from ..scanner import collection_scanner, constraint_scanner, geonodes_scanner, object_scanner
+from ..scanner import (
+    animation_scanner,
+    collection_scanner,
+    constraint_scanner,
+    geonodes_scanner,
+    library_scanner,
+    object_scanner,
+    safe_delete_scanner,
+)
 from .graph_model import GraphData
 
 
@@ -16,6 +24,10 @@ ALL_FILTERS = {
     "NODEGROUP": True,
     "MATERIAL": True,
     "IMAGE": True,
+    "ACTION": True,
+    "DRIVER": True,
+    "LIBRARY": True,
+    "SAFE_DELETE": True,
     "WARNING": True,
 }
 
@@ -52,6 +64,8 @@ def build_graph(context, settings):
         object_scanner.add_armature_and_bones(graph, target_obj, filters, include_all_bones=False)
         object_scanner.add_selected_bone_context(graph, target_obj, target_bone, filters)
         _expand_pose_bone_constraints(graph, target_obj, target_bone, filters)
+        animation_scanner.add_object_animation_refs(graph, target_obj, filters)
+        _finalize_graph(graph, settings.target_id, filters)
         return graph
 
     if not target_obj:
@@ -66,6 +80,8 @@ def build_graph(context, settings):
 
     visited = set()
     _expand_object(graph, target_obj, filters, mode, depth, visited)
+    target_id = settings.target_id or object_scanner.object_id(target_obj)
+    _finalize_graph(graph, target_id, filters)
     return graph
 
 
@@ -83,6 +99,7 @@ def _expand_object(graph, obj, filters, mode, depth, visited):
         constraint_scanner.add_object_constraints(graph, obj, filters)
         geonodes_scanner.add_geometry_nodes_modifiers(graph, obj, filters)
         object_scanner.add_armature_and_bones(graph, obj, filters)
+        animation_scanner.add_object_animation_refs(graph, obj, filters)
 
         if obj.parent and _allowed(filters, "OBJECT"):
             object_scanner.add_object_node(graph, obj.parent, filters)
@@ -102,6 +119,7 @@ def _expand_object(graph, obj, filters, mode, depth, visited):
             graph.add_edge(object_scanner.object_id(obj), object_scanner.object_id(child), "parent_of", "child")
             if depth > 1:
                 _expand_object(graph, child, filters, "USES", depth - 1, visited)
+        animation_scanner.add_incoming_driver_users(graph, obj, filters)
 
 
 def _expand_pose_bone_constraints(graph, armature_obj, bone_name, filters):
@@ -111,3 +129,8 @@ def _expand_pose_bone_constraints(graph, armature_obj, bone_name, filters):
     if not pose_bone:
         return
     constraint_scanner.add_pose_bone_constraints(graph, armature_obj, pose_bone, filters)
+
+
+def _finalize_graph(graph, target_id, filters):
+    library_scanner.add_library_links_for_graph(graph, filters)
+    safe_delete_scanner.add_safe_delete_preview(graph, target_id, filters)

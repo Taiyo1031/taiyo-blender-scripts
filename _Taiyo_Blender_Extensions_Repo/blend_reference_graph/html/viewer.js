@@ -8,6 +8,7 @@
   const legend = document.getElementById("legend");
   const search = document.getElementById("search");
   const githubUrl = "https://github.com/Taiyo1031/taiyo-blender-scripts/tree/main/_Taiyo_Blender_Extensions_Repo/blend_reference_graph";
+  const panelSwapKey = "brg.panels.swapped";
 
   const colors = {
     COLLECTION: "#f5c65b",
@@ -21,6 +22,10 @@
     NODEGROUP: "#5ecf9f",
     MATERIAL: "#c9a06b",
     IMAGE: "#76d9ea",
+    ACTION: "#9ecb70",
+    DRIVER: "#ffb36b",
+    LIBRARY: "#8ea0ff",
+    SAFE_DELETE: "#ff6f91",
     WARNING: "#ff6262",
   };
   const typeOrder = [
@@ -35,6 +40,10 @@
     "NODEGROUP",
     "MATERIAL",
     "IMAGE",
+    "ACTION",
+    "DRIVER",
+    "LIBRARY",
+    "SAFE_DELETE",
     "WARNING",
   ];
   const nodeById = new Map(graphData.nodes.map((node) => [node.id, node]));
@@ -62,6 +71,7 @@
       graphData.meta.generated_at || "",
     ].filter(Boolean).join("   ");
     buildLegend();
+    syncPanelSwap();
     render();
     fitView();
     updateDetails();
@@ -113,9 +123,13 @@
       let level = levels.get(node.id);
       if (level === undefined) level = 2;
       if (node.type === "COLLECTION") level = Math.min(level, -1);
-      if (["MESH", "MODIFIER", "GEONODES", "NODEGROUP", "MATERIAL", "IMAGE"].includes(node.type)) {
+    if (["MESH", "MODIFIER", "GEONODES", "NODEGROUP", "MATERIAL", "IMAGE"].includes(node.type)) {
         level = Math.max(level, 1);
       }
+      if (["ACTION", "DRIVER", "LIBRARY"].includes(node.type)) {
+        level = Math.max(level, 2);
+      }
+      if (node.type === "SAFE_DELETE") level = Math.min(level, -1);
       if (!columns.has(level)) columns.set(level, []);
       columns.get(level).push(node);
     }
@@ -520,10 +534,14 @@
 
   function applySearch() {
     const query = state.query.toLowerCase();
+    const matches = [];
     document.querySelectorAll(".node").forEach((el) => {
       const node = nodeById.get(el.dataset.id);
       const text = JSON.stringify(node || {}).toLowerCase();
-      el.classList.toggle("dim", Boolean(query) && !text.includes(query));
+      const hit = Boolean(query) && text.includes(query);
+      if (hit && node) matches.push(node);
+      el.classList.toggle("dim", Boolean(query) && !hit);
+      el.classList.toggle("search-hit", hit);
     });
     document.querySelectorAll(".edge-group").forEach((el) => {
       const from = nodeById.get(el.dataset.from);
@@ -533,6 +551,7 @@
         || JSON.stringify(to || {}).toLowerCase().includes(query);
       el.classList.toggle("dim", !visible);
     });
+    if (query && matches.length) focusNodes(matches);
   }
 
   function fitView() {
@@ -546,6 +565,24 @@
       (box.width - 100) / (maxX - minX || 1),
       (box.height - 100) / (maxY - minY || 1),
     )));
+    state.tx = (box.width - (minX + maxX) * state.scale) / 2;
+    state.ty = (box.height - (minY + maxY) * state.scale) / 2;
+    applyTransform();
+  }
+
+  function focusNodes(nodes) {
+    const box = svg.getBoundingClientRect();
+    if (!nodes.length || !box.width || !box.height) return;
+    const minX = Math.min(...nodes.map((node) => node.x));
+    const maxX = Math.max(...nodes.map((node) => node.x + node.w));
+    const minY = Math.min(...nodes.map((node) => node.y));
+    const maxY = Math.max(...nodes.map((node) => node.y + node.h));
+    const padding = nodes.length === 1 ? 240 : 150;
+    const nextScale = Math.min(1.25, Math.max(0.35, Math.min(
+      (box.width - padding) / (maxX - minX || 1),
+      (box.height - padding) / (maxY - minY || 1),
+    )));
+    state.scale = nextScale;
     state.tx = (box.width - (minX + maxX) * state.scale) / 2;
     state.ty = (box.height - (minY + maxY) * state.scale) / 2;
     applyTransform();
@@ -583,8 +620,39 @@
     }[char]));
   }
 
+  function syncPanelSwap() {
+    document.body.classList.toggle("panels-swapped", localStorage.getItem(panelSwapKey) === "1");
+  }
+
+  function togglePanelSwap() {
+    const next = !document.body.classList.contains("panels-swapped");
+    localStorage.setItem(panelSwapKey, next ? "1" : "0");
+    syncPanelSwap();
+    fitView();
+  }
+
+  function exportJson() {
+    const payload = `${JSON.stringify(graphData, null, 2)}\n`;
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const targetName = graphData.meta.target_name || "blend_reference_graph";
+    link.href = url;
+    link.download = `${fileSafeName(targetName)}_graph.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  function fileSafeName(value) {
+    return String(value || "graph").replace(/[\\/:*?"<>|\s]+/g, "_").replace(/^_+|_+$/g, "") || "graph";
+  }
+
   document.getElementById("reload").addEventListener("click", () => window.location.reload());
   document.getElementById("fit").addEventListener("click", fitView);
+  document.getElementById("export-json").addEventListener("click", exportJson);
+  document.getElementById("swap-panels").addEventListener("click", togglePanelSwap);
   document.getElementById("github").addEventListener("click", () => {
     window.open(githubUrl, "_blank", "noopener");
   });

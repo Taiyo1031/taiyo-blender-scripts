@@ -11,11 +11,13 @@
     <h1>Blend Reference Graph</h1>
     <div class="meta" id="meta"></div>
     <button id="github" type="button">GitHub</button>
+    <button id="export-json" type="button">Export JSON</button>
+    <button id="swap-panels" type="button">Swap Bars</button>
     <button id="reload">Reload Data</button>
     <button id="fit">Fit View</button>
   </header>
   <main>
-    <aside>
+    <aside id="left-panel">
       <input id="search" type="search" placeholder="Search nodes">
       <section>
         <h2>Node Types</h2>
@@ -26,7 +28,7 @@
       <svg id="graph" aria-label="Reference graph"></svg>
       <div id="selection-box"></div>
       <div class="graph-bottom-help">
-        <span id="usage-hint">Click a node for Details. Edge labels show relationship types.</span>
+        <span id="usage-hint">Search focuses matching nodes. Click a node for Details. Edge labels show relationship types.</span>
         <span id="shortcuts">Shortcuts: drag empty space or B = box select / Shift = add-toggle / middle drag or Space+drag = pan / wheel = zoom / Esc = cancel</span>
       </div>
     </section>

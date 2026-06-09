@@ -6,6 +6,7 @@
   --text: #edf1f5;
   --muted: #9da8b7;
   --accent: #5eb4ff;
+  --search: #ffe07a;
 }
 
 * {
@@ -70,22 +71,28 @@ input {
 main {
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr) 320px;
+  grid-template-areas: "left graph details";
   height: calc(100vh - 52px);
 }
 
 aside {
   overflow: auto;
   padding: 14px;
-  border-right: 1px solid var(--line);
   background: var(--panel);
 }
 
+#left-panel {
+  grid-area: left;
+  border-right: 1px solid var(--line);
+}
+
 #details {
-  border-right: 0;
+  grid-area: details;
   border-left: 1px solid var(--line);
 }
 
 #graph-wrap {
+  grid-area: graph;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -95,6 +102,21 @@ aside {
     linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     var(--bg);
   background-size: 24px 24px;
+}
+
+body.panels-swapped main {
+  grid-template-columns: 320px minmax(0, 1fr) 210px;
+  grid-template-areas: "details graph left";
+}
+
+body.panels-swapped #left-panel {
+  border-right: 0;
+  border-left: 1px solid var(--line);
+}
+
+body.panels-swapped #details {
+  border-right: 1px solid var(--line);
+  border-left: 0;
 }
 
 #graph {
@@ -256,6 +278,17 @@ aside {
   opacity: 0.14;
 }
 
+.node.search-hit .node-body {
+  stroke: var(--search);
+  stroke-width: 2;
+}
+
+.node.search-hit .node-selection-halo {
+  opacity: 1;
+  stroke: var(--search);
+  filter: drop-shadow(0 0 6px var(--search));
+}
+
 .node.selected .node-body {
   stroke: #ffffff;
   stroke-width: 2;
@@ -312,6 +345,12 @@ aside {
 @media (max-width: 900px) {
   main {
     grid-template-columns: 180px minmax(0, 1fr);
+    grid-template-areas: "left graph";
+  }
+
+  body.panels-swapped main {
+    grid-template-columns: 180px minmax(0, 1fr);
+    grid-template-areas: "left graph";
   }
 
   #details {

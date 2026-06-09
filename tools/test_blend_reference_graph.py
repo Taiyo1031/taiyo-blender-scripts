@@ -78,6 +78,16 @@ def create_fixture():
     referenced_collection = bpy.data.collections.new(PREFIX + "GNCollection")
     bpy.context.scene.collection.children.link(referenced_collection)
 
+    library_source = bpy.data.objects.new(PREFIX + "LibrarySource", None)
+    bpy.context.scene.collection.objects.link(library_source)
+    library_path = Path(tempfile.gettempdir()) / f"{PREFIX.lower()}linked_library.blend"
+    bpy.data.libraries.write(str(library_path), {library_source})
+    bpy.data.objects.remove(library_source, do_unlink=True)
+    with bpy.data.libraries.load(str(library_path), link=True) as (data_from, data_to):
+        data_to.objects = [PREFIX + "LibrarySource"]
+    linked_object = data_to.objects[0]
+    bpy.context.scene.collection.objects.link(linked_object)
+
     sub_group = bpy.data.node_groups.new(PREFIX + "SubGroup", "GeometryNodeTree")
     sub_object_info = sub_group.nodes.new("GeometryNodeObjectInfo")
     sub_object_info.inputs["Object"].default_value = nested_object
@@ -98,6 +108,18 @@ def create_fixture():
 
     modifier = source.modifiers.new(PREFIX + "GeometryNodes", "NODES")
     modifier.node_group = node_group
+
+    action = bpy.data.actions.new(PREFIX + "Action")
+    action.fcurves.new(data_path="location", index=0)
+    source.animation_data_create()
+    source.animation_data.action = action
+    driver_fcurve = source.driver_add("scale", 0)
+    driver_fcurve.driver.type = "SCRIPTED"
+    driver_fcurve.driver.expression = "var"
+    driver_variable = driver_fcurve.driver.variables.new()
+    driver_variable.name = "var"
+    driver_variable.targets[0].id = linked_object
+    driver_variable.targets[0].data_path = "location.x"
 
     armature_data = bpy.data.armatures.new(PREFIX + "ArmatureData")
     armature = new_object("Armature", armature_data)
@@ -143,6 +165,9 @@ def create_fixture():
         "referenced_object": referenced_object,
         "nested_object": nested_object,
         "referenced_collection": referenced_collection,
+        "linked_object": linked_object,
+        "library_path": library_path,
+        "action": action,
         "armature": armature,
         "pole_target": pole_target,
         "root_bone": root_bone_name,
@@ -171,6 +196,11 @@ def test_object_graph(fixture):
     modifier_id = f"Modifier:{fixture['source'].name}:{PREFIX}GeometryNodes"
     node_group_id = f"NodeGroup:{fixture['node_group'].name}"
     collection_id = f"Collection:{fixture['collection'].name}"
+    action_id = f"Action:{fixture['action'].name}"
+    driver_id = f"Driver:{source_id}:scale:0"
+    linked_object_id = f"Object:{fixture['linked_object'].name}"
+    library_id = f"Library:{fixture['library_path']}"
+    safe_delete_id = f"SafeDelete:{source_id}"
 
     for node_id in (
         source_id,
@@ -189,6 +219,11 @@ def test_object_graph(fixture):
         f"Image:{fixture['image'].name}",
         f"NodeGroup:{fixture['sub_group'].name}",
         collection_id,
+        action_id,
+        driver_id,
+        linked_object_id,
+        library_id,
+        safe_delete_id,
     ):
         assert_node(graph, node_id)
 
@@ -197,6 +232,11 @@ def test_object_graph(fixture):
     assert_edge(graph, source_id, child_id, "parent_of")
     assert_edge(graph, constraint_id, f"Object:{fixture['target'].name}", "constraint_target")
     assert_edge(graph, modifier_id, node_group_id, "uses_node_group")
+    assert_edge(graph, source_id, action_id, "uses_action")
+    assert_edge(graph, source_id, driver_id, "has_driver")
+    assert_edge(graph, driver_id, linked_object_id, "driver_target")
+    assert_edge(graph, linked_object_id, library_id, "linked_from_library")
+    assert_edge(graph, safe_delete_id, source_id, "previews_delete")
     assert_edge(
         graph,
         f"NodeGroup:{fixture['sub_group'].name}",
@@ -228,6 +268,9 @@ def test_object_graph(fixture):
     assert collection_node["path"] == sorted(expected_paths)[0]
     source_node = graph.nodes[source_id]
     assert expected_paths.issubset(set(source_node["details"]["collections"]))
+    safe_delete_node = graph.nodes[safe_delete_id]
+    assert safe_delete_node["details"]["blocker_count"] > 0
+    assert safe_delete_node["details"]["status"] == "Blocked"
     assert f"Warning:Constraint:{source_id}:{PREFIX}LimitLocation:MissingTarget" not in graph.nodes
     assert f"Mesh:{fixture['child_mesh'].name}" not in graph.nodes, "Depth 1 expanded child references"
     assert_no_dangling_edges(graph)
@@ -294,7 +337,7 @@ def test_output_folders():
     result = bpy.ops.brg.update_graph_data()
     assert "FINISHED" in result
     assert Path(bpy.context.scene.brg_settings.resolved_output_path) == expected
-    for filename in ("graph_data.js", "viewer.html", "viewer.css", "viewer.js"):
+    for filename in ("graph_data.js", "graph_data.json", "viewer.html", "viewer.css", "viewer.js"):
         assert (expected / filename).is_file(), f"Missing generated viewer file: {filename}"
     viewer_js = (expected / "viewer.js").read_text(encoding="utf-8")
     viewer_css = (expected / "viewer.css").read_text(encoding="utf-8")
@@ -302,8 +345,15 @@ def test_output_folders():
     assert 'class: "edge-label"' in viewer_js
     assert 'class: "node-selected-badge"' in viewer_js
     assert "githubUrl" in viewer_js
+    assert "focusNodes(matches)" in viewer_js
+    assert "exportJson" in viewer_js
+    assert "togglePanelSwap" in viewer_js
     assert ".node.selected .node-selection-halo" in viewer_css
+    assert ".node.search-hit .node-body" in viewer_css
+    assert "panels-swapped" in viewer_css
     assert 'id="github"' in viewer_html
+    assert 'id="export-json"' in viewer_html
+    assert 'id="swap-panels"' in viewer_html
     assert 'id="shortcuts"' in viewer_html
 
     with tempfile.TemporaryDirectory() as custom_directory:
