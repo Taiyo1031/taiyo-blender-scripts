@@ -1,6 +1,6 @@
 from bpy.types import Panel, UIList
 
-from . import naming, preset_utils
+from . import naming
 
 
 DOCUMENTATION_URL = (
@@ -30,26 +30,15 @@ def _draw_separator_controls(layout, module):
         operator.value = value
 
 
-def _repair_choice_module(module):
-    if module.module_type != "CHOICE":
-        return
-
-    seen = set()
-    option_id_map = {}
-    for option in module.choice_options:
-        old_id = option.option_id
-        new_id = preset_utils.unique_choice_option_id(old_id, seen)
-        seen.add(new_id)
-        option_id_map[old_id] = new_id
-        if old_id != new_id:
-            option.option_id = new_id
-
-    if module.choice_current in option_id_map:
-        module.choice_current = option_id_map[module.choice_current]
-
-    option_ids = [option.option_id for option in module.choice_options]
-    if option_ids and module.choice_current not in option_ids:
-        module.choice_current = option_ids[0]
+def _draw_choice_current(layout, module):
+    try:
+        layout.prop(module, "choice_current", text="")
+        return True
+    except Exception:
+        layout.label(text="Choice data needs repair.", icon="ERROR")
+        operator = layout.operator("mar.repair_choice_modules", text="Repair")
+        operator.module_id = module.module_id
+        return False
 
 
 class MAR_UL_modules(UIList):
@@ -143,11 +132,10 @@ class MAR_PT_main(Panel):
             box = layout.box()
             box.label(text="Quick Controls", icon="OPTIONS")
             for module in choice_modules:
-                _repair_choice_module(module)
                 row = box.row(align=True)
                 row.label(text=module.choice_label or "Choice")
                 if module.choice_options:
-                    row.prop(module, "choice_current", text="")
+                    _draw_choice_current(row, module)
                     if not module.enabled:
                         row.label(text="Disabled", icon="HIDE_OFF")
                 else:
@@ -219,7 +207,6 @@ class MAR_PT_main(Panel):
             if module.module_type == "TEXT":
                 box.prop(module, "text_value")
             elif module.module_type == "CHOICE":
-                _repair_choice_module(module)
                 box.prop(module, "choice_label")
                 if not module.choice_options:
                     box.label(text="Choice has no options.", icon="ERROR")
@@ -239,7 +226,8 @@ class MAR_PT_main(Panel):
                 up.direction = "UP"
                 down = row.operator("mar.move_choice_option", text="", icon="TRIA_DOWN")
                 down.direction = "DOWN"
-                box.prop(module, "choice_current")
+                if module.choice_options:
+                    _draw_choice_current(box, module)
             elif module.module_type == "DIMENSIONS":
                 box.prop(module, "axis_order")
                 box.prop(module, "dimension_unit")

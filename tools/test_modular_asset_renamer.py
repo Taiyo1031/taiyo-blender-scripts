@@ -137,6 +137,14 @@ def test_module_editing():
     )
     assert len(only_choice.choice_options) == 1
 
+    only_choice.choice_options[0].option_id = "123legacy"
+    only_choice.choice_current = "123legacy"
+    assert_finished(
+        bpy.ops.mar.repair_choice_modules(module_id=only_choice.module_id)
+    )
+    assert only_choice.choice_options[0].option_id == "option_123legacy"
+    assert only_choice.choice_current == "option_123legacy"
+
 
 def test_module_outputs(parent, child, obj):
     settings = bpy.context.scene.mar_settings

@@ -279,12 +279,39 @@ class MAR_OT_move_choice_option(Operator):
         return {"FINISHED"}
 
 
+class MAR_OT_repair_choice_modules(Operator):
+    bl_idname = "mar.repair_choice_modules"
+    bl_label = "Repair Choice Data"
+    bl_options = {"REGISTER", "UNDO"}
+
+    module_id: StringProperty(name="Module ID", default="")
+
+    def execute(self, context):
+        settings = _settings(context)
+        if self.module_id:
+            module = _module_by_id(settings, self.module_id)
+            if module is None:
+                self.report({"ERROR"}, "Choice module not found.")
+                return {"CANCELLED"}
+            changed = preset_utils.repair_choice_module(module)
+            count = 1 if changed else 0
+        else:
+            count = sum(
+                1
+                for module in settings.modules
+                if preset_utils.repair_choice_module(module)
+            )
+        self.report({"INFO"}, f"Repaired {count} choice module(s).")
+        return {"FINISHED"}
+
+
 class MAR_OT_preview(Operator):
     bl_idname = "mar.preview"
     bl_label = "Preview Selected"
 
     def execute(self, context):
         settings = _settings(context)
+        preset_utils.repair_settings(settings)
         records, warning = naming.build_rename_plan(context, settings)
         _fill_preview(settings, records)
         settings.last_warning = warning
@@ -314,6 +341,7 @@ class MAR_OT_apply(Operator):
 
     def execute(self, context):
         settings = _settings(context)
+        preset_utils.repair_settings(settings)
         records, warning = naming.build_rename_plan(context, settings)
         settings.last_warning = warning
         valid = [record for record in records if record.status == naming.STATUS_OK]
@@ -475,6 +503,7 @@ class MAR_OT_save_preset(Operator):
             return {"CANCELLED"}
         name = preset["name"]
         try:
+            preset_utils.repair_settings(settings)
             presets = preset_utils.upsert_preset(
                 preset_utils.load_presets(),
                 preset_utils.settings_to_preset(settings, name),
@@ -516,6 +545,7 @@ class MAR_OT_save_preset_as(Operator):
                     "A preset with this name already exists. Use Save to update it.",
                 )
                 return {"CANCELLED"}
+            preset_utils.repair_settings(settings)
             presets = preset_utils.upsert_preset(
                 existing,
                 preset_utils.settings_to_preset(settings, name),

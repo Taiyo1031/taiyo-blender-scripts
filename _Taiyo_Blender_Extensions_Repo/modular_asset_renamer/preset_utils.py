@@ -58,6 +58,13 @@ def new_option_value():
     return int(uuid.uuid4().hex[:7], 16) + 1
 
 
+def unique_choice_option_value(existing):
+    value = new_option_value()
+    while value in existing:
+        value = new_option_value()
+    return value
+
+
 def safe_choice_option_id(raw_id, fallback=None):
     value = str(raw_id or "").strip()
     value = UNSAFE_CHOICE_ID_CHARACTER_PATTERN.sub("_", value)
@@ -76,6 +83,60 @@ def unique_choice_option_id(raw_id, existing):
         candidate = f"{base}_{suffix}"
         suffix += 1
     return candidate
+
+
+def safe_choice_current(module):
+    try:
+        return module.choice_current
+    except Exception:
+        return ""
+
+
+def repair_choice_module(module):
+    if module.module_type != "CHOICE":
+        return False
+
+    changed = False
+    seen_ids = set()
+    seen_values = set()
+    option_id_map = {}
+    for option in module.choice_options:
+        old_id = option.option_id
+        new_id = unique_choice_option_id(old_id, seen_ids)
+        seen_ids.add(new_id)
+        option_id_map[old_id] = new_id
+        if old_id != new_id:
+            option.option_id = new_id
+            changed = True
+
+        old_value = option.option_value
+        if old_value < 1 or old_value in seen_values:
+            option.option_value = unique_choice_option_value(seen_values)
+            changed = True
+        seen_values.add(option.option_value)
+
+    current = safe_choice_current(module)
+    if current in option_id_map:
+        desired = option_id_map[current]
+    else:
+        option_ids = [option.option_id for option in module.choice_options]
+        desired = (
+            current
+            if current in option_ids
+            else (option_ids[0] if option_ids else "__NONE__")
+        )
+
+    if desired != current:
+        module.choice_current = desired
+        changed = True
+    return changed
+
+
+def repair_settings(settings):
+    changed = False
+    for module in settings.modules:
+        changed = repair_choice_module(module) or changed
+    return changed
 
 
 def user_preset_path():
@@ -323,7 +384,7 @@ def module_to_dict(module):
             }
             for option in module.choice_options
         ],
-        "choice_current": module.choice_current,
+        "choice_current": safe_choice_current(module),
         "axis_order": module.axis_order,
         "dimension_unit": module.dimension_unit,
         "axis_separator": module.axis_separator,

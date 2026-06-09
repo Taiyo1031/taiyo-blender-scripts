@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Modular Asset Renamer",
     "author": "Taiyo",
-    "version": (1, 0, 3),
+    "version": (1, 0, 4),
     "blender": (4, 5, 0),
     "location": "View3D > Sidebar (N) > Rename Tools",
     "description": "Build names from reusable modules and rename selected assets",
@@ -11,7 +11,7 @@ bl_info = {
 import bpy
 from bpy.props import PointerProperty
 
-from . import operators, props, ui
+from . import operators, preset_utils, props, ui
 
 
 DOCUMENTATION_URL = (
@@ -50,6 +50,7 @@ classes = (
     operators.MAR_OT_add_choice_option,
     operators.MAR_OT_remove_choice_option,
     operators.MAR_OT_move_choice_option,
+    operators.MAR_OT_repair_choice_modules,
     operators.MAR_OT_preview,
     operators.MAR_OT_apply,
     operators.MAR_OT_revert,
@@ -68,13 +69,25 @@ classes = (
 )
 
 
+def _repair_existing_choice_modules():
+    for scene in bpy.data.scenes:
+        settings = getattr(scene, "mar_settings", None)
+        if settings is not None:
+            preset_utils.repair_settings(settings)
+    return None
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.mar_settings = PointerProperty(type=props.MAR_Settings)
+    if not bpy.app.timers.is_registered(_repair_existing_choice_modules):
+        bpy.app.timers.register(_repair_existing_choice_modules, first_interval=0.1)
 
 
 def unregister():
+    if bpy.app.timers.is_registered(_repair_existing_choice_modules):
+        bpy.app.timers.unregister(_repair_existing_choice_modules)
     if hasattr(bpy.types.Scene, "mar_settings"):
         del bpy.types.Scene.mar_settings
     for cls in reversed(classes):
