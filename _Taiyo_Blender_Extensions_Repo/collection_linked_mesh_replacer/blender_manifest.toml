@@ -1,0 +1,19 @@
+schema_version = "1.0.0"
+
+id = "collection_linked_mesh_replacer"
+version = "1.0.0"
+name = "Collection Linked Mesh Replacer"
+tagline = "Replace meshes with linked matches from a collection"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.5.0"
+website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/collection_linked_mesh_replacer/README.md"
+license = ["SPDX:GPL-3.0-or-later"]
+tags = ["Object", "Mesh", "Pipeline"]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "*.zip",
+]

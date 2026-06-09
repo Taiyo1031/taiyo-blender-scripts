@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 6),
+    "version": (1, 0, 7),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -40,6 +40,11 @@ TAG_ALIASES = {
     "collection_mesh_merge_fbx_exporter": (
         "alembic", "abc", "collection", "combine", "export", "fbx", "merge", "usd",
         "asset", "batch", "pipeline", "統合", "書き出し", "コレクション", "アセット",
+    ),
+    "collection_linked_mesh_replacer": (
+        "asset", "batch", "cache", "collection", "duplicate", "linked", "match",
+        "mesh", "replace", "shape", "swap",
+        "アセット", "キャッシュ", "コレクション", "メッシュ", "形状", "置換", "差し替え",
     ),
     "collection_number_to_mesh_name": (
         "collection", "cleanup", "mesh", "name", "number", "rename", "renaming",
@@ -121,6 +126,10 @@ DESCRIPTION_ALIASES = {
     "collection_mesh_merge_fbx_exporter": {
         "ja": "対象コレクションを統合し、FBX/USD/Alembicで書き出します。",
         "en": "Export target collections as merged FBX, USD, or Alembic files.",
+    },
+    "collection_linked_mesh_replacer": {
+        "ja": "形状が一致するCollection内の正規Meshへlinked duplicateで差し替えます。",
+        "en": "Replace meshes with linked duplicates matched from a source collection.",
     },
     "collection_number_to_mesh_name": {
         "ja": "コレクション番号を付け、メッシュデータ名を整理します。",

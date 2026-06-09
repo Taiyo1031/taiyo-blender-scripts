@@ -25,6 +25,7 @@ BLENDER_BIN="${BLENDER_BIN:-/Applications/Blender.app/Contents/MacOS/Blender}"
 packages=(
   "attribute_csv_exporter"
   "blend_reference_graph"
+  "collection_linked_mesh_replacer"
   "collection_number_to_mesh_name"
   "collection_mesh_merge_fbx_exporter"
   "custom_properties_batch_editor"

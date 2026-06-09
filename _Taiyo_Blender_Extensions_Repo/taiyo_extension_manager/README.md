@@ -16,7 +16,7 @@ View3D > Sidebar(N) > Taiyo > Taiyo Add-on Manager
 - リポジトリ未登録時に、Taiyo repositoryを追加
 - Remote RepositoryのmanifestからExtension一覧を動的に取得
 - 名前、ID、説明、推定タグで検索
-- `csv`、`export`、`uv`、`unreal`、`custom-property`、`名前整理`、`衝突` などのタグで絞り込み
+- `csv`、`export`、`uv`、`unreal`、`custom-property`、`mesh`、`名前整理`、`差し替え`、`衝突` などのタグで絞り込み
 - `All`、`Installed`、`Enabled`、`Disabled`、`Available`、`Updates` で状態フィルター
 - 管理対象Extensionの日本語/英語説明をコンパクトに表示
 - 各Extensionのインストール状態を表示
@@ -51,8 +51,10 @@ instance
 scale
 viewport
 custom-property
+mesh
 メタデータ
 名前整理
+差し替え
 書き出し
 衝突
 寸法

@@ -43,6 +43,28 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "collection_linked_mesh_replacer",
+      "name": "Collection Linked Mesh Replacer",
+      "tagline": "Replace meshes with linked matches from a collection",
+      "version": "1.0.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/collection_linked_mesh_replacer/README.md",
+      "tags": [
+        "Object",
+        "Mesh",
+        "Pipeline"
+      ],
+      "archive_url": "./collection_linked_mesh_replacer-1.0.0.zip",
+      "archive_size": 10334,
+      "archive_hash": "sha256:36264d086fcea311d5a3c9de32f3c5e122b824bb6b29c1a5579b3f72f356cb6f"
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "collection_mesh_merge_fbx_exporter",
       "name": "Collection Mesh Merge FBX Exporter",
       "tagline": "Export target collections as merged FBX, USD, or Alembic files",
@@ -260,7 +282,7 @@
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
       "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.6",
+      "version": "1.0.7",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -268,9 +290,9 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.6.zip",
-      "archive_size": 10354,
-      "archive_hash": "sha256:48f3f29bf14aee0da3bd28402c1392740050ae14cdc95e9b037f868abc0b11c2"
+      "archive_url": "./taiyo_extension_manager-1.0.7.zip",
+      "archive_size": 10500,
+      "archive_hash": "sha256:664160de1885bb4b423f0a34dd53161d13db9339b84d7d03f9f08168536385a0"
     },
     {
       "schema_version": "1.0.0",
