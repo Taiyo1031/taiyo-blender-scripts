@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Move Objects to Own Collections",
     "author": "Taiyo",
-    "version": (1, 4, 0),
+    "version": (1, 5, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar (N) > Collection Tools",
     "description": "Move each selected object into a child collection named after the object.",
@@ -11,7 +11,7 @@ bl_info = {
 DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/move_selected_to_own_collections/Move_Objects_to_Own_Collections_%E4%BD%BF%E7%94%A8%E6%9B%B8.md"
 
 import bpy
-from bpy.props import BoolProperty, EnumProperty, PointerProperty
+from bpy.props import EnumProperty, PointerProperty
 
 
 def collection_contains(collection, target_collection):
@@ -45,15 +45,16 @@ def get_or_create_target_collection(parent_collection, collection_name):
 
 
 COLLECTION_COLOR_ITEMS = (
-    ("NONE", "None", "Do not show a color tag"),
-    ("COLOR_01", "Color 1", "Use collection color tag 1"),
-    ("COLOR_02", "Color 2", "Use collection color tag 2"),
-    ("COLOR_03", "Color 3", "Use collection color tag 3"),
-    ("COLOR_04", "Color 4", "Use collection color tag 4"),
-    ("COLOR_05", "Color 5", "Use collection color tag 5"),
-    ("COLOR_06", "Color 6", "Use collection color tag 6"),
-    ("COLOR_07", "Color 7", "Use collection color tag 7"),
-    ("COLOR_08", "Color 8", "Use collection color tag 8"),
+    ("KEEP", "Keep", "Do not change existing collection color", "BLANK1", 0),
+    ("NONE", "None", "Clear the collection color tag", "X", 1),
+    ("COLOR_01", "1", "Use collection color tag 1", "COLLECTION_COLOR_01", 2),
+    ("COLOR_02", "2", "Use collection color tag 2", "COLLECTION_COLOR_02", 3),
+    ("COLOR_03", "3", "Use collection color tag 3", "COLLECTION_COLOR_03", 4),
+    ("COLOR_04", "4", "Use collection color tag 4", "COLLECTION_COLOR_04", 5),
+    ("COLOR_05", "5", "Use collection color tag 5", "COLLECTION_COLOR_05", 6),
+    ("COLOR_06", "6", "Use collection color tag 6", "COLLECTION_COLOR_06", 7),
+    ("COLOR_07", "7", "Use collection color tag 7", "COLLECTION_COLOR_07", 8),
+    ("COLOR_08", "8", "Use collection color tag 8", "COLLECTION_COLOR_08", 9),
 )
 
 
@@ -70,16 +71,17 @@ def target_collection_name(obj, name_source):
 
 
 class MSOC_Settings(bpy.types.PropertyGroup):
-    apply_collection_color: BoolProperty(
-        name="Set Collection Color",
-        description="Apply a color tag to each destination collection",
-        default=False,
+    name_source: EnumProperty(
+        name="Name Mode",
+        description="Name source for destination collections",
+        items=NAME_SOURCE_ITEMS,
+        default="OBJECT",
     )
     collection_color_tag: EnumProperty(
         name="Collection Color",
         description="Color tag assigned to destination collections",
         items=COLLECTION_COLOR_ITEMS,
-        default="COLOR_03",
+        default="KEEP",
     )
 
 
@@ -118,7 +120,7 @@ class OBJECT_OT_move_selected_to_own_collections(bpy.types.Operator):
                 original_collection,
                 collection_name,
             )
-            if settings.apply_collection_color:
+            if settings.collection_color_tag != "KEEP":
                 target_collection.color_tag = settings.collection_color_tag
 
             if obj.name not in target_collection.objects:
@@ -155,24 +157,38 @@ class VIEW3D_PT_collection_tools(bpy.types.Panel):
         layout = self.layout
         settings = context.scene.msoc_settings
 
+        mode_box = layout.box()
+        mode_box.label(text="Name Mode")
+        mode_box.prop(settings, "name_source", expand=True)
+
         color_box = layout.box()
-        color_box.prop(settings, "apply_collection_color")
-        row = color_box.row()
-        row.enabled = settings.apply_collection_color
-        row.prop(settings, "collection_color_tag")
+        color_box.label(text="Collection Color")
+        row = color_box.row(align=True)
+        row.prop_enum(settings, "collection_color_tag", "KEEP", text="Keep")
+        row.prop_enum(settings, "collection_color_tag", "NONE", text="None", icon="X")
+        grid = color_box.grid_flow(
+            columns=4,
+            row_major=True,
+            even_columns=True,
+            even_rows=True,
+            align=True,
+        )
+        for index in range(1, 9):
+            color_id = f"COLOR_{index:02d}"
+            grid.prop_enum(
+                settings,
+                "collection_color_tag",
+                color_id,
+                text=str(index),
+                icon=f"COLLECTION_COLOR_{index:02d}",
+            )
 
         op = layout.operator(
             OBJECT_OT_move_selected_to_own_collections.bl_idname,
-            text="Move by Object Name",
+            text="Move to Own Collections",
             icon="OUTLINER_COLLECTION",
         )
-        op.name_source = "OBJECT"
-        op = layout.operator(
-            OBJECT_OT_move_selected_to_own_collections.bl_idname,
-            text="Move by Mesh Name",
-            icon="MESH_DATA",
-        )
-        op.name_source = "MESH"
+        op.name_source = settings.name_source
 
 
 class MSOC_AddonPreferences(bpy.types.AddonPreferences):

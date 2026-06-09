@@ -24,8 +24,9 @@ https://taiyo1031.github.io/taiyo-blender-scripts/extensions/index.json
 1. 3D Viewで整理したいオブジェクトを選択します。
 2. 右側のSidebarを開きます。表示されていない場合は `N` キーを押します。
 3. `Collection Tools` タブを開きます。
-4. 移動先コレクションに色を付けたい場合は、`Set Collection Color` を有効にして `Collection Color` を選びます。
-5. Object名でコレクションを作る場合は `Move by Object Name`、Meshデータ名で作る場合は `Move by Mesh Name` を押します。
+4. `Name Mode` で、Object名を使うかMeshデータ名を使うか選びます。
+5. `Collection Color` で、色を変更しない場合は `Keep`、色を消す場合は `None`、色を付ける場合は色番号ボタンを選びます。
+6. `Move to Own Collections` を押します。
 
 ## 実行例
 `Assets` コレクションの中に `Chair`、`Table`、`Lamp` がある状態で実行すると、次のように整理されます。
@@ -45,9 +46,9 @@ Assets
 - 基準になる元コレクションは、オブジェクトの最初の所属コレクションです。
 - 元コレクション直下に同名の子コレクションがある場合は、それを使います。
 - 元コレクション直下にない場合は、同名の既存コレクションデータをリンクするか、新しく作成します。
-- `Move by Object Name` はObject名を移動先コレクション名に使います。
-- `Move by Mesh Name` はMeshオブジェクトのMeshデータ名を移動先コレクション名に使います。Mesh以外のオブジェクトはObject名を使います。
-- `Set Collection Color` が有効な場合は、移動先コレクションのOutliner色を指定した色に設定します。既存コレクションを再利用した場合も、その色に更新されます。
+- `Name Mode` が `Object Name` の場合は、Object名を移動先コレクション名に使います。
+- `Name Mode` が `Mesh Name` の場合は、MeshオブジェクトのMeshデータ名を移動先コレクション名に使います。Mesh以外のオブジェクトはObject名を使います。
+- `Collection Color` で色を選んだ場合は、移動先コレクションのOutliner色を指定した色に設定します。既存コレクションを再利用した場合も、その色に更新されます。
 - 移動後、オブジェクトは移動先以外のコレクションから外されます。
 
 ## 注意点

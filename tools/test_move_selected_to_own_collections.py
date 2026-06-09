@@ -40,10 +40,10 @@ def main():
         bpy.context.view_layer.objects.active = obj
 
         settings = bpy.context.scene.msoc_settings
-        settings.apply_collection_color = True
+        settings.name_source = "OBJECT"
         settings.collection_color_tag = "COLOR_05"
 
-        result = bpy.ops.object.move_selected_to_own_collections(name_source="OBJECT")
+        result = bpy.ops.object.move_selected_to_own_collections(name_source=settings.name_source)
         assert result == {"FINISHED"}, result
 
         target = parent.children.get("Chair")
@@ -65,9 +65,10 @@ def main():
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
 
-        settings.apply_collection_color = False
+        settings.name_source = "MESH"
+        settings.collection_color_tag = "KEEP"
 
-        result = bpy.ops.object.move_selected_to_own_collections(name_source="MESH")
+        result = bpy.ops.object.move_selected_to_own_collections(name_source=settings.name_source)
         assert result == {"FINISHED"}, result
 
         target = parent.children.get("ChairMeshData")
