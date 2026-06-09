@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `collection_linked_mesh_replacer`
-- バージョン: `1.0.6`
+- バージョン: `1.0.7`
 - 対応Blender: `4.5.0` 以降
 - 表示場所: `3D Viewport > Sidebar (N) > Mesh Replace`
 - キャッシュ: メモリのみ。Blender終了時に消去
@@ -22,8 +22,9 @@
 - Source ObjectとMesh Dataを共有するlinked duplicateへの差し替え
 - 元Objectのworld transformと親子関係を引き継ぎ
 - world bounding box centerによる原点ずれ補正
-- 単体置換と選択Meshの一括置換
-- 選択中Objectごとの対応先を一覧表示する複数プレビュー
+- 選択Meshの一括置換（1個選択も同じ操作）
+- 置換前に必ず表示される選択中Objectごとのプレビュー
+- 候補なし時に一度だけキャッシュを自動再構築するオプション
 - 複数候補があるObjectを警告表示し、first matchを使うことを明示
 - 元Objectのバックアップ移動、削除、非表示、保持
 - 複数候補時は名前順の最初の候補を使用
@@ -32,13 +33,11 @@
 
 1. 正規アセットをまとめたCollectionを`Source Collection`に指定します。
 2. `Build / Update Cache`を押します。
-3. 差し替えたいMesh Objectを選択してアクティブにします。
-4. 必要なら`Find Match`で候補を確認します。
-5. `Replace Selected`を押します。
-6. 複数を処理する場合は対象を選択し、`Replace All Selected`を押して確認します。
+3. 差し替えたいMesh Objectをすべて選択します。
+4. リロードアイコンの`Replace All Selected`を押します。
+5. 必ず表示されるプレビューで、各ObjectのSource Object、候補数、Not Found、Skippedを確認してから実行します。
 
-複数Objectを処理する前に`Preview Selected`を押すと、選択中の各Objectについて対応するSource Object、候補数、Not Found、Skippedを一覧で確認できます。
-選択を変えて再度プレビューした場合は、前回の単体Match Resultを消してから現在の選択結果を表示します。
+単体専用の置換ボタンはありません。Objectを1個だけ選択した場合も、同じ`Replace All Selected`を使用します。プレビュー専用ボタンもなく、置換前の確認ダイアログへ常に表示されます。
 候補が複数あるObjectは`Multiple Candidate Targets`として警告し、名前順のfirst matchを使用します。
 
 ## 形状照合
@@ -77,6 +76,8 @@ Manual Source ObjectはSource Collection外からも指定できます。元Obje
 - `Outdated`: 上記のいずれかが変更済み
 
 Mesh内部の編集はv1.0ではOutdated判定に含めません。`Verify Match Before Replace`がONの場合は、差し替え直前に対象とSource Meshを再計算します。
+
+`Auto Rebuild Cache When No Match`がONの場合、選択中の有効なMeshに候補0件が1つでもあると、キャッシュを一度だけ自動再構築して全選択を再照合します。キャッシュ未作成の場合も自動構築します。OFFの場合は現在のキャッシュだけで判定し、候補なしのObjectを置換しません。
 
 ## Transform
 

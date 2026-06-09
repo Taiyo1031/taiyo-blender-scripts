@@ -60,15 +60,12 @@ class CLMR_PT_actions(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         settings = context.scene.clmr_settings
-        ready = bool(cache.CACHE) and settings.source_collection is not None
+        ready = settings.source_collection is not None
 
         column = layout.column(align=True)
         column.enabled = ready
         column.scale_y = 1.25
-        column.operator("clmr.find_match", icon="VIEWZOOM")
-        column.operator("clmr.preview_selected", icon="VIEWZOOM")
-        column.operator("clmr.replace_selected", icon="FILE_REFRESH")
-        column.operator("clmr.replace_all_selected", icon="DUPLICATE")
+        column.operator("clmr.replace_all_selected", icon="FILE_REFRESH")
 
 
 class CLMR_PT_match_result(bpy.types.Panel):
@@ -90,10 +87,10 @@ class CLMR_PT_match_result(bpy.types.Panel):
         if settings.result_candidates > 1:
             box.label(text="Multiple candidates: using first match", icon="ERROR")
 
+        layout.separator(factor=0.5)
+        box = layout.box()
+        box.label(text="Last Selection Preview", icon="FILE_REFRESH")
         if settings.preview_items:
-            layout.separator(factor=0.5)
-            box = layout.box()
-            box.label(text="Selected Preview", icon="VIEWZOOM")
             box.label(
                 text=(
                     f"Matched: {settings.preview_matched} / "
@@ -115,6 +112,8 @@ class CLMR_PT_match_result(bpy.types.Panel):
                 "preview_index",
                 rows=min(8, max(2, len(settings.preview_items))),
             )
+        else:
+            box.label(text="Preview appears before every replacement")
 
 
 class CLMR_PT_fallback(bpy.types.Panel):
@@ -230,6 +229,7 @@ class CLMR_PT_settings(bpy.types.Panel):
         box.label(text="Match Settings", icon="VIEWZOOM")
         box.prop(settings, "match_method")
         box.prop(settings, "verify_match")
+        box.prop(settings, "auto_rebuild_on_no_match")
         box.prop(settings, "recursive_search")
 
         box = layout.box()

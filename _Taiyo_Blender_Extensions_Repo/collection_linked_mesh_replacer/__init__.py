@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Collection Linked Mesh Replacer",
     "author": "Taiyo",
-    "version": (1, 0, 6),
+    "version": (1, 0, 7),
     "blender": (4, 5, 0),
     "location": "View3D > Sidebar (N) > Mesh Replace",
     "description": "Replace mesh objects with linked copies matched from a source collection",
@@ -44,8 +44,6 @@ classes = (
     operators.CLMR_OT_thorough_find_match,
     operators.CLMR_OT_thorough_replace_active,
     operators.CLMR_OT_replace_active_manual,
-    operators.CLMR_OT_preview_selected,
-    operators.CLMR_OT_replace_selected,
     operators.CLMR_OT_replace_all_selected,
     ui.CLMR_UL_preview_results,
     ui.CLMR_PT_source,

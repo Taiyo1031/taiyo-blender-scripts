@@ -53,6 +53,7 @@ compatibility_archives=(
   "collection_linked_mesh_replacer-1.0.3.zip"
   "collection_linked_mesh_replacer-1.0.4.zip"
   "collection_linked_mesh_replacer-1.0.5.zip"
+  "collection_linked_mesh_replacer-1.0.6.zip"
   "modular_asset_renamer-1.0.0.zip"
   "modular_asset_renamer-1.0.1.zip"
   "modular_asset_renamer-1.0.2.zip"

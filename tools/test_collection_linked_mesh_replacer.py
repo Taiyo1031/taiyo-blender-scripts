@@ -183,7 +183,10 @@ def main():
         assert settings.result_candidates == 2
         assert settings.result_match == source_a.name
 
-        assert bpy.ops.clmr.replace_selected() == {"FINISHED"}
+        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
+        assert settings.preview_matched == 1
+        assert settings.preview_multiple == 1
+        assert settings.batch_replaced == 1
         replacement = bpy.context.active_object
         assert replacement is not None
         assert replacement.data == source_a.data
@@ -216,7 +219,9 @@ def main():
         bpy.context.view_layer.update()
 
         select_only(excluded_backup_target)
-        assert bpy.ops.clmr.replace_selected() == {"FINISHED"}
+        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
+        assert settings.preview_matched == 1
+        assert settings.batch_replaced == 1
         assert excluded_backup_target.name in backup.objects
         assert excluded_backup_target.name not in target_collection.objects
         assert excluded_backup_target.hide_viewport
@@ -253,7 +258,9 @@ def main():
         assert bpy.ops.clmr.find_match() == {"FINISHED"}
         assert settings.result_confidence == "Shape Match / Multiple"
         assert settings.result_match == source_a.name
-        assert bpy.ops.clmr.replace_selected() == {"FINISHED"}
+        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
+        assert settings.preview_matched == 1
+        assert settings.batch_replaced == 1
         scaled_replacement = bpy.context.active_object
         assert scaled_replacement.name == PREFIX + "ScaledTarget"
         assert scaled_replacement.data == source_a.data
@@ -310,10 +317,18 @@ def main():
             target_collection,
         )
         batch_target_pointer = batch_target.as_pointer()
+        batch_target_name = batch_target.name
+        no_match_name = no_match.name
+        source_b_name = source_b.name
         settings.original_mode = "DELETE"
         select_only(batch_target, no_match, source_b, active=batch_target)
 
-        assert bpy.ops.clmr.preview_selected() == {"FINISHED"}
+        select_only()
+        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"CANCELLED"}
+        assert settings.result_confidence == "Not Searched"
+
+        select_only(batch_target, no_match, source_b, active=batch_target)
+        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
         preview = {
             item.target_name: item
             for item in settings.preview_items
@@ -322,29 +337,12 @@ def main():
         assert settings.preview_not_found == 1
         assert settings.preview_skipped == 1
         assert settings.preview_multiple == 1
-        assert preview[batch_target.name].match_name == source_a.name
-        assert preview[batch_target.name].confidence == "Exact / Multiple"
-        assert preview[batch_target.name].candidate_count == 2
-        assert preview[batch_target.name].using_first is True
-        assert preview[no_match.name].confidence == "Not Found"
-        assert preview[source_b.name].confidence == "Skipped"
-
-        select_only(no_match)
-        settings.result_selected = batch_target.name
-        settings.result_match = source_a.name
-        assert bpy.ops.clmr.preview_selected() == {"FINISHED"}
-        assert settings.preview_matched == 0
-        assert settings.preview_not_found == 1
-        assert settings.result_selected == no_match.name
-        assert settings.result_match == ""
-        assert settings.result_confidence == "Not Found"
-
-        select_only()
-        assert bpy.ops.clmr.preview_selected() == {"CANCELLED"}
-        assert settings.result_confidence == "Not Searched"
-
-        select_only(batch_target, no_match, source_b, active=batch_target)
-        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
+        assert preview[batch_target_name].match_name == source_a.name
+        assert preview[batch_target_name].confidence == "Exact / Multiple"
+        assert preview[batch_target_name].candidate_count == 2
+        assert preview[batch_target_name].using_first is True
+        assert preview[no_match_name].confidence == "Not Found"
+        assert preview[source_b_name].confidence == "Skipped"
         assert settings.batch_replaced == 1
         assert settings.batch_not_found == 1
         assert settings.batch_skipped == 1
@@ -403,10 +401,57 @@ def main():
         assert not stale_candidates
 
         select_only(stale_cache_target)
-        assert bpy.ops.clmr.thorough_find_match() == {"FINISHED"}
+        stale_pointer = stale_cache_target.as_pointer()
+        settings.auto_rebuild_on_no_match = True
+        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
+        assert settings.preview_matched == 1
+        assert settings.preview_not_found == 0
+        assert settings.batch_replaced == 1
         assert settings.result_candidates == 2
-        assert settings.result_match == source_a.name
-        assert settings.result_confidence == "Thorough Exact / Multiple"
+        assert all(
+            obj.as_pointer() != stale_pointer
+            for obj in bpy.data.objects
+        )
+
+        source_mesh.vertices[1].co.y -= 0.25
+        source_mesh.update()
+        no_rebuild_target = link_object(
+            PREFIX + "NoRebuildTarget",
+            source_mesh.copy(),
+            target_collection,
+        )
+        assert cache.cache_status(source_root, True) == "VALID"
+        _signature, stale_candidates = cache.find_candidates(no_rebuild_target)
+        assert not stale_candidates
+
+        settings.auto_rebuild_on_no_match = False
+        select_only(no_rebuild_target)
+        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
+        assert settings.preview_matched == 0
+        assert settings.preview_not_found == 1
+        assert settings.batch_replaced == 0
+        assert settings.batch_not_found == 1
+        assert bpy.data.objects.get(PREFIX + "NoRebuildTarget") is no_rebuild_target
+
+        assert bpy.ops.clmr.clear_cache() == {"FINISHED"}
+        assert cache.cache_status(source_root, True) == "NOT_BUILT"
+
+        auto_build_target = link_object(
+            PREFIX + "AutoBuildTarget",
+            source_mesh.copy(),
+            target_collection,
+        )
+        auto_build_pointer = auto_build_target.as_pointer()
+        settings.auto_rebuild_on_no_match = True
+        select_only(auto_build_target)
+        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
+        assert cache.cache_status(source_root, True) == "VALID"
+        assert settings.preview_matched == 1
+        assert settings.batch_replaced == 1
+        assert all(
+            obj.as_pointer() != auto_build_pointer
+            for obj in bpy.data.objects
+        )
 
         assert bpy.ops.clmr.clear_cache() == {"FINISHED"}
         assert cache.cache_status(source_root, True) == "NOT_BUILT"

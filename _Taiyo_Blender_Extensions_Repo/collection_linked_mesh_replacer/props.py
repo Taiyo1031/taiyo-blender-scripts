@@ -44,6 +44,14 @@ class CLMR_Settings(bpy.types.PropertyGroup):
         description="Recalculate both meshes immediately before replacement",
         default=True,
     )
+    auto_rebuild_on_no_match: BoolProperty(
+        name="Auto Rebuild Cache When No Match",
+        description=(
+            "Rebuild the cache once and retry all selected objects when "
+            "one or more valid targets have no match"
+        ),
+        default=True,
+    )
     recursive_search: BoolProperty(
         name="Search Source Collection Recursively",
         description="Include objects in child collections",

@@ -252,6 +252,116 @@ def _active_target(operator, context, settings):
     return target
 
 
+def _set_preview_results(settings, selected, candidates_by_pointer):
+    _clear_single_match_result(settings)
+    settings.preview_items.clear()
+    settings.preview_index = 0
+    matched = 0
+    not_found = 0
+    skipped = 0
+    multiple = 0
+
+    for obj in selected:
+        item = settings.preview_items.add()
+        item.target_name = obj.name if obj else ""
+        if not _is_valid_target(obj, settings):
+            item.confidence = "Skipped"
+            skipped += 1
+            continue
+
+        candidates = candidates_by_pointer.get(obj.as_pointer(), [])
+        item.candidate_count = len(candidates)
+        if not candidates:
+            item.confidence = "Not Found"
+            not_found += 1
+            continue
+
+        first = candidates[0]
+        item.match_name = first["object_name"]
+        item.source_mesh = first["mesh_name"]
+        item.using_first = len(candidates) > 1
+        confidence = first.get("confidence", "Exact")
+        item.confidence = (
+            confidence if len(candidates) == 1 else f"{confidence} / Multiple"
+        )
+        matched += 1
+        if len(candidates) > 1:
+            multiple += 1
+
+        if obj == bpy.context.active_object:
+            _set_match_result(settings, obj, candidates)
+
+    if settings.preview_items and not settings.result_selected:
+        first_item = settings.preview_items[0]
+        settings.result_selected = first_item.target_name
+        settings.result_match = first_item.match_name
+        settings.result_source_mesh = first_item.source_mesh
+        settings.result_confidence = first_item.confidence or "Not Found"
+        settings.result_candidates = first_item.candidate_count
+
+    settings.preview_matched = matched
+    settings.preview_not_found = not_found
+    settings.preview_skipped = skipped
+    settings.preview_multiple = multiple
+
+
+def _prepare_selected_preview(operator, context, settings):
+    if settings.source_collection is None:
+        operator.report({"ERROR"}, "No Source Collection selected")
+        return None, None
+
+    selected = list(context.selected_objects)
+    if not selected:
+        _clear_match_result(settings)
+        operator.report({"WARNING"}, "No objects selected")
+        return None, None
+
+    status = cache.cache_status(
+        settings.source_collection,
+        settings.recursive_search,
+    )
+    rebuilt = False
+    if status == "NOT_BUILT":
+        if not settings.auto_rebuild_on_no_match:
+            operator.report({"ERROR"}, "Cache is not built")
+            return None, None
+        cache.build_cache(
+            settings.source_collection,
+            settings.recursive_search,
+        )
+        rebuilt = True
+    elif status == "OUTDATED":
+        operator.report({"WARNING"}, "Cache is outdated")
+
+    def collect_candidates():
+        result = {}
+        missing = False
+        for obj in selected:
+            if not _is_valid_target(obj, settings):
+                continue
+            _signature, candidates = cache.find_candidates(obj)
+            result[obj.as_pointer()] = candidates
+            if not candidates:
+                missing = True
+        return result, missing
+
+    candidates_by_pointer, missing = collect_candidates()
+    if (
+        missing
+        and settings.auto_rebuild_on_no_match
+        and not rebuilt
+    ):
+        cache.build_cache(
+            settings.source_collection,
+            settings.recursive_search,
+        )
+        candidates_by_pointer, _missing = collect_candidates()
+        rebuilt = True
+
+    _set_preview_results(settings, selected, candidates_by_pointer)
+    return selected, candidates_by_pointer
+
+
 class CLMR_OT_build_cache(bpy.types.Operator):
     bl_idname = "clmr.build_cache"
     bl_label = "Build / Update Cache"
@@ -466,148 +576,6 @@ class CLMR_OT_replace_active_manual(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class CLMR_OT_preview_selected(bpy.types.Operator):
-    bl_idname = "clmr.preview_selected"
-    bl_label = "Preview Selected"
-    bl_description = "Preview source matches for all selected mesh objects"
-
-    def execute(self, context):
-        settings = context.scene.clmr_settings
-        if not _cache_ready(self, settings):
-            return {"CANCELLED"}
-
-        _clear_single_match_result(settings)
-        settings.preview_items.clear()
-        settings.preview_index = 0
-        matched = 0
-        not_found = 0
-        skipped = 0
-        multiple = 0
-
-        if not context.selected_objects:
-            self.report({"WARNING"}, "No objects selected")
-            settings.preview_matched = 0
-            settings.preview_not_found = 0
-            settings.preview_skipped = 0
-            settings.preview_multiple = 0
-            return {"CANCELLED"}
-
-        for obj in context.selected_objects:
-            item = settings.preview_items.add()
-            item.target_name = obj.name if obj else ""
-
-            if obj is None or obj.type != "MESH" or obj.data is None:
-                item.confidence = "Skipped"
-                skipped += 1
-                continue
-
-            if not _is_valid_target(obj, settings):
-                item.confidence = "Skipped"
-                skipped += 1
-                continue
-
-            _signature, candidates = cache.find_candidates(obj)
-            item.candidate_count = len(candidates)
-            if not candidates:
-                item.confidence = "Not Found"
-                not_found += 1
-                continue
-
-            first = candidates[0]
-            item.match_name = first["object_name"]
-            item.source_mesh = first["mesh_name"]
-            item.using_first = len(candidates) > 1
-            confidence = first.get("confidence", "Exact")
-            item.confidence = (
-                confidence if len(candidates) == 1 else f"{confidence} / Multiple"
-            )
-            matched += 1
-            if len(candidates) > 1:
-                multiple += 1
-
-            if obj == context.active_object:
-                _set_match_result(settings, obj, candidates)
-                if len(candidates) > 1:
-                    self.report(
-                        {"WARNING"},
-                        _multiple_match_message(obj.name, candidates),
-                    )
-
-        if settings.preview_items and not settings.result_selected:
-            first_item = settings.preview_items[0]
-            settings.result_selected = first_item.target_name
-            settings.result_match = first_item.match_name
-            settings.result_source_mesh = first_item.source_mesh
-            settings.result_confidence = first_item.confidence or "Not Found"
-            settings.result_candidates = first_item.candidate_count
-
-        settings.preview_matched = matched
-        settings.preview_not_found = not_found
-        settings.preview_skipped = skipped
-        settings.preview_multiple = multiple
-        if matched == 0:
-            self.report(
-                {"WARNING"},
-                (
-                    f"Previewed: {len(settings.preview_items)}, no matches "
-                    f"({not_found} not found, {skipped} skipped)"
-                ),
-            )
-            return {"FINISHED"}
-
-        self.report(
-            {"WARNING"} if multiple else {"INFO"},
-            (
-                f"Previewed: {len(settings.preview_items)}, Matched: {matched}, "
-                f"Not Found: {not_found}, Skipped: {skipped}, "
-                f"Multiple: {multiple}"
-            ),
-        )
-        return {"FINISHED"}
-
-
-class CLMR_OT_replace_selected(bpy.types.Operator):
-    bl_idname = "clmr.replace_selected"
-    bl_label = "Replace Selected"
-    bl_description = "Replace the active object with a linked copy of its source match"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        settings = context.scene.clmr_settings
-        if not _cache_ready(self, settings):
-            return {"CANCELLED"}
-
-        target = context.active_object
-        if target is None or target.type != "MESH" or target.data is None:
-            self.report({"ERROR"}, "Active object is not a Mesh")
-            return {"CANCELLED"}
-        if not _is_valid_target(target, settings):
-            self.report({"WARNING"}, "Active object is in the Source Collection")
-            return {"CANCELLED"}
-
-        status, new_obj = _replace_object(context, target, settings)
-        if status == "NOT_FOUND":
-            self.report({"WARNING"}, "No match found")
-            return {"CANCELLED"}
-        if status != "REPLACED":
-            self.report({"ERROR"}, "Match verification failed")
-            return {"CANCELLED"}
-
-        _select_replacement(context, settings, new_obj)
-
-        if settings.result_candidates > 1:
-            self.report(
-                {"WARNING"},
-                (
-                    f"Replaced with linked mesh: {new_obj.name}; "
-                    f"multiple candidates existed, used {settings.result_match}"
-                ),
-            )
-        else:
-            self.report({"INFO"}, f"Replaced with linked mesh: {new_obj.name}")
-        return {"FINISHED"}
-
-
 class CLMR_OT_replace_all_selected(bpy.types.Operator):
     bl_idname = "clmr.replace_all_selected"
     bl_label = "Replace All Selected"
@@ -618,25 +586,56 @@ class CLMR_OT_replace_all_selected(bpy.types.Operator):
 
     def invoke(self, context, event):
         settings = context.scene.clmr_settings
-        self.target_count = sum(
-            1
-            for obj in context.selected_objects
-            if _is_valid_target(obj, settings)
+        selected, _candidates = _prepare_selected_preview(
+            self,
+            context,
+            settings,
         )
-        return context.window_manager.invoke_props_dialog(self, width=340)
+        if selected is None:
+            return {"CANCELLED"}
+        self.target_count = settings.preview_matched
+        return context.window_manager.invoke_props_dialog(self, width=560)
 
     def draw(self, context):
-        self.layout.label(
-            text=f"Replace {self.target_count} selected mesh objects?",
+        settings = context.scene.clmr_settings
+        layout = self.layout
+        layout.label(
+            text=(
+                f"Matched: {settings.preview_matched} / "
+                f"Not Found: {settings.preview_not_found} / "
+                f"Skipped: {settings.preview_skipped}"
+            ),
+            icon="FILE_REFRESH",
+        )
+        if settings.preview_multiple:
+            layout.label(
+                text=f"Multiple Candidate Targets: {settings.preview_multiple}",
+                icon="ERROR",
+            )
+        layout.template_list(
+            "CLMR_UL_preview_results",
+            "",
+            settings,
+            "preview_items",
+            settings,
+            "preview_index",
+            rows=min(10, max(3, len(settings.preview_items))),
+        )
+        layout.label(
+            text=f"Replace {self.target_count} matched selected objects?",
             icon="QUESTION",
         )
 
     def execute(self, context):
         settings = context.scene.clmr_settings
-        if not _cache_ready(self, settings):
+        selected, candidates_by_pointer = _prepare_selected_preview(
+            self,
+            context,
+            settings,
+        )
+        if selected is None:
             return {"CANCELLED"}
 
-        selected = list(context.selected_objects)
         created = []
         replaced = 0
         not_found = 0
@@ -648,11 +647,16 @@ class CLMR_OT_replace_all_selected(bpy.types.Operator):
             if not _is_valid_target(target, settings):
                 skipped += 1
                 continue
-            _target_signature, candidates = cache.find_candidates(target)
+            candidates = candidates_by_pointer.get(target.as_pointer(), [])
             if len(candidates) > 1:
                 multiple += 1
             try:
-                status, new_obj = _replace_object(context, target, settings)
+                status, new_obj = _replace_object(
+                    context,
+                    target,
+                    settings,
+                    candidates=candidates,
+                )
             except (ReferenceError, RuntimeError, ValueError):
                 failed += 1
                 continue
