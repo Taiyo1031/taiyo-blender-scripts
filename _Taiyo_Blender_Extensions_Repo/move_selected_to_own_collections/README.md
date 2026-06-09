@@ -8,7 +8,7 @@
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar (N) > Collection Tools`
-- バージョン: `1.3.0`
+- バージョン: `1.4.0`
 - 対応Blender目安: `4.2.0` 以降
 - カテゴリ: `Object`
 
@@ -21,7 +21,7 @@
 1. 整理したいオブジェクトを選択します。
 2. `Collection Tools` パネルを開きます。
 3. 必要に応じて `Set Collection Color` を有効にし、移動先コレクションへ付ける色を選びます。
-4. `Move to Own Collections` を押します。
+4. Object名でコレクションを作る場合は `Move by Object Name`、Meshデータ名で作る場合は `Move by Mesh Name` を押します。
 
 ## 結果
 各オブジェクトは、元の所属コレクション内にある同名コレクションへ移動します。
@@ -42,6 +42,7 @@ Original Collection
 - 同名コレクションが元コレクション直下にある場合は再利用します。
 - 同名コレクションデータが既に存在する場合は、それを元コレクションへリンクして再利用します。
 - `Set Collection Color` が有効な場合、作成または再利用した移動先コレクションのOutliner色が指定色に更新されます。
+- `Move by Mesh Name` では、MeshオブジェクトはMeshデータ名を使います。Mesh以外のオブジェクトはObject名を使います。
 
 ## 詳細な使用書
 - `Move_Objects_to_Own_Collections_使用書.md`

@@ -58,7 +58,8 @@ repo/
 - Private repositoryでGitHub Pagesが使えない場合は、BlenderからRemote Repositoryとして使う目的を優先してPublicに切り替えます。
 - GitHub CLIの認証が切れている場合は、`gh auth login -h github.com` を先に実行してください。
 - ユーザーから「pushしない」「コミットしない」などの明示的な指定がない場合、実装・検証後はcommitしてpushまで進めます。作業ツリーに無関係な差分がある場合は混ぜず、必要なら対象範囲を確認してから進めます。
-- Codex環境で `git` / `gh` がPATHになくても、GitHubコネクタが使える場合はそこで止めず、GitHub Git Data API相当の `create_blob` / `create_tree` / `create_commit` / `update_ref` を使ってcommitとpushを行います。配布更新ではローカルの `docs/extensions` 状態を優先し、古いzipの削除、新zipの追加、`index.json` / `index.html` の更新を同じcommitにまとめます。
+- Codex環境で `git` がPATHにない場合は、まず `powershell -ExecutionPolicy Bypass -File tools/git.ps1 ...` を使います。このラッパーは `.codex-tools/MinGit` のPATHと `GIT_EXEC_PATH` を補完するため、HTTPSのfetch/pushにも使えます。
+- それでも `git` / `gh` が使えずGitHubコネクタが使える場合は、そこで止めず、GitHub Git Data API相当の `create_blob` / `create_tree` / `create_commit` / `update_ref` を使ってcommitとpushを行います。配布更新ではローカルの `docs/extensions` 状態を優先し、古いzipの削除、新zipの追加、`index.json` / `index.html` の更新を同じcommitにまとめます。
 
 ## 配布前チェック
 

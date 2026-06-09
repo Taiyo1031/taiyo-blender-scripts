@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Move Objects to Own Collections",
     "author": "Taiyo",
-    "version": (1, 3, 0),
+    "version": (1, 4, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar (N) > Collection Tools",
     "description": "Move each selected object into a child collection named after the object.",
@@ -57,6 +57,18 @@ COLLECTION_COLOR_ITEMS = (
 )
 
 
+NAME_SOURCE_ITEMS = (
+    ("OBJECT", "Object Name", "Create destination collections from object names"),
+    ("MESH", "Mesh Name", "Create destination collections from mesh data names"),
+)
+
+
+def target_collection_name(obj, name_source):
+    if name_source == "MESH" and obj.type == "MESH" and obj.data is not None:
+        return obj.data.name
+    return obj.name
+
+
 class MSOC_Settings(bpy.types.PropertyGroup):
     apply_collection_color: BoolProperty(
         name="Set Collection Color",
@@ -74,8 +86,15 @@ class MSOC_Settings(bpy.types.PropertyGroup):
 class OBJECT_OT_move_selected_to_own_collections(bpy.types.Operator):
     bl_idname = "object.move_selected_to_own_collections"
     bl_label = "Move to Own Collections"
-    bl_description = "Move each selected object into a child collection with the same name as the object"
+    bl_description = "Move each selected object into a child collection named from the object or mesh"
     bl_options = {"REGISTER", "UNDO"}
+
+    name_source: EnumProperty(
+        name="Name Source",
+        description="Name source for destination collections",
+        items=NAME_SOURCE_ITEMS,
+        default="OBJECT",
+    )
 
     def execute(self, context):
         selected_objects = list(context.selected_objects)
@@ -94,9 +113,10 @@ class OBJECT_OT_move_selected_to_own_collections(bpy.types.Operator):
                 continue
 
             original_collection = obj.users_collection[0]
+            collection_name = target_collection_name(obj, self.name_source)
             target_collection = get_or_create_target_collection(
                 original_collection,
-                obj.name,
+                collection_name,
             )
             if settings.apply_collection_color:
                 target_collection.color_tag = settings.collection_color_tag
@@ -113,12 +133,12 @@ class OBJECT_OT_move_selected_to_own_collections(bpy.types.Operator):
         if skipped_count:
             self.report(
                 {"INFO"},
-                f"Moved {moved_count} object(s). Skipped {skipped_count} object(s) without a collection.",
+                f"Moved {moved_count} object(s) by {self.name_source.lower()} name. Skipped {skipped_count} object(s) without a collection.",
             )
         else:
             self.report(
                 {"INFO"},
-                f"Moved {moved_count} object(s) to matching collection(s).",
+                f"Moved {moved_count} object(s) by {self.name_source.lower()} name.",
             )
 
         return {"FINISHED"}
@@ -141,11 +161,18 @@ class VIEW3D_PT_collection_tools(bpy.types.Panel):
         row.enabled = settings.apply_collection_color
         row.prop(settings, "collection_color_tag")
 
-        layout.operator(
+        op = layout.operator(
             OBJECT_OT_move_selected_to_own_collections.bl_idname,
-            text="Move to Own Collections",
+            text="Move by Object Name",
             icon="OUTLINER_COLLECTION",
         )
+        op.name_source = "OBJECT"
+        op = layout.operator(
+            OBJECT_OT_move_selected_to_own_collections.bl_idname,
+            text="Move by Mesh Name",
+            icon="MESH_DATA",
+        )
+        op.name_source = "MESH"
 
 
 class MSOC_AddonPreferences(bpy.types.AddonPreferences):

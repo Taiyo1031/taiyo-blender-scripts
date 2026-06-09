@@ -43,7 +43,7 @@ def main():
         settings.apply_collection_color = True
         settings.collection_color_tag = "COLOR_05"
 
-        result = bpy.ops.object.move_selected_to_own_collections()
+        result = bpy.ops.object.move_selected_to_own_collections(name_source="OBJECT")
         assert result == {"FINISHED"}, result
 
         target = parent.children.get("Chair")
@@ -51,6 +51,29 @@ def main():
         assert target.color_tag == "COLOR_05", target.color_tag
         assert obj.name in target.objects, "Expected object to move into the target collection"
         assert obj.name not in parent.objects, "Expected object to be unlinked from the parent collection"
+
+        reset_scene()
+
+        parent = bpy.data.collections.new("Assets")
+        bpy.context.scene.collection.children.link(parent)
+
+        mesh = bpy.data.meshes.new("ChairMeshData")
+        obj = bpy.data.objects.new("ChairObject", mesh)
+        parent.objects.link(obj)
+
+        bpy.context.view_layer.update()
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
+
+        settings.apply_collection_color = False
+
+        result = bpy.ops.object.move_selected_to_own_collections(name_source="MESH")
+        assert result == {"FINISHED"}, result
+
+        target = parent.children.get("ChairMeshData")
+        assert target is not None, "Expected child collection named after the mesh data"
+        assert obj.name in target.objects, "Expected object to move into the mesh-named collection"
+        assert parent.children.get("ChairObject") is None, "Did not expect an object-named collection"
     finally:
         addon.unregister()
 

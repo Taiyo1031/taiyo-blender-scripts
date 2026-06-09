@@ -175,7 +175,7 @@
       "id": "move_selected_to_own_collections",
       "name": "Move Objects to Own Collections",
       "tagline": "Move selected objects into matching child collections",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -183,9 +183,9 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/move_selected_to_own_collections/Move_Objects_to_Own_Collections_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./move_selected_to_own_collections-1.3.0.zip",
-      "archive_size": 5043,
-      "archive_hash": "sha256:c5761e52f45ab2d041d386f363b6045c48502b7b20c3055d45d61b31400b443e"
+      "archive_url": "./move_selected_to_own_collections-1.4.0.zip",
+      "archive_size": 5387,
+      "archive_hash": "sha256:e40da3122fa5b93d8a1fb3043c341e639dedb957541e48ee5175f296c8abdf9c"
     },
     {
       "schema_version": "1.0.0",
