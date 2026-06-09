@@ -66,6 +66,7 @@ class CLMR_PT_actions(bpy.types.Panel):
         column.enabled = ready
         column.scale_y = 1.25
         column.operator("clmr.find_match", icon="VIEWZOOM")
+        column.operator("clmr.preview_selected", icon="VIEWZOOM")
         column.operator("clmr.replace_selected", icon="FILE_REFRESH")
         column.operator("clmr.replace_all_selected", icon="DUPLICATE")
 
@@ -88,6 +89,51 @@ class CLMR_PT_match_result(bpy.types.Panel):
         box.label(text=f"Candidates: {settings.result_candidates}")
         if settings.result_candidates > 1:
             box.label(text="Using: First Match", icon="INFO")
+
+        if settings.preview_items:
+            layout.separator(factor=0.5)
+            box = layout.box()
+            box.label(text="Selected Preview", icon="VIEWZOOM")
+            box.label(
+                text=(
+                    f"Matched: {settings.preview_matched} / "
+                    f"Not Found: {settings.preview_not_found} / "
+                    f"Skipped: {settings.preview_skipped}"
+                )
+            )
+            box.template_list(
+                "CLMR_UL_preview_results",
+                "",
+                settings,
+                "preview_items",
+                settings,
+                "preview_index",
+                rows=min(8, max(2, len(settings.preview_items))),
+            )
+
+
+class CLMR_UL_preview_results(bpy.types.UIList):
+    def draw_item(
+        self,
+        context,
+        layout,
+        data,
+        item,
+        icon,
+        active_data,
+        active_propname,
+        index,
+    ):
+        if self.layout_type in {"DEFAULT", "COMPACT"}:
+            row = layout.row(align=True)
+            row.label(text=item.target_name or "-", icon="OBJECT_DATA")
+            match_text = item.match_name or item.confidence or "-"
+            row.label(text=f"-> {match_text}")
+            if item.candidate_count:
+                row.label(text=str(item.candidate_count), icon="INFO")
+        elif self.layout_type == "GRID":
+            layout.alignment = "CENTER"
+            layout.label(text=item.target_name[:8])
 
 
 class CLMR_PT_cache(bpy.types.Panel):

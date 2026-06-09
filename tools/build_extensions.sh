@@ -47,6 +47,12 @@ packages=(
 )
 
 compatibility_archives=(
+  "collection_linked_mesh_replacer-1.0.0.zip"
+  "modular_asset_renamer-1.0.0.zip"
+  "modular_asset_renamer-1.0.1.zip"
+  "modular_asset_renamer-1.0.2.zip"
+  "modular_asset_renamer-1.0.3.zip"
+  "modular_asset_renamer-1.0.4.zip"
   "move_selected_to_own_collections-1.3.0.zip"
   "move_selected_to_own_collections-1.4.0.zip"
 )

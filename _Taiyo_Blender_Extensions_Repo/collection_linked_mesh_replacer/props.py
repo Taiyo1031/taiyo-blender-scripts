@@ -1,11 +1,20 @@
 import bpy
 from bpy.props import (
     BoolProperty,
+    CollectionProperty,
     EnumProperty,
     IntProperty,
     PointerProperty,
     StringProperty,
 )
+
+
+class CLMR_PreviewItem(bpy.types.PropertyGroup):
+    target_name: StringProperty(default="")
+    match_name: StringProperty(default="")
+    source_mesh: StringProperty(default="")
+    confidence: StringProperty(default="")
+    candidate_count: IntProperty(default=0, min=0)
 
 
 class CLMR_Settings(bpy.types.PropertyGroup):
@@ -105,6 +114,12 @@ class CLMR_Settings(bpy.types.PropertyGroup):
     result_source_mesh: StringProperty(default="")
     result_confidence: StringProperty(default="Not Searched")
     result_candidates: IntProperty(default=0, min=0)
+
+    preview_items: CollectionProperty(type=CLMR_PreviewItem)
+    preview_index: IntProperty(default=0, min=0)
+    preview_matched: IntProperty(default=0, min=0)
+    preview_not_found: IntProperty(default=0, min=0)
+    preview_skipped: IntProperty(default=0, min=0)
 
     batch_replaced: IntProperty(default=0, min=0)
     batch_not_found: IntProperty(default=0, min=0)

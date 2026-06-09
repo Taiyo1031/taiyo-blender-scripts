@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Collection Linked Mesh Replacer",
     "author": "Taiyo",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (4, 5, 0),
     "location": "View3D > Sidebar (N) > Mesh Replace",
     "description": "Replace mesh objects with linked copies matched from a source collection",
@@ -36,12 +36,15 @@ class CLMR_AddonPreferences(bpy.types.AddonPreferences):
 
 classes = (
     CLMR_AddonPreferences,
+    props.CLMR_PreviewItem,
     props.CLMR_Settings,
     operators.CLMR_OT_build_cache,
     operators.CLMR_OT_clear_cache,
     operators.CLMR_OT_find_match,
+    operators.CLMR_OT_preview_selected,
     operators.CLMR_OT_replace_selected,
     operators.CLMR_OT_replace_all_selected,
+    ui.CLMR_UL_preview_results,
     ui.CLMR_PT_source,
     ui.CLMR_PT_actions,
     ui.CLMR_PT_match_result,

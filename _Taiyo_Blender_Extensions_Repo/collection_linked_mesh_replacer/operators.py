@@ -10,6 +10,11 @@ def _clear_match_result(settings):
     settings.result_source_mesh = ""
     settings.result_confidence = "Not Searched"
     settings.result_candidates = 0
+    settings.preview_items.clear()
+    settings.preview_index = 0
+    settings.preview_matched = 0
+    settings.preview_not_found = 0
+    settings.preview_skipped = 0
 
 
 def _set_match_result(settings, target, candidates):
@@ -232,6 +237,74 @@ class CLMR_OT_find_match(bpy.types.Operator):
             )
         else:
             self.report({"INFO"}, f"Match found: {candidates[0]['object_name']}")
+        return {"FINISHED"}
+
+
+class CLMR_OT_preview_selected(bpy.types.Operator):
+    bl_idname = "clmr.preview_selected"
+    bl_label = "Preview Selected"
+    bl_description = "Preview source matches for all selected mesh objects"
+
+    def execute(self, context):
+        settings = context.scene.clmr_settings
+        if not _cache_ready(self, settings):
+            return {"CANCELLED"}
+
+        settings.preview_items.clear()
+        matched = 0
+        not_found = 0
+        skipped = 0
+
+        for obj in context.selected_objects:
+            item = settings.preview_items.add()
+            item.target_name = obj.name if obj else ""
+
+            if obj is None or obj.type != "MESH" or obj.data is None:
+                item.confidence = "Skipped"
+                skipped += 1
+                continue
+
+            if not _is_valid_target(obj, settings):
+                item.confidence = "Skipped"
+                skipped += 1
+                continue
+
+            _signature, candidates = cache.find_candidates(obj)
+            item.candidate_count = len(candidates)
+            if not candidates:
+                item.confidence = "Not Found"
+                not_found += 1
+                continue
+
+            first = candidates[0]
+            item.match_name = first["object_name"]
+            item.source_mesh = first["mesh_name"]
+            item.confidence = (
+                "Exact" if len(candidates) == 1 else "Multiple Matches"
+            )
+            matched += 1
+
+            if obj == context.active_object:
+                _set_match_result(settings, obj, candidates)
+
+        if settings.preview_items and not settings.result_selected:
+            first_item = settings.preview_items[0]
+            settings.result_selected = first_item.target_name
+            settings.result_match = first_item.match_name
+            settings.result_source_mesh = first_item.source_mesh
+            settings.result_confidence = first_item.confidence or "Not Found"
+            settings.result_candidates = first_item.candidate_count
+
+        settings.preview_matched = matched
+        settings.preview_not_found = not_found
+        settings.preview_skipped = skipped
+        self.report(
+            {"INFO"},
+            (
+                f"Previewed: {len(settings.preview_items)}, Matched: {matched}, "
+                f"Not Found: {not_found}, Skipped: {skipped}"
+            ),
+        )
         return {"FINISHED"}
 
 

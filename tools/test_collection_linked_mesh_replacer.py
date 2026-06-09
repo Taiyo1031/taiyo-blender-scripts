@@ -184,6 +184,19 @@ def main():
         settings.original_mode = "DELETE"
         select_only(batch_target, no_match, source_b, active=batch_target)
 
+        assert bpy.ops.clmr.preview_selected() == {"FINISHED"}
+        preview = {
+            item.target_name: item
+            for item in settings.preview_items
+        }
+        assert settings.preview_matched == 1
+        assert settings.preview_not_found == 1
+        assert settings.preview_skipped == 1
+        assert preview[batch_target.name].match_name == source_a.name
+        assert preview[batch_target.name].confidence == "Multiple Matches"
+        assert preview[no_match.name].confidence == "Not Found"
+        assert preview[source_b.name].confidence == "Skipped"
+
         assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
         assert settings.batch_replaced == 1
         assert settings.batch_not_found == 1
