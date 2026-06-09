@@ -5,16 +5,20 @@ from . import cache
 
 
 def _clear_match_result(settings):
-    settings.result_selected = ""
-    settings.result_match = ""
-    settings.result_source_mesh = ""
-    settings.result_confidence = "Not Searched"
-    settings.result_candidates = 0
+    _clear_single_match_result(settings)
     settings.preview_items.clear()
     settings.preview_index = 0
     settings.preview_matched = 0
     settings.preview_not_found = 0
     settings.preview_skipped = 0
+
+
+def _clear_single_match_result(settings):
+    settings.result_selected = ""
+    settings.result_match = ""
+    settings.result_source_mesh = ""
+    settings.result_confidence = "Not Searched"
+    settings.result_candidates = 0
 
 
 def _set_match_result(settings, target, candidates):
@@ -250,10 +254,19 @@ class CLMR_OT_preview_selected(bpy.types.Operator):
         if not _cache_ready(self, settings):
             return {"CANCELLED"}
 
+        _clear_single_match_result(settings)
         settings.preview_items.clear()
+        settings.preview_index = 0
         matched = 0
         not_found = 0
         skipped = 0
+
+        if not context.selected_objects:
+            self.report({"WARNING"}, "No objects selected")
+            settings.preview_matched = 0
+            settings.preview_not_found = 0
+            settings.preview_skipped = 0
+            return {"CANCELLED"}
 
         for obj in context.selected_objects:
             item = settings.preview_items.add()
@@ -298,6 +311,16 @@ class CLMR_OT_preview_selected(bpy.types.Operator):
         settings.preview_matched = matched
         settings.preview_not_found = not_found
         settings.preview_skipped = skipped
+        if matched == 0:
+            self.report(
+                {"WARNING"},
+                (
+                    f"Previewed: {len(settings.preview_items)}, no matches "
+                    f"({not_found} not found, {skipped} skipped)"
+                ),
+            )
+            return {"FINISHED"}
+
         self.report(
             {"INFO"},
             (

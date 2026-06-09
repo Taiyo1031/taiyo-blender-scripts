@@ -197,6 +197,21 @@ def main():
         assert preview[no_match.name].confidence == "Not Found"
         assert preview[source_b.name].confidence == "Skipped"
 
+        select_only(no_match)
+        settings.result_selected = batch_target.name
+        settings.result_match = source_a.name
+        assert bpy.ops.clmr.preview_selected() == {"FINISHED"}
+        assert settings.preview_matched == 0
+        assert settings.preview_not_found == 1
+        assert settings.result_selected == no_match.name
+        assert settings.result_match == ""
+        assert settings.result_confidence == "Not Found"
+
+        select_only()
+        assert bpy.ops.clmr.preview_selected() == {"CANCELLED"}
+        assert settings.result_confidence == "Not Searched"
+
+        select_only(batch_target, no_match, source_b, active=batch_target)
         assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
         assert settings.batch_replaced == 1
         assert settings.batch_not_found == 1

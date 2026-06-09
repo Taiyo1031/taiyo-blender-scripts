@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `collection_linked_mesh_replacer`
-- バージョン: `1.0.1`
+- バージョン: `1.0.2`
 - 対応Blender: `4.5.0` 以降
 - 表示場所: `3D Viewport > Sidebar (N) > Mesh Replace`
 - キャッシュ: メモリのみ。Blender終了時に消去
@@ -34,6 +34,7 @@
 6. 複数を処理する場合は対象を選択し、`Replace All Selected`を押して確認します。
 
 複数Objectを処理する前に`Preview Selected`を押すと、選択中の各Objectについて対応するSource Object、候補数、Not Found、Skippedを一覧で確認できます。
+選択を変えて再度プレビューした場合は、前回の単体Match Resultを消してから現在の選択結果を表示します。
 
 ## 形状照合
 
