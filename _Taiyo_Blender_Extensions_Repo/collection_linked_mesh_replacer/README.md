@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `collection_linked_mesh_replacer`
-- バージョン: `1.0.5`
+- バージョン: `1.0.6`
 - 対応Blender: `4.5.0` 以降
 - 表示場所: `3D Viewport > Sidebar (N) > Mesh Replace`
 - キャッシュ: メモリのみ。Blender終了時に消去
@@ -17,6 +17,8 @@
 - Object名、Mesh Data名、原点、頂点順に依存しない形状照合
 - 頂点、辺、面、bounding box寸法、正規化済み頂点・トポロジーによるSHA-256 hash
 - 完全一致が見つからない場合のプロポーション一致フォールバック
+- キャッシュを使わず全Source Meshを再検査するThorough Search
+- 指定したMesh ObjectでActive Objectを置換するManual Replacement
 - Source ObjectとMesh Dataを共有するlinked duplicateへの差し替え
 - 元Objectのworld transformと親子関係を引き継ぎ
 - world bounding box centerによる原点ずれ補正
@@ -37,7 +39,7 @@
 
 複数Objectを処理する前に`Preview Selected`を押すと、選択中の各Objectについて対応するSource Object、候補数、Not Found、Skippedを一覧で確認できます。
 選択を変えて再度プレビューした場合は、前回の単体Match Resultを消してから現在の選択結果を表示します。
-候補が複数あるObjectは`Multiple Candidate Targets`として警告し、v1.0.4では名前順のfirst matchを使用します。
+候補が複数あるObjectは`Multiple Candidate Targets`として警告し、名前順のfirst matchを使用します。
 
 ## 形状照合
 
@@ -52,6 +54,21 @@
 - Objectのworld transform
 
 完全一致が見つからない場合は、uniform scale差や微小な寸法差を吸収する`Shape Match`として再検索します。この場合は置換後の見た目の大きさが変わりにくいよう、Source Meshのlocal bounding boxに合わせて新Objectのscaleを補正します。
+
+## 最終手段のThorough Search
+
+通常検索で`Not Found`になる場合は、`Fallback / Manual`パネルを開きます。
+
+- `Thorough Check Active`: キャッシュを使わず、Source Collection内の全Meshを最新状態で再読み込みしてActive Objectと比較します。
+- `Thorough Replace Active`: 同じ完全走査を実行し、見つかった名前順の最初の候補でActive Objectを置換します。実行前に確認ダイアログを表示します。
+
+Thorough Searchは通常のhash照合に加え、bounding box比率、全頂点の対応付け、辺・面の接続を許容誤差付きで比較します。キャッシュ作成後にSource Mesh内部を編集し、Cache Statusが`Valid`のまま通常検索できない場合にも使用できます。Source数や頂点数が多いほど時間がかかるため、通常検索で見つからない場合の最終手段として使用してください。
+
+## Manual Replacement
+
+自分で置換元を指定する場合は、`Fallback / Manual > Manual Source Object`へ使用したいMesh Objectを設定します。差し替えたいObjectをActiveにして`Replace Active Manually`を押すと、形状照合を行わず、指定ObjectのMesh Dataを共有するlinked duplicateへ置換します。
+
+Manual Source ObjectはSource Collection外からも指定できます。元Objectの処理、Transform、bounding box center補正、置換後の選択設定は通常置換と共通です。
 
 ## キャッシュ状態
 

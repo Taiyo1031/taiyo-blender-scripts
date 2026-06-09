@@ -80,6 +80,16 @@ def scaled_translated_reordered_cube(name, scale, offset=(0.0, 0.0, 0.0)):
     return create_mesh(name, vertices, faces)
 
 
+def slightly_perturbed_cube(name):
+    vertices = list(CUBE_VERTICES)
+    vertices[6] = (
+        vertices[6][0] + 0.00006,
+        vertices[6][1],
+        vertices[6][2],
+    )
+    return create_mesh(name, vertices, CUBE_FACES)
+
+
 def link_object(name, mesh, collection):
     obj = bpy.data.objects.new(name, mesh)
     collection.objects.link(obj)
@@ -253,6 +263,33 @@ def main():
         )
         assert (bbox_size(scaled_replacement) - scaled_size).length < 1.0e-5
 
+        thorough_mesh = slightly_perturbed_cube(PREFIX + "ThoroughMesh")
+        thorough_target = link_object(
+            PREFIX + "ThoroughTarget",
+            thorough_mesh,
+            target_collection,
+        )
+        thorough_pointer = thorough_target.as_pointer()
+        _signature, normal_candidates = cache.find_candidates(thorough_target)
+        assert not normal_candidates
+
+        settings.original_mode = "DELETE"
+        select_only(thorough_target)
+        assert bpy.ops.clmr.thorough_find_match() == {"FINISHED"}
+        assert settings.result_candidates == 2
+        assert settings.result_match == source_a.name
+        assert settings.result_confidence == (
+            "Thorough Tolerant Shape / Multiple"
+        )
+        assert bpy.ops.clmr.thorough_replace_active("EXEC_DEFAULT") == {"FINISHED"}
+        thorough_replacement = bpy.context.active_object
+        assert thorough_replacement.name == PREFIX + "ThoroughTarget"
+        assert thorough_replacement.data == source_a.data
+        assert all(
+            obj.as_pointer() != thorough_pointer
+            for obj in bpy.data.objects
+        )
+
         batch_mesh = translated_reordered_cube(
             PREFIX + "BatchMesh",
             (-2.0, 1.0, 5.0),
@@ -318,6 +355,58 @@ def main():
             for obj in bpy.data.objects
         )
         assert bpy.data.objects.get(PREFIX + "NoMatch") is no_match
+
+        manual_source_mesh = create_mesh(
+            PREFIX + "ManualSourceMesh",
+            [
+                (-1.0, -1.0, 0.0),
+                (1.0, -1.0, 0.0),
+                (0.0, 1.0, 0.0),
+                (0.0, 0.0, 2.0),
+            ],
+            [
+                (0, 1, 2),
+                (0, 3, 1),
+                (1, 3, 2),
+                (2, 3, 0),
+            ],
+        )
+        manual_source = link_object(
+            PREFIX + "ManualSource",
+            manual_source_mesh,
+            target_collection,
+        )
+        no_match_pointer = no_match.as_pointer()
+        settings.manual_source_object = manual_source
+        settings.original_mode = "DELETE"
+        select_only(no_match)
+        assert bpy.ops.clmr.replace_active_manual() == {"FINISHED"}
+        manual_replacement = bpy.context.active_object
+        assert manual_replacement.name == PREFIX + "NoMatch"
+        assert manual_replacement.data == manual_source.data
+        assert settings.result_confidence == "Manual"
+        assert settings.result_match == manual_source.name
+        assert all(
+            obj.as_pointer() != no_match_pointer
+            for obj in bpy.data.objects
+        )
+
+        source_mesh.vertices[0].co.x -= 0.25
+        source_mesh.update()
+        stale_cache_target = link_object(
+            PREFIX + "StaleCacheTarget",
+            source_mesh.copy(),
+            target_collection,
+        )
+        assert cache.cache_status(source_root, True) == "VALID"
+        _signature, stale_candidates = cache.find_candidates(stale_cache_target)
+        assert not stale_candidates
+
+        select_only(stale_cache_target)
+        assert bpy.ops.clmr.thorough_find_match() == {"FINISHED"}
+        assert settings.result_candidates == 2
+        assert settings.result_match == source_a.name
+        assert settings.result_confidence == "Thorough Exact / Multiple"
 
         assert bpy.ops.clmr.clear_cache() == {"FINISHED"}
         assert cache.cache_status(source_root, True) == "NOT_BUILT"

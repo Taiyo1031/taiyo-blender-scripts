@@ -5,6 +5,7 @@ import bpy
 
 
 CACHE = {}
+THOROUGH_TOLERANCE = 1.0e-4
 
 COLOR_TAG_NAMES = {
     "NONE": "None",
@@ -293,6 +294,176 @@ def find_candidates(obj):
         )
 
     return signature, []
+
+
+def _normalized_geometry(mesh):
+    vertices = [vertex.co.copy() for vertex in mesh.vertices]
+    if vertices:
+        minimum = [
+            min(co[axis] for co in vertices)
+            for axis in range(3)
+        ]
+        maximum = [
+            max(co[axis] for co in vertices)
+            for axis in range(3)
+        ]
+    else:
+        minimum = [0.0, 0.0, 0.0]
+        maximum = [0.0, 0.0, 0.0]
+
+    center = [
+        (minimum[axis] + maximum[axis]) * 0.5
+        for axis in range(3)
+    ]
+    bbox_size = [
+        maximum[axis] - minimum[axis]
+        for axis in range(3)
+    ]
+    largest_size = max((abs(value) for value in bbox_size), default=0.0)
+    if largest_size <= 1.0e-12:
+        normalized = [(0.0, 0.0, 0.0) for _vertex in vertices]
+    else:
+        normalized = [
+            tuple(
+                (float(co[axis]) - center[axis]) / largest_size
+                for axis in range(3)
+            )
+            for co in vertices
+        ]
+
+    return {
+        "vertices": normalized,
+        "bbox_ratio": tuple(
+            float(value) / largest_size
+            if largest_size > 1.0e-12
+            else 0.0
+            for value in bbox_size
+        ),
+        "edges": {
+            tuple(sorted((edge.vertices[0], edge.vertices[1])))
+            for edge in mesh.edges
+        },
+        "polygons": sorted(
+            tuple(sorted(polygon.vertices))
+            for polygon in mesh.polygons
+        ),
+    }
+
+
+def _values_close(left, right, tolerance):
+    return len(left) == len(right) and all(
+        abs(float(a) - float(b)) <= tolerance
+        for a, b in zip(left, right)
+    )
+
+
+def _match_vertex_mapping(target_vertices, source_vertices, tolerance):
+    if len(target_vertices) != len(source_vertices):
+        return None
+
+    unmatched = set(range(len(source_vertices)))
+    mapping = {}
+    target_order = sorted(
+        range(len(target_vertices)),
+        key=lambda index: tuple(target_vertices[index]),
+    )
+    for target_index in target_order:
+        target_co = target_vertices[target_index]
+        best_source = None
+        best_distance = None
+        for source_index in unmatched:
+            source_co = source_vertices[source_index]
+            distance = max(
+                abs(float(target_co[axis]) - float(source_co[axis]))
+                for axis in range(3)
+            )
+            if distance > tolerance:
+                continue
+            if best_distance is None or distance < best_distance:
+                best_source = source_index
+                best_distance = distance
+        if best_source is None:
+            return None
+        mapping[target_index] = best_source
+        unmatched.remove(best_source)
+    return mapping
+
+
+def thorough_mesh_match_kind(target_mesh, source_mesh, tolerance=THOROUGH_TOLERANCE):
+    target_signature = mesh_signature(target_mesh)
+    source_signature = mesh_signature(source_mesh)
+    if signatures_match(target_signature, source_signature, "EXACT"):
+        return "EXACT"
+    if signatures_match(target_signature, source_signature, "PROPORTIONAL"):
+        return "PROPORTIONAL"
+    if signatures_match(target_signature, source_signature, "VERTEX_SHAPE"):
+        return "VERTEX_SHAPE"
+
+    target = _normalized_geometry(target_mesh)
+    source = _normalized_geometry(source_mesh)
+    if not _values_close(
+        target["bbox_ratio"],
+        source["bbox_ratio"],
+        tolerance,
+    ):
+        return None
+
+    mapping = _match_vertex_mapping(
+        target["vertices"],
+        source["vertices"],
+        tolerance,
+    )
+    if mapping is None:
+        return None
+
+    mapped_edges = {
+        tuple(sorted((mapping[start], mapping[end])))
+        for start, end in target["edges"]
+    }
+    mapped_polygons = sorted(
+        tuple(sorted(mapping[index] for index in polygon))
+        for polygon in target["polygons"]
+    )
+    if (
+        mapped_edges == source["edges"]
+        and mapped_polygons == source["polygons"]
+    ):
+        return "THOROUGH_SHAPE"
+    return "THOROUGH_VERTEX_SHAPE"
+
+
+def find_candidates_thorough(obj, collection, recursive):
+    if obj is None or obj.type != "MESH" or obj.data is None:
+        return None, []
+
+    signature = mesh_signature(obj.data)
+    candidates = []
+    confidence_labels = {
+        "EXACT": "Thorough Exact",
+        "PROPORTIONAL": "Thorough Shape",
+        "VERTEX_SHAPE": "Thorough Vertex Shape",
+        "THOROUGH_SHAPE": "Thorough Tolerant Shape",
+        "THOROUGH_VERTEX_SHAPE": "Thorough Tolerant Vertex Shape",
+    }
+    for source in sorted(
+        iter_collection_mesh_objects(collection, recursive),
+        key=lambda item: item.name.casefold(),
+    ):
+        match_kind = thorough_mesh_match_kind(obj.data, source.data)
+        if match_kind is None:
+            continue
+        source_signature = mesh_signature(source.data)
+        candidates.append(
+            {
+                "object_name": source.name,
+                "object_ref": source,
+                "mesh_name": source.data.name,
+                **source_signature,
+                "match_kind": match_kind,
+                "confidence": confidence_labels[match_kind],
+            }
+        )
+    return signature, candidates
 
 
 def _annotate_candidates(entries, match_kind, confidence):

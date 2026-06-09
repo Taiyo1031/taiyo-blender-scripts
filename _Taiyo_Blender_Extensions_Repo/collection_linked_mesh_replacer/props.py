@@ -9,6 +9,10 @@ from bpy.props import (
 )
 
 
+def _mesh_object_poll(_self, obj):
+    return obj.type == "MESH" and obj.data is not None
+
+
 class CLMR_PreviewItem(bpy.types.PropertyGroup):
     target_name: StringProperty(default="")
     match_name: StringProperty(default="")
@@ -108,6 +112,12 @@ class CLMR_Settings(bpy.types.PropertyGroup):
     rename_to_source: BoolProperty(
         name="Rename New Object to Source Name",
         default=False,
+    )
+    manual_source_object: PointerProperty(
+        name="Manual Source Object",
+        description="Mesh Object used for manual replacement of the active object",
+        type=bpy.types.Object,
+        poll=_mesh_object_poll,
     )
 
     result_selected: StringProperty(default="")

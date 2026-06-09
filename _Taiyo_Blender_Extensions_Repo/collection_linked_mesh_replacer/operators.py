@@ -163,8 +163,10 @@ def _handle_original(context, target, settings):
         _hide_object_safely(target, context.view_layer)
 
 
-def _replace_object(context, target, settings):
-    target_signature, candidates = cache.find_candidates(target)
+def _replace_object(context, target, settings, candidates=None):
+    target_signature = cache.mesh_signature(target.data)
+    if candidates is None:
+        _signature, candidates = cache.find_candidates(target)
     _set_match_result(settings, target, candidates)
     if not candidates:
         return "NOT_FOUND", None
@@ -175,8 +177,19 @@ def _replace_object(context, target, settings):
 
     source_signature = cache.mesh_signature(source.data)
     match_kind = candidates[0].get("match_kind", "EXACT")
-    if settings.verify_match:
-        if not cache.signatures_match(target_signature, source_signature, match_kind):
+    if settings.verify_match and match_kind != "MANUAL":
+        if match_kind.startswith("THOROUGH"):
+            verified = (
+                cache.thorough_mesh_match_kind(target.data, source.data)
+                is not None
+            )
+        else:
+            verified = cache.signatures_match(
+                target_signature,
+                source_signature,
+                match_kind,
+            )
+        if not verified:
             return "FAILED", None
 
     target_name = target.name
@@ -197,7 +210,7 @@ def _replace_object(context, target, settings):
         collection.objects.link(new_obj)
 
     if settings.keep_transform:
-        if match_kind == "EXACT":
+        if match_kind in {"EXACT", "MANUAL"}:
             new_obj.matrix_world = target_matrix
         else:
             new_obj.matrix_world = _compensate_bbox_scale(
@@ -217,6 +230,26 @@ def _replace_object(context, target, settings):
     _handle_original(context, target, settings)
     new_obj.name = source.name if settings.rename_to_source else target_name
     return "REPLACED", new_obj
+
+
+def _select_replacement(context, settings, new_obj):
+    if not settings.select_new_objects:
+        return
+    bpy.ops.object.select_all(action="DESELECT")
+    new_obj.hide_set(False)
+    new_obj.select_set(True)
+    context.view_layer.objects.active = new_obj
+
+
+def _active_target(operator, context, settings):
+    target = context.active_object
+    if target is None or target.type != "MESH" or target.data is None:
+        operator.report({"ERROR"}, "Active object is not a Mesh")
+        return None
+    if not _is_valid_target(target, settings):
+        operator.report({"WARNING"}, "Active object is in the Source Collection")
+        return None
+    return target
 
 
 class CLMR_OT_build_cache(bpy.types.Operator):
@@ -288,6 +321,148 @@ class CLMR_OT_find_match(bpy.types.Operator):
             )
         else:
             self.report({"INFO"}, f"Match found: {candidates[0]['object_name']}")
+        return {"FINISHED"}
+
+
+class CLMR_OT_thorough_find_match(bpy.types.Operator):
+    bl_idname = "clmr.thorough_find_match"
+    bl_label = "Thorough Check Active"
+    bl_description = (
+        "Bypass the cache and compare the active mesh against every source mesh "
+        "with tolerant geometry checks"
+    )
+
+    def execute(self, context):
+        settings = context.scene.clmr_settings
+        if settings.source_collection is None:
+            self.report({"ERROR"}, "No Source Collection selected")
+            return {"CANCELLED"}
+
+        target = _active_target(self, context, settings)
+        if target is None:
+            return {"CANCELLED"}
+
+        _signature, candidates = cache.find_candidates_thorough(
+            target,
+            settings.source_collection,
+            settings.recursive_search,
+        )
+        _set_match_result(settings, target, candidates)
+        if not candidates:
+            self.report({"WARNING"}, "No match found after thorough check")
+            return {"FINISHED"}
+
+        if len(candidates) > 1:
+            self.report(
+                {"WARNING"},
+                _multiple_match_message(target.name, candidates),
+            )
+        else:
+            self.report(
+                {"INFO"},
+                f"Thorough match found: {candidates[0]['object_name']}",
+            )
+        return {"FINISHED"}
+
+
+class CLMR_OT_thorough_replace_active(bpy.types.Operator):
+    bl_idname = "clmr.thorough_replace_active"
+    bl_label = "Thorough Replace Active"
+    bl_description = (
+        "Scan every source mesh with tolerant checks and replace the active object"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
+
+    def execute(self, context):
+        settings = context.scene.clmr_settings
+        if settings.source_collection is None:
+            self.report({"ERROR"}, "No Source Collection selected")
+            return {"CANCELLED"}
+
+        target = _active_target(self, context, settings)
+        if target is None:
+            return {"CANCELLED"}
+
+        _signature, candidates = cache.find_candidates_thorough(
+            target,
+            settings.source_collection,
+            settings.recursive_search,
+        )
+        if not candidates:
+            _set_match_result(settings, target, candidates)
+            self.report({"WARNING"}, "No match found after thorough check")
+            return {"CANCELLED"}
+
+        status, new_obj = _replace_object(
+            context,
+            target,
+            settings,
+            candidates=candidates,
+        )
+        if status != "REPLACED":
+            self.report({"ERROR"}, "Thorough match verification failed")
+            return {"CANCELLED"}
+
+        _select_replacement(context, settings, new_obj)
+        level = {"WARNING"} if len(candidates) > 1 else {"INFO"}
+        self.report(
+            level,
+            f"Thorough replacement completed: {new_obj.name}",
+        )
+        return {"FINISHED"}
+
+
+class CLMR_OT_replace_active_manual(bpy.types.Operator):
+    bl_idname = "clmr.replace_active_manual"
+    bl_label = "Replace Active Manually"
+    bl_description = (
+        "Replace the active object using the manually specified Mesh Object"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        settings = context.scene.clmr_settings
+        target = _active_target(self, context, settings)
+        if target is None:
+            return {"CANCELLED"}
+
+        source = settings.manual_source_object
+        if source is None or source.type != "MESH" or source.data is None:
+            self.report({"ERROR"}, "Select a Manual Source Object")
+            return {"CANCELLED"}
+        if source.as_pointer() == target.as_pointer():
+            self.report({"ERROR"}, "Manual source cannot be the active target")
+            return {"CANCELLED"}
+
+        source_signature = cache.mesh_signature(source.data)
+        candidates = [
+            {
+                "object_name": source.name,
+                "object_ref": source,
+                "mesh_name": source.data.name,
+                **source_signature,
+                "match_kind": "MANUAL",
+                "confidence": "Manual",
+            }
+        ]
+        status, new_obj = _replace_object(
+            context,
+            target,
+            settings,
+            candidates=candidates,
+        )
+        if status != "REPLACED":
+            self.report({"ERROR"}, "Manual replacement failed")
+            return {"CANCELLED"}
+
+        _select_replacement(context, settings, new_obj)
+        self.report(
+            {"INFO"},
+            f"Manually replaced with: {source.name}",
+        )
         return {"FINISHED"}
 
 
@@ -418,11 +593,7 @@ class CLMR_OT_replace_selected(bpy.types.Operator):
             self.report({"ERROR"}, "Match verification failed")
             return {"CANCELLED"}
 
-        if settings.select_new_objects:
-            bpy.ops.object.select_all(action="DESELECT")
-            new_obj.hide_set(False)
-            new_obj.select_set(True)
-            context.view_layer.objects.active = new_obj
+        _select_replacement(context, settings, new_obj)
 
         if settings.result_candidates > 1:
             self.report(

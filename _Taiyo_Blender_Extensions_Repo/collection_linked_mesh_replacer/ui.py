@@ -117,6 +117,44 @@ class CLMR_PT_match_result(bpy.types.Panel):
             )
 
 
+class CLMR_PT_fallback(bpy.types.Panel):
+    bl_label = "Fallback / Manual"
+    bl_idname = "CLMR_PT_fallback"
+    bl_parent_id = "CLMR_PT_source"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+
+    def draw(self, context):
+        layout = self.layout
+        settings = context.scene.clmr_settings
+        active = context.active_object
+        active_is_mesh = (
+            active is not None
+            and active.type == "MESH"
+            and active.data is not None
+        )
+
+        box = layout.box()
+        box.label(text="Slow Thorough Search", icon="VIEWZOOM")
+        box.label(text="Bypasses cache and scans every source mesh")
+        row = box.row(align=True)
+        row.enabled = settings.source_collection is not None and active_is_mesh
+        row.operator("clmr.thorough_find_match", icon="VIEWZOOM")
+        row.operator("clmr.thorough_replace_active", icon="FILE_REFRESH")
+
+        box = layout.box()
+        box.label(text="Manual Replacement", icon="EYEDROPPER")
+        box.label(text=f"Active Target: {active.name if active_is_mesh else '-'}")
+        box.prop(settings, "manual_source_object")
+        row = box.row()
+        row.enabled = (
+            active_is_mesh
+            and settings.manual_source_object is not None
+            and settings.manual_source_object != active
+        )
+        row.operator("clmr.replace_active_manual", icon="FILE_REFRESH")
+
+
 class CLMR_UL_preview_results(bpy.types.UIList):
     def draw_item(
         self,
