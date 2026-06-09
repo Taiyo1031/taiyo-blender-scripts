@@ -112,6 +112,16 @@ def bbox_size(obj):
     )
 
 
+def find_layer_collection(layer_collection, target_collection):
+    if layer_collection.collection == target_collection:
+        return layer_collection
+    for child in layer_collection.children:
+        found = find_layer_collection(child, target_collection)
+        if found is not None:
+            return found
+    return None
+
+
 def main():
     collection_linked_mesh_replacer.register()
     try:
@@ -175,7 +185,35 @@ def main():
         assert backup is not None
         assert target.name in backup.objects
         assert target.name not in target_collection.objects
-        assert target.hide_get()
+        assert target.hide_viewport
+        assert target.hide_render
+
+        excluded_backup_target_mesh = translated_reordered_cube(
+            PREFIX + "ExcludedBackupMesh",
+            (3.0, 4.0, -2.0),
+        )
+        excluded_backup_target = link_object(
+            PREFIX + "ExcludedBackupTarget",
+            excluded_backup_target_mesh,
+            target_collection,
+        )
+        backup_layer = find_layer_collection(
+            bpy.context.view_layer.layer_collection,
+            backup,
+        )
+        assert backup_layer is not None
+        backup_layer.exclude = True
+        bpy.context.view_layer.update()
+
+        select_only(excluded_backup_target)
+        assert bpy.ops.clmr.replace_selected() == {"FINISHED"}
+        assert excluded_backup_target.name in backup.objects
+        assert excluded_backup_target.name not in target_collection.objects
+        assert excluded_backup_target.hide_viewport
+        assert excluded_backup_target.hide_render
+
+        backup_layer.exclude = False
+        bpy.context.view_layer.update()
 
         extra_source = link_object(
             PREFIX + "ExtraSource",

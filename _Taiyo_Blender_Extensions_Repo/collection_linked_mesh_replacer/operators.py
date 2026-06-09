@@ -132,6 +132,17 @@ def _unique_backup_name(name):
     return f"{base}.{index:03d}"
 
 
+def _hide_object_safely(obj, view_layer):
+    obj.hide_viewport = True
+    obj.hide_render = True
+    if obj.name not in view_layer.objects:
+        return
+    try:
+        obj.hide_set(True, view_layer=view_layer)
+    except RuntimeError:
+        pass
+
+
 def _handle_original(context, target, settings):
     mode = settings.original_mode
     if mode == "BACKUP":
@@ -142,16 +153,14 @@ def _handle_original(context, target, settings):
         target.name = _unique_backup_name(target.name)
         if target.name not in backup.objects:
             backup.objects.link(target)
+        _hide_object_safely(target, context.view_layer)
         for collection in list(target.users_collection):
             if collection != backup:
                 collection.objects.unlink(target)
-        target.hide_set(True)
-        target.hide_render = True
     elif mode == "DELETE":
         bpy.data.objects.remove(target, do_unlink=True)
     elif mode == "HIDE":
-        target.hide_set(True)
-        target.hide_render = True
+        _hide_object_safely(target, context.view_layer)
 
 
 def _replace_object(context, target, settings):

@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `collection_linked_mesh_replacer`
-- バージョン: `1.0.4`
+- バージョン: `1.0.5`
 - 対応Blender: `4.5.0` 以降
 - 表示場所: `3D Viewport > Sidebar (N) > Mesh Replace`
 - キャッシュ: メモリのみ。Blender終了時に消去
@@ -74,6 +74,7 @@ Mesh内部の編集はv1.0ではOutdated判定に含めません。`Verify Match
 - `Keep Original`: 元Objectを残し、新Objectを同じ場所へ追加します。
 
 バックアップへ移動したObjectは名前末尾に`_backup`が付きます。新Objectは通常、元Objectの名前を引き継ぎます。`Rename New Object to Source Name`をONにするとSource Object名を使います。
+Backup Collectionが現在のView Layerで除外されている場合も、元Objectの退避処理は継続されます。
 
 ## 注意点
 

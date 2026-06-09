@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Collection Linked Mesh Replacer",
     "author": "Taiyo",
-    "version": (1, 0, 4),
+    "version": (1, 0, 5),
     "blender": (4, 5, 0),
     "location": "View3D > Sidebar (N) > Mesh Replace",
     "description": "Replace mesh objects with linked copies matched from a source collection",
