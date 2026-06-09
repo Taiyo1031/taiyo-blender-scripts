@@ -1,14 +1,16 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 8),
+    "version": (1, 0, 9),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
     "category": "System",
 }
 
+import json
 import os
+from datetime import datetime
 
 import addon_utils
 import bpy
@@ -26,6 +28,9 @@ DOCUMENTATION_URL = (
     + "/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md"
 )
 SELF_ID = "taiyo_extension_manager"
+REPO_INDEX_RELATIVE_PATH = os.path.join(".blender_ext", "index.json")
+RELEASE_TIMESTAMP_KEY = "taiyo_updated_at"
+TAG_FILTER_SEPARATOR = "\n"
 
 TAG_ALIASES = {
     "attribute_csv_exporter": (
@@ -207,6 +212,12 @@ DESCRIPTION_ALIASES = {
 }
 
 _AUTO_SYNC_DONE = False
+_RELEASE_TIMES_CACHE = {
+    "path": "",
+    "mtime": None,
+    "values": {},
+}
+_TAG_FILTER_ITEMS = []
 
 
 def _repo_url_key(url):
@@ -274,6 +285,43 @@ def _version_tuple(version):
             number += char
         parts.append(int(number or 0))
     return tuple(parts)
+
+
+def _release_times(repo):
+    directory = getattr(repo, "directory", "") if repo is not None else ""
+    path = os.path.join(directory, REPO_INDEX_RELATIVE_PATH) if directory else ""
+
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return {}
+
+    if _RELEASE_TIMES_CACHE["path"] == path and _RELEASE_TIMES_CACHE["mtime"] == mtime:
+        return _RELEASE_TIMES_CACHE["values"]
+
+    values = {}
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        for item in data.get("data", ()):
+            pkg_id = item.get("id")
+            timestamp = item.get(RELEASE_TIMESTAMP_KEY)
+            if pkg_id and isinstance(timestamp, (int, float)):
+                values[pkg_id] = int(timestamp)
+    except (OSError, TypeError, ValueError) as ex:
+        print("Taiyo Extension Manager: release timestamps unavailable:", ex)
+
+    _RELEASE_TIMES_CACHE.update(path=path, mtime=mtime, values=values)
+    return values
+
+
+def _format_release_date(timestamp):
+    if not timestamp:
+        return ""
+    try:
+        return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d")
+    except (OSError, OverflowError, ValueError):
+        return ""
 
 
 def _is_outdated(item_local, item_remote):
@@ -417,6 +465,7 @@ def _sync_repo_safely(context, repo, repo_index, report_fn=None):
 
 def _package_rows(repo):
     local_manifest, remote_manifest = _repo_manifests(repo)
+    release_times = _release_times(repo)
     pkg_ids = sorted(set(local_manifest.keys()) | set(remote_manifest.keys()))
 
     rows = []
@@ -439,6 +488,7 @@ def _package_rows(repo):
                 "tagline": _value(item, "tagline", ""),
                 "version": _value(item, "version", ""),
                 "local_version": _value(item_local, "version", ""),
+                "updated_at": release_times.get(pkg_id, 0),
                 "tags": tags,
                 "search_text": _search_text_for(pkg_id, item, tags),
                 "installed": installed,
@@ -464,9 +514,25 @@ def _status_matches(row, status_filter):
     return True
 
 
+def _selected_tags(tag_filter):
+    if not tag_filter:
+        return ()
+
+    if TAG_FILTER_SEPARATOR in tag_filter:
+        terms = tag_filter.split(TAG_FILTER_SEPARATOR)
+    else:
+        terms = tag_filter.replace(",", " ").split()
+
+    return tuple(dict.fromkeys(term.strip().casefold() for term in terms if term.strip()))
+
+
+def _set_selected_tags(wm, tags):
+    wm.tayman_tag_filter = TAG_FILTER_SEPARATOR.join(dict.fromkeys(tags))
+
+
 def _filtered_rows(rows, search, tag_filter, status_filter):
     search = (search or "").strip().casefold()
-    tag_terms = [term.casefold() for term in (tag_filter or "").replace(",", " ").split() if term.strip()]
+    tag_terms = _selected_tags(tag_filter)
 
     visible = []
     for row in rows:
@@ -474,11 +540,56 @@ def _filtered_rows(rows, search, tag_filter, status_filter):
             continue
         if search and search not in row["search_text"]:
             continue
-        if tag_terms and not all(any(term in tag for tag in row["tags"]) for term in tag_terms):
+        if tag_terms and not all(term in row["tags"] for term in tag_terms):
             continue
         visible.append(row)
 
     return visible
+
+
+def _status_sort_key(row):
+    if row["outdated"]:
+        rank = 0
+    elif row["installed"] and row["enabled"]:
+        rank = 1
+    elif row["installed"]:
+        rank = 2
+    else:
+        rank = 3
+    return rank, str(row["name"]).casefold(), row["id"]
+
+
+def _sorted_rows(rows, sort_mode):
+    if sort_mode == "NAME_DESC":
+        return sorted(rows, key=lambda row: (str(row["name"]).casefold(), row["id"]), reverse=True)
+    if sort_mode == "UPDATED_DESC":
+        return sorted(
+            rows,
+            key=lambda row: (-row.get("updated_at", 0), str(row["name"]).casefold(), row["id"]),
+        )
+    if sort_mode == "STATUS":
+        return sorted(rows, key=_status_sort_key)
+    return sorted(rows, key=lambda row: (str(row["name"]).casefold(), row["id"]))
+
+
+def _update_tag_filter_items(rows, selected_tags):
+    global _TAG_FILTER_ITEMS
+
+    selected = set(selected_tags)
+    tags = sorted(
+        {tag for row in rows for tag in row["tags"] if tag not in selected},
+        key=lambda tag: (not tag.isascii(), tag.casefold()),
+    )
+    _TAG_FILTER_ITEMS = [
+        (tag, tag, "Add the {:s} tag filter".format(tag))
+        for tag in tags
+    ]
+
+
+def _tag_filter_items(_self, _context):
+    if _TAG_FILTER_ITEMS:
+        return _TAG_FILTER_ITEMS
+    return [("__NONE__", "No more tags", "All available tags are already selected")]
 
 
 def _auto_sync_once():
@@ -607,6 +718,60 @@ class TAYMAN_OT_CopyRepositoryURL(Operator):
         return {"FINISHED"}
 
 
+class TAYMAN_OT_AddTagFilter(Operator):
+    bl_idname = "tayman.add_tag_filter"
+    bl_label = "Add Tag Filter"
+    bl_description = "Search for a tag and add it to the active filters"
+    bl_property = "tag"
+
+    tag: EnumProperty(
+        name="Tag",
+        items=_tag_filter_items,
+        options={"SKIP_SAVE"},
+    )
+
+    def invoke(self, context, _event):
+        context.window_manager.invoke_search_popup(self)
+        return {"RUNNING_MODAL"}
+
+    def execute(self, context):
+        if self.tag == "__NONE__":
+            return {"CANCELLED"}
+
+        tags = list(_selected_tags(context.window_manager.tayman_tag_filter))
+        tag = self.tag.casefold()
+        if tag not in tags:
+            tags.append(tag)
+            _set_selected_tags(context.window_manager, tags)
+        return {"FINISHED"}
+
+
+class TAYMAN_OT_RemoveTagFilter(Operator):
+    bl_idname = "tayman.remove_tag_filter"
+    bl_label = "Remove Tag Filter"
+    bl_description = "Remove this tag from the active filters"
+
+    tag: StringProperty()
+
+    def execute(self, context):
+        tags = [
+            tag for tag in _selected_tags(context.window_manager.tayman_tag_filter)
+            if tag != self.tag.casefold()
+        ]
+        _set_selected_tags(context.window_manager, tags)
+        return {"FINISHED"}
+
+
+class TAYMAN_OT_ClearTagFilters(Operator):
+    bl_idname = "tayman.clear_tag_filters"
+    bl_label = "Clear Tag Filters"
+    bl_description = "Remove all selected tag filters"
+
+    def execute(self, context):
+        context.window_manager.tayman_tag_filter = ""
+        return {"FINISHED"}
+
+
 class TAYMAN_OT_SetAddonEnabled(Operator):
     bl_idname = "tayman.set_addon_enabled"
     bl_label = "Set Taiyo Add-on Enabled"
@@ -714,16 +879,48 @@ class TAYMAN_PT_Manager(Panel):
 
         filters = layout.box()
         filters.prop(wm, "tayman_search", text="", icon="VIEWZOOM")
-        filters.prop(wm, "tayman_tag_filter", text="Tag")
-        filters.prop(wm, "tayman_status_filter", text="Status")
 
         rows = _package_rows(repo)
+        selected_tags = _selected_tags(wm.tayman_tag_filter)
+        _update_tag_filter_items(rows, selected_tags)
+
+        filter_row = filters.row(align=True)
+        filter_row.prop(wm, "tayman_status_filter", text="Status")
+        filter_row.prop(wm, "tayman_sort_mode", text="Sort")
+
+        tag_header = filters.row(align=True)
+        tag_header.label(text="Tags", icon="TAG")
+        tag_header.operator("tayman.add_tag_filter", text="Add Tag", icon="ADD")
+        if selected_tags:
+            tag_header.operator("tayman.clear_tag_filters", text="", icon="X")
+
+            tag_flow = filters.grid_flow(
+                row_major=True,
+                columns=0,
+                even_columns=False,
+                even_rows=False,
+                align=True,
+            )
+            for tag in selected_tags:
+                op = tag_flow.operator(
+                    "tayman.remove_tag_filter",
+                    text=tag,
+                    icon="X",
+                    depress=True,
+                )
+                op.tag = tag
+        else:
+            tags_empty = filters.row()
+            tags_empty.scale_y = 0.75
+            tags_empty.label(text="All tags")
+
         visible_rows = _filtered_rows(
             rows,
             wm.tayman_search,
             wm.tayman_tag_filter,
             wm.tayman_status_filter,
         )
+        visible_rows = _sorted_rows(visible_rows, wm.tayman_sort_mode)
         installed_count = sum(1 for row_data in rows if row_data["installed"])
         update_count = sum(1 for row_data in rows if row_data["outdated"])
 
@@ -760,6 +957,9 @@ class TAYMAN_PT_Manager(Panel):
         if outdated:
             version_text = "v{:s} -> {:s}".format(row_data["local_version"], row_data["version"])
         header.label(text=version_text)
+        release_date = _format_release_date(row_data.get("updated_at"))
+        if release_date:
+            header.label(text=release_date, icon="SORTTIME")
 
         if prefs is None or prefs.show_descriptions:
             desc = _description_for(pkg_id, row_data["tagline"], prefs)
@@ -828,6 +1028,9 @@ classes = (
     TAYMAN_OT_AddRepository,
     TAYMAN_OT_RefreshRepository,
     TAYMAN_OT_CopyRepositoryURL,
+    TAYMAN_OT_AddTagFilter,
+    TAYMAN_OT_RemoveTagFilter,
+    TAYMAN_OT_ClearTagFilters,
     TAYMAN_OT_SetAddonEnabled,
     TAYMAN_OT_UninstallPackage,
     TAYMAN_PT_Manager,
@@ -844,9 +1047,10 @@ def register():
         default="",
     )
     bpy.types.WindowManager.tayman_tag_filter = StringProperty(
-        name="Tag",
-        description="Filter by tags such as csv, export, uv, unreal, collection, 名前整理, 衝突",
+        name="Selected Tags",
+        description="Internal list of selected tag filters",
         default="",
+        options={"HIDDEN"},
     )
     bpy.types.WindowManager.tayman_status_filter = EnumProperty(
         name="Status",
@@ -861,12 +1065,25 @@ def register():
         ],
         default="ALL",
     )
+    bpy.types.WindowManager.tayman_sort_mode = EnumProperty(
+        name="Sort",
+        description="Choose how extensions are ordered",
+        items=[
+            ("NAME_ASC", "Name A-Z", "Sort by extension name"),
+            ("NAME_DESC", "Name Z-A", "Sort by extension name in reverse"),
+            ("UPDATED_DESC", "Recently Updated", "Sort by the latest source update"),
+            ("STATUS", "Status", "Show updates, enabled, disabled, then available extensions"),
+        ],
+        default="NAME_ASC",
+    )
 
     if not bpy.app.background:
         bpy.app.timers.register(_auto_sync_once, first_interval=2.0)
 
 
 def unregister():
+    if hasattr(bpy.types.WindowManager, "tayman_sort_mode"):
+        del bpy.types.WindowManager.tayman_sort_mode
     if hasattr(bpy.types.WindowManager, "tayman_status_filter"):
         del bpy.types.WindowManager.tayman_status_filter
     if hasattr(bpy.types.WindowManager, "tayman_tag_filter"):

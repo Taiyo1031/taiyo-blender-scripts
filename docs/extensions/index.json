@@ -17,7 +17,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/attribute_csv_exporter/Attribute_CSV_Exporter_Helper_User_Manual_JP_v1_8_2.md",
       "archive_url": "./attribute_csv_exporter-1.8.3.zip",
       "archive_size": 15266,
-      "archive_hash": "sha256:f08ca2e23dca4ea3c551d7b0479de07b36f7bc641b3bc818ee7ddfada024fc93"
+      "archive_hash": "sha256:f08ca2e23dca4ea3c551d7b0479de07b36f7bc641b3bc818ee7ddfada024fc93",
+      "taiyo_updated_at": 1779596198
     },
     {
       "schema_version": "1.0.0",
@@ -39,7 +40,8 @@
       ],
       "archive_url": "./blend_reference_graph-0.1.4.zip",
       "archive_size": 25845,
-      "archive_hash": "sha256:eaf2380eea14894083dd2e5eaa15e81823bc21dcad230f152dd5e78bab3d6433"
+      "archive_hash": "sha256:eaf2380eea14894083dd2e5eaa15e81823bc21dcad230f152dd5e78bab3d6433",
+      "taiyo_updated_at": 1780991254
     },
     {
       "schema_version": "1.0.0",
@@ -61,7 +63,8 @@
       ],
       "archive_url": "./collection_linked_mesh_replacer-1.0.0.zip",
       "archive_size": 10334,
-      "archive_hash": "sha256:36264d086fcea311d5a3c9de32f3c5e122b824bb6b29c1a5579b3f72f356cb6f"
+      "archive_hash": "sha256:36264d086fcea311d5a3c9de32f3c5e122b824bb6b29c1a5579b3f72f356cb6f",
+      "taiyo_updated_at": 1781017652
     },
     {
       "schema_version": "1.0.0",
@@ -78,7 +81,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/collection_mesh_merge_fbx_exporter/Collection_Mesh_Merge_FBX_Exporter_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
       "archive_url": "./collection_mesh_merge_fbx_exporter-0.3.1.zip",
       "archive_size": 19019,
-      "archive_hash": "sha256:c858808540ffb14d82755fc4d7c447ce26eb9761dc9082d5b63ffdc832544608"
+      "archive_hash": "sha256:c858808540ffb14d82755fc4d7c447ce26eb9761dc9082d5b63ffdc832544608",
+      "taiyo_updated_at": 1780053462
     },
     {
       "schema_version": "1.0.0",
@@ -95,7 +99,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/collection_number_to_mesh_name/README.md",
       "archive_url": "./collection_number_to_mesh_name-1.0.1.zip",
       "archive_size": 4966,
-      "archive_hash": "sha256:72110010cbaf374c9cf31ee23fa47a050a46600cd4d5972bc2f14c44fa98b03c"
+      "archive_hash": "sha256:72110010cbaf374c9cf31ee23fa47a050a46600cd4d5972bc2f14c44fa98b03c",
+      "taiyo_updated_at": 1779854816
     },
     {
       "schema_version": "1.0.0",
@@ -117,7 +122,8 @@
       ],
       "archive_url": "./custom_properties_batch_editor-1.0.0.zip",
       "archive_size": 15346,
-      "archive_hash": "sha256:bfad01376e47e516dfc26a6c9fb6daa3eeb73415fbd7d766aba73c730c768e41"
+      "archive_hash": "sha256:bfad01376e47e516dfc26a6c9fb6daa3eeb73415fbd7d766aba73c730c768e41",
+      "taiyo_updated_at": 1780942705
     },
     {
       "schema_version": "1.0.0",
@@ -134,7 +140,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/export_selected_names_csv/%E3%82%A4%E3%83%B3%E3%82%B9%E3%82%BF%E3%83%B3%E3%82%B9%E3%83%98%E3%83%AB%E3%83%8F%E3%82%9A%E3%83%BC_%E9%81%B8%E6%8A%9E%E3%82%AA%E3%83%95%E3%82%99%E3%82%B7%E3%82%99%E3%82%A7%E3%82%AF%E3%83%88%E5%90%8DCSV%E6%9B%B8%E3%81%8D%E5%87%BA%E3%81%97_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
       "archive_url": "./export_selected_names_csv-1.0.1.zip",
       "archive_size": 7569,
-      "archive_hash": "sha256:e809fbc0ca1fc3ad5f09d82996e148b9e39f2e48efa646832c844174dd9bd65f"
+      "archive_hash": "sha256:e809fbc0ca1fc3ad5f09d82996e148b9e39f2e48efa646832c844174dd9bd65f",
+      "taiyo_updated_at": 1779596198
     },
     {
       "schema_version": "1.0.0",
@@ -151,7 +158,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/gn_parameter_csv_exporter/GN%E3%83%8F%E3%82%9A%E3%83%A9%E3%83%A1%E3%83%BC%E3%82%BFCSV%E3%82%A8%E3%82%AF%E3%82%B9%E3%83%9B%E3%82%9A%E3%83%BC%E3%82%BF%E3%83%BC_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
       "archive_url": "./gn_parameter_csv_exporter-1.1.1.zip",
       "archive_size": 11710,
-      "archive_hash": "sha256:d487b76a767997cbc86e5c78d6b85490d3c91c3e0def9c38d34ff002ebdcdaf7"
+      "archive_hash": "sha256:d487b76a767997cbc86e5c78d6b85490d3c91c3e0def9c38d34ff002ebdcdaf7",
+      "taiyo_updated_at": 1779596198
     },
     {
       "schema_version": "1.0.0",
@@ -168,7 +176,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/instance_name_fixer/Instance_Name_Fixer_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
       "archive_url": "./instance_name_fixer-0.1.2.zip",
       "archive_size": 8789,
-      "archive_hash": "sha256:4b716dc14a369494302990b30323d93e8bfe322acf39555f32c4cd8f256e9e97"
+      "archive_hash": "sha256:4b716dc14a369494302990b30323d93e8bfe322acf39555f32c4cd8f256e9e97",
+      "taiyo_updated_at": 1779596198
     },
     {
       "schema_version": "1.0.0",
@@ -190,7 +199,8 @@
       ],
       "archive_url": "./map_link_tools-0.2.3.zip",
       "archive_size": 15131,
-      "archive_hash": "sha256:f5abf0d85326c31ffc95e1eb5ae89293b6a5e3aa50ad017e9fdc7ece7dfa4967"
+      "archive_hash": "sha256:f5abf0d85326c31ffc95e1eb5ae89293b6a5e3aa50ad017e9fdc7ece7dfa4967",
+      "taiyo_updated_at": 1780990891
     },
     {
       "schema_version": "1.0.0",
@@ -212,7 +222,8 @@
       ],
       "archive_url": "./modular_asset_renamer-1.0.1.zip",
       "archive_size": 19520,
-      "archive_hash": "sha256:bb16a17973dab2177997eb65596adf602db97ce79d5f36dfb81f85884397b28e"
+      "archive_hash": "sha256:bb16a17973dab2177997eb65596adf602db97ce79d5f36dfb81f85884397b28e",
+      "taiyo_updated_at": 1781031289
     },
     {
       "schema_version": "1.0.0",
@@ -229,7 +240,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/move_selected_to_own_collections/Move_Objects_to_Own_Collections_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
       "archive_url": "./move_selected_to_own_collections-1.5.0.zip",
       "archive_size": 5638,
-      "archive_hash": "sha256:dbe96f3eec538fb0daf4e307fb5889b10d27131c69431af5358f11de568c2d3c"
+      "archive_hash": "sha256:dbe96f3eec538fb0daf4e307fb5889b10d27131c69431af5358f11de568c2d3c",
+      "taiyo_updated_at": 1780996276
     },
     {
       "schema_version": "1.0.0",
@@ -246,7 +258,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/overlap_selector/Overlap_Selector_User_Guide_v1_2_1.md",
       "archive_url": "./overlap_selector-1.2.2.zip",
       "archive_size": 14540,
-      "archive_hash": "sha256:1048981703e2037cae503be2d627bd599b269562f8d68ecc8c4d6a30af9bcfb9"
+      "archive_hash": "sha256:1048981703e2037cae503be2d627bd599b269562f8d68ecc8c4d6a30af9bcfb9",
+      "taiyo_updated_at": 1779596198
     },
     {
       "schema_version": "1.0.0",
@@ -263,7 +276,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/proportional_dimensions/README.md",
       "archive_url": "./proportional_dimensions-1.0.1.zip",
       "archive_size": 4441,
-      "archive_hash": "sha256:e8810af96dc72166e4a7b4043a532264f32edd294b6dc55a2fada7f59dc31095"
+      "archive_hash": "sha256:e8810af96dc72166e4a7b4043a532264f32edd294b6dc55a2fada7f59dc31095",
+      "taiyo_updated_at": 1779596198
     },
     {
       "schema_version": "1.0.0",
@@ -280,7 +294,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/rb_instance_helper/RB_Instance_Helper_%E4%BD%BF%E7%94%A8%E6%9B%B8_v1.3.1_FINAL.md",
       "archive_url": "./rb_instance_helper-1.3.3.zip",
       "archive_size": 20386,
-      "archive_hash": "sha256:b465e0db8428025e7816388e39ef4646a17dedc3524a1d4d1991ba41e97e84f6"
+      "archive_hash": "sha256:b465e0db8428025e7816388e39ef4646a17dedc3524a1d4d1991ba41e97e84f6",
+      "taiyo_updated_at": 1779596198
     },
     {
       "schema_version": "1.0.0",
@@ -297,14 +312,15 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/replace_selected_with_active/Replace_Selected_with_Active_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
       "archive_url": "./replace_selected_with_active-3.0.1.zip",
       "archive_size": 10400,
-      "archive_hash": "sha256:9585ef0150dee9fb081015a47341327e7dce7dc1f38df0d65988c134fb33a717"
+      "archive_hash": "sha256:9585ef0150dee9fb081015a47341327e7dce7dc1f38df0d65988c134fb33a717",
+      "taiyo_updated_at": 1779596198
     },
     {
       "schema_version": "1.0.0",
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
       "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.8",
+      "version": "1.0.9",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -312,9 +328,10 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.8.zip",
-      "archive_size": 10634,
-      "archive_hash": "sha256:4ff408c8e1e2dcdb87a20080f7690a530386bcdabeb2153ebb89e59bba771875"
+      "archive_url": "./taiyo_extension_manager-1.0.9.zip",
+      "archive_size": 12667,
+      "archive_hash": "sha256:1febf4cc7f3292bc8b13eef127b671b8d7bc05bbe6353bcc2d36b71ea6a9ed1d",
+      "taiyo_updated_at": 1781031334
     },
     {
       "schema_version": "1.0.0",
@@ -331,7 +348,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
       "archive_url": "./unreal_bridge_tools-2.2.15.zip",
       "archive_size": 8248,
-      "archive_hash": "sha256:f2eb9e3faf4e107d667d2db62b9e19090a0fd658a0f4a1493ab5c8d49d3fbc27"
+      "archive_hash": "sha256:f2eb9e3faf4e107d667d2db62b9e19090a0fd658a0f4a1493ab5c8d49d3fbc27",
+      "taiyo_updated_at": 1779596892
     },
     {
       "schema_version": "1.0.0",
@@ -348,7 +366,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/uv_channel_placement_tool/%E3%82%A4%E3%83%B3%E3%82%B9%E3%82%BF%E3%83%B3%E3%82%B9%E3%83%98%E3%83%AB%E3%83%8F%E3%82%9A%E3%83%BC_UV%E3%83%81%E3%83%A3%E3%83%B3%E3%83%8D%E3%83%AB%E9%85%8D%E7%BD%AE%E3%83%84%E3%83%BC%E3%83%AB_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8_v2_6.md",
       "archive_url": "./uv_channel_placement_tool-2.6.2.zip",
       "archive_size": 10061,
-      "archive_hash": "sha256:c1a95c4fe0dccc273c11e46ee9c568d5df6289e33d7e82ecd6504317abb6f919"
+      "archive_hash": "sha256:c1a95c4fe0dccc273c11e46ee9c568d5df6289e33d7e82ecd6504317abb6f919",
+      "taiyo_updated_at": 1779596198
     },
     {
       "schema_version": "1.0.0",
@@ -365,7 +384,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/vertex_color_material_painter/README.md",
       "archive_url": "./vertex_color_material_painter-1.0.0.zip",
       "archive_size": 7555,
-      "archive_hash": "sha256:700733e63768e70d1bb19fadf302ea678ab789895bd9fe7c1ad262c916b1d0cb"
+      "archive_hash": "sha256:700733e63768e70d1bb19fadf302ea678ab789895bd9fe7c1ad262c916b1d0cb",
+      "taiyo_updated_at": 1780255197
     },
     {
       "schema_version": "1.0.0",
@@ -382,7 +402,8 @@
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/viewport_export_selected_meshes/ViewportExport_SelectedMesh_AutoFit_%E5%AE%8C%E5%85%A8%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
       "archive_url": "./viewport_export_selected_meshes-1.5.3.zip",
       "archive_size": 14398,
-      "archive_hash": "sha256:0734cb7e866deae502c1c2ec8308b41f42c5b1b391ca88853191d21e0e788b9c"
+      "archive_hash": "sha256:0734cb7e866deae502c1c2ec8308b41f42c5b1b391ca88853191d21e0e788b9c",
+      "taiyo_updated_at": 1779596198
     }
   ]
 }

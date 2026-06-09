@@ -46,6 +46,11 @@ packages=(
   "viewport_export_selected_meshes"
 )
 
+compatibility_archives=(
+  "move_selected_to_own_collections-1.3.0.zip"
+  "move_selected_to_own_collections-1.4.0.zip"
+)
+
 if [[ ! -x "$BLENDER_BIN" ]]; then
   echo "Blender executable not found: $BLENDER_BIN" >&2
   echo "Set BLENDER_BIN=/path/to/blender and rerun." >&2
@@ -53,6 +58,27 @@ if [[ ! -x "$BLENDER_BIN" ]]; then
 fi
 
 mkdir -p "$OUTPUT_DIR"
+compatibility_dir="$(mktemp -d "${TMPDIR:-/tmp}/taiyo-extension-compat.XXXXXX")"
+
+restore_compatibility_archives() {
+  if [[ ! -d "$compatibility_dir" ]]; then
+    return
+  fi
+  for archive in "${compatibility_archives[@]}"; do
+    if [[ -f "$compatibility_dir/$archive" ]]; then
+      mv "$compatibility_dir/$archive" "$OUTPUT_DIR/$archive"
+    fi
+  done
+  rmdir "$compatibility_dir"
+}
+
+trap restore_compatibility_archives EXIT
+for archive in "${compatibility_archives[@]}"; do
+  if [[ -f "$OUTPUT_DIR/$archive" ]]; then
+    mv "$OUTPUT_DIR/$archive" "$compatibility_dir/$archive"
+  fi
+done
+
 find "$OUTPUT_DIR" -maxdepth 1 -type f \( -name '*.zip' -o -name 'index.json' -o -name 'index.html' \) -delete
 find "$SOURCE_ROOT" -name '__pycache__' -type d -prune -exec rm -rf {} +
 find "$SOURCE_ROOT" -name '.DS_Store' -type f -delete
@@ -68,6 +94,12 @@ done
 
 echo "==> Generating static extension repository"
 "$BLENDER_BIN" --background --command extension server-generate --repo-dir "$OUTPUT_DIR" --html
+
+echo "==> Adding extension update timestamps"
+"$BLENDER_BIN" --background --python "$ROOT_DIR/tools/add_extension_update_metadata.py" -- "$ROOT_DIR"
+
+restore_compatibility_archives
+trap - EXIT
 
 find "$SOURCE_ROOT" -name '__pycache__' -type d -prune -exec rm -rf {} +
 find "$SOURCE_ROOT" -name '.DS_Store' -type f -delete

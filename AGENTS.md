@@ -73,7 +73,7 @@ repo/
 - 新しい注意点、失敗した手順、Blenderバージョン差分、配布時の落とし穴はここに追記してください。
 - SynologyDrive上で `Stale NFS file handle` が出ることがあります。読み取りが不安定な場合は、少し待って再実行してください。
 - Codexのsandbox内で `./tools/build_extensions.sh` からBlenderを子プロセス起動すると、環境によってMetal初期化でセグフォすることがあります。同じ `blender --background --command extension ...` を直接実行すると通る場合があります。
-- `./tools/build_extensions.sh` は最初に `docs/extensions/*.zip`、`index.json`、`index.html` を削除してから validate/build を始めます。途中でBlenderがセグフォした場合、配布フォルダが空になるので、そのままコミットしないでください。必要なら `git archive` や `git checkout` で既存の `docs/extensions` を復元してから作業を続けます。
+- `./tools/build_extensions.sh` は互換用zipを一時退避したあと、`docs/extensions/*.zip`、`index.json`、`index.html` を削除してから validate/build を始め、index生成後に互換用zipを復元します。途中でBlenderがセグフォした場合、互換用以外の配布フォルダが空になるので、そのままコミットしないでください。必要なら `git archive` や `git checkout` で既存の `docs/extensions` を復元してから作業を続けます。
 - 一部アドオンだけ手動で配布更新する場合は、対象zipを作り直したあと、`docs/extensions/index.json` の `archive_size` と `archive_hash` を実ファイルの `wc -c` / `shasum -a 256` に合わせます。`index.html` のサイズ表示とBuilt時刻も更新し、最後にindexの値と実zipが一致することを確認してください。
 - 旧バージョンzipを削除すると、Blenderがキャッシュ済みの古い `index.json` から旧zipを読みに行ってHTTP 404になることがあります。更新直後は少なくとも直近旧バージョンzipを `docs/extensions/` に残し、`server-generate` は最新zipだけで実行したあと、必要な旧zipを復元してpushします。
 - Windowsの標準インストールでは `C:/Program Files/Blender Foundation/Blender 4.5/blender.exe` を利用できます。`tools/build_extensions.sh` はmacOS版に加えてBlender 4.2〜4.5のWindows標準パスも探索します。
@@ -81,3 +81,5 @@ repo/
 - Custom Properties Batch Editorの統合テストは `blender --background --python tools/test_custom_properties_batch_editor.py` で実行します。
 - Collection Linked Mesh Replacerの統合テストは `blender --background --python tools/test_collection_linked_mesh_replacer.py` で実行します。
 - Modular Asset Renamerの統合テストは `blender --background --python tools/test_modular_asset_renamer.py` で実行します。
+- Taiyo Extension Managerのフィルター・並び替え統合テストは `blender --background --python tools/test_taiyo_extension_manager.py` で実行します。
+- `tools/build_extensions.sh` はRepository index生成後に `tools/add_extension_update_metadata.py` を実行し、各packageの最終Git更新時刻を `taiyo_updated_at` として `docs/extensions/index.json` に追記します。マネージャーの `Recently Updated` はこの値を使います。
