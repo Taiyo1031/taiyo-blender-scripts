@@ -33,8 +33,9 @@ def _set_match_result(settings, target, candidates):
     first = candidates[0]
     settings.result_match = first["object_name"]
     settings.result_source_mesh = first["mesh_name"]
+    confidence = first.get("confidence", "Exact")
     settings.result_confidence = (
-        "Exact" if len(candidates) == 1 else "Multiple Matches"
+        confidence if len(candidates) == 1 else f"{confidence} / Multiple"
     )
 
 
@@ -71,6 +72,24 @@ def _world_bbox_center(obj):
         return obj.matrix_world.translation.copy()
     corners = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
     return sum(corners, Vector()) / len(corners)
+
+
+def _compensate_bbox_scale(matrix, target_signature, source_signature):
+    adjusted = matrix.copy()
+    target_size = target_signature.get("bbox_size", ())
+    source_size = source_signature.get("bbox_size", ())
+    if len(target_size) != 3 or len(source_size) != 3:
+        return adjusted
+
+    for axis in range(3):
+        source_value = abs(float(source_size[axis]))
+        target_value = abs(float(target_size[axis]))
+        if source_value <= 1.0e-12 or target_value <= 1.0e-12:
+            continue
+        adjusted.col[axis][0] *= target_value / source_value
+        adjusted.col[axis][1] *= target_value / source_value
+        adjusted.col[axis][2] *= target_value / source_value
+    return adjusted
 
 
 def _collection_in_scene(scene, collection):
@@ -134,9 +153,10 @@ def _replace_object(context, target, settings):
     if source is None or source.type != "MESH" or source.data is None:
         return "FAILED", None
 
+    source_signature = cache.mesh_signature(source.data)
+    match_kind = candidates[0].get("match_kind", "EXACT")
     if settings.verify_match:
-        source_signature = cache.mesh_signature(source.data)
-        if not cache.signatures_match(target_signature, source_signature):
+        if not cache.signatures_match(target_signature, source_signature, match_kind):
             return "FAILED", None
 
     target_name = target.name
@@ -157,7 +177,14 @@ def _replace_object(context, target, settings):
         collection.objects.link(new_obj)
 
     if settings.keep_transform:
-        new_obj.matrix_world = target_matrix
+        if match_kind == "EXACT":
+            new_obj.matrix_world = target_matrix
+        else:
+            new_obj.matrix_world = _compensate_bbox_scale(
+                target_matrix,
+                target_signature,
+                source_signature,
+            )
     context.view_layer.update()
 
     if settings.adjust_bbox_center:
@@ -292,8 +319,9 @@ class CLMR_OT_preview_selected(bpy.types.Operator):
             first = candidates[0]
             item.match_name = first["object_name"]
             item.source_mesh = first["mesh_name"]
+            confidence = first.get("confidence", "Exact")
             item.confidence = (
-                "Exact" if len(candidates) == 1 else "Multiple Matches"
+                confidence if len(candidates) == 1 else f"{confidence} / Multiple"
             )
             matched += 1
 

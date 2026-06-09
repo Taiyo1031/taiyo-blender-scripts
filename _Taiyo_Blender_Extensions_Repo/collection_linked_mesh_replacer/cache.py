@@ -65,6 +65,17 @@ def _rounded_tuple(values, digits=6):
     return tuple(round(float(value), digits) for value in values)
 
 
+def _digest(payload):
+    return hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
+
+
+def _ratio_tuple(values):
+    largest = max((abs(float(value)) for value in values), default=0.0)
+    if largest <= 1.0e-12:
+        return (0.0, 0.0, 0.0)
+    return tuple(round(float(value) / largest, 5) for value in values)
+
+
 def mesh_signature(mesh):
     vertices = [vertex.co.copy() for vertex in mesh.vertices]
     if vertices:
@@ -90,6 +101,8 @@ def mesh_signature(mesh):
     ]
 
     normalized = []
+    proportional = []
+    largest_size = max((abs(value) for value in bbox_size), default=0.0)
     for co in vertices:
         normalized.append(
             tuple(
@@ -102,8 +115,17 @@ def mesh_signature(mesh):
                 for axis in range(3)
             )
         )
+        proportional.append(
+            tuple(
+                round((float(co[axis]) - center[axis]) / largest_size, 5)
+                if largest_size > 1.0e-12
+                else 0.0
+                for axis in range(3)
+            )
+        )
 
     sorted_vertices = tuple(sorted(normalized))
+    sorted_proportional_vertices = tuple(sorted(proportional))
     sorted_edges = tuple(
         sorted(
             tuple(sorted((normalized[edge.vertices[0]], normalized[edge.vertices[1]])))
@@ -113,6 +135,18 @@ def mesh_signature(mesh):
     sorted_polygons = tuple(
         sorted(
             tuple(sorted(normalized[index] for index in polygon.vertices))
+            for polygon in mesh.polygons
+        )
+    )
+    sorted_proportional_edges = tuple(
+        sorted(
+            tuple(sorted((proportional[edge.vertices[0]], proportional[edge.vertices[1]])))
+            for edge in mesh.edges
+        )
+    )
+    sorted_proportional_polygons = tuple(
+        sorted(
+            tuple(sorted(proportional[index] for index in polygon.vertices))
             for polygon in mesh.polygons
         )
     )
@@ -126,14 +160,30 @@ def mesh_signature(mesh):
         sorted_edges,
         sorted_polygons,
     )
-    digest = hashlib.sha256(repr(payload).encode("utf-8")).hexdigest()
+    proportional_payload = (
+        len(mesh.vertices),
+        len(mesh.edges),
+        len(mesh.polygons),
+        _ratio_tuple(bbox_size),
+        sorted_proportional_vertices,
+        sorted_proportional_edges,
+        sorted_proportional_polygons,
+    )
+    vertex_payload = (
+        len(mesh.vertices),
+        _ratio_tuple(bbox_size),
+        sorted_proportional_vertices,
+    )
 
     return {
-        "hash": digest,
+        "hash": _digest(payload),
+        "proportional_hash": _digest(proportional_payload),
+        "vertex_shape_hash": _digest(vertex_payload),
         "vertex_count": len(mesh.vertices),
         "edge_count": len(mesh.edges),
         "polygon_count": len(mesh.polygons),
         "bbox_size": _rounded_tuple(bbox_size),
+        "bbox_ratio": _ratio_tuple(bbox_size),
     }
 
 
@@ -145,6 +195,8 @@ def build_cache(collection, recursive):
         if obj.type == "MESH" and obj.data is not None
     ]
     signatures = {}
+    proportional_signatures = {}
+    vertex_shape_signatures = {}
 
     for obj in sorted(mesh_objects, key=lambda item: item.name.casefold()):
         signature = mesh_signature(obj.data)
@@ -155,6 +207,14 @@ def build_cache(collection, recursive):
             **signature,
         }
         signatures.setdefault(signature["hash"], []).append(entry)
+        proportional_signatures.setdefault(
+            signature["proportional_hash"],
+            [],
+        ).append(entry)
+        vertex_shape_signatures.setdefault(
+            signature["vertex_shape_hash"],
+            [],
+        ).append(entry)
 
     CACHE.clear()
     CACHE.update(
@@ -167,6 +227,8 @@ def build_cache(collection, recursive):
             "built_time": datetime.now().strftime("%H:%M"),
             "recursive": recursive,
             "signatures": signatures,
+            "proportional_signatures": proportional_signatures,
+            "vertex_shape_signatures": vertex_shape_signatures,
             "unique_mesh_count": len(signatures),
             "duplicated_signature_count": sum(
                 1 for entries in signatures.values() if len(entries) > 1
@@ -200,7 +262,47 @@ def find_candidates(obj):
     if obj is None or obj.type != "MESH" or obj.data is None:
         return None, []
     signature = mesh_signature(obj.data)
-    return signature, list(CACHE.get("signatures", {}).get(signature["hash"], ()))
+    exact = list(CACHE.get("signatures", {}).get(signature["hash"], ()))
+    if exact:
+        return signature, _annotate_candidates(exact, "EXACT", "Exact")
+
+    proportional = list(
+        CACHE.get("proportional_signatures", {}).get(
+            signature["proportional_hash"],
+            (),
+        )
+    )
+    if proportional:
+        return signature, _annotate_candidates(
+            proportional,
+            "PROPORTIONAL",
+            "Shape Match",
+        )
+
+    vertex_shape = list(
+        CACHE.get("vertex_shape_signatures", {}).get(
+            signature["vertex_shape_hash"],
+            (),
+        )
+    )
+    if vertex_shape:
+        return signature, _annotate_candidates(
+            vertex_shape,
+            "VERTEX_SHAPE",
+            "Vertex Shape Match",
+        )
+
+    return signature, []
+
+
+def _annotate_candidates(entries, match_kind, confidence):
+    annotated = []
+    for entry in entries:
+        candidate = dict(entry)
+        candidate["match_kind"] = match_kind
+        candidate["confidence"] = confidence
+        annotated.append(candidate)
+    return annotated
 
 
 def resolve_source_object(entry):
@@ -217,8 +319,13 @@ def resolve_source_object(entry):
     return None
 
 
-def signatures_match(left, right):
-    keys = ("hash", "vertex_count", "edge_count", "polygon_count")
+def signatures_match(left, right, match_kind="EXACT"):
+    if match_kind == "PROPORTIONAL":
+        keys = ("proportional_hash", "vertex_count", "edge_count", "polygon_count")
+    elif match_kind == "VERTEX_SHAPE":
+        keys = ("vertex_shape_hash", "vertex_count")
+    else:
+        keys = ("hash", "vertex_count", "edge_count", "polygon_count")
     return all(left.get(key) == right.get(key) for key in keys)
 
 

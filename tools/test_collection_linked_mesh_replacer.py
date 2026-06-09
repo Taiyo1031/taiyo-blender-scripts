@@ -66,6 +66,20 @@ def translated_reordered_cube(name, offset):
     return create_mesh(name, vertices, faces)
 
 
+def scaled_translated_reordered_cube(name, scale, offset=(0.0, 0.0, 0.0)):
+    order = list(reversed(range(len(CUBE_VERTICES))))
+    old_to_new = {old: new for new, old in enumerate(order)}
+    vertices = [
+        tuple(CUBE_VERTICES[index][axis] * scale + offset[axis] for axis in range(3))
+        for index in order
+    ]
+    faces = [
+        tuple(old_to_new[index] for index in face)
+        for face in CUBE_FACES
+    ]
+    return create_mesh(name, vertices, faces)
+
+
 def link_object(name, mesh, collection):
     obj = bpy.data.objects.new(name, mesh)
     collection.objects.link(obj)
@@ -85,6 +99,17 @@ def bbox_center(obj):
         (obj.matrix_world @ type(obj.location)(corner) for corner in obj.bound_box),
         type(obj.location)(),
     ) / 8.0
+
+
+def bbox_size(obj):
+    corners = [obj.matrix_world @ type(obj.location)(corner) for corner in obj.bound_box]
+    return type(obj.location)(
+        (
+            max(corner.x for corner in corners) - min(corner.x for corner in corners),
+            max(corner.y for corner in corners) - min(corner.y for corner in corners),
+            max(corner.z for corner in corners) - min(corner.z for corner in corners),
+        )
+    )
 
 
 def main():
@@ -134,7 +159,7 @@ def main():
 
         select_only(target)
         assert bpy.ops.clmr.find_match() == {"FINISHED"}
-        assert settings.result_confidence == "Multiple Matches"
+        assert settings.result_confidence == "Exact / Multiple"
         assert settings.result_candidates == 2
         assert settings.result_match == source_a.name
 
@@ -160,6 +185,35 @@ def main():
         assert cache.cache_status(source_root, True) == "OUTDATED"
         bpy.data.objects.remove(extra_source, do_unlink=True)
         assert bpy.ops.clmr.build_cache() == {"FINISHED"}
+
+        scaled_mesh = scaled_translated_reordered_cube(
+            PREFIX + "ScaledMesh",
+            2.5,
+            (8.0, -1.0, 0.5),
+        )
+        scaled_target = link_object(
+            PREFIX + "ScaledTarget",
+            scaled_mesh,
+            target_collection,
+        )
+        scaled_target.location = (4.0, 5.0, 6.0)
+        bpy.context.view_layer.update()
+        scaled_size = bbox_size(scaled_target)
+        scaled_pointer = scaled_target.as_pointer()
+        settings.original_mode = "DELETE"
+        select_only(scaled_target)
+        assert bpy.ops.clmr.find_match() == {"FINISHED"}
+        assert settings.result_confidence == "Shape Match / Multiple"
+        assert settings.result_match == source_a.name
+        assert bpy.ops.clmr.replace_selected() == {"FINISHED"}
+        scaled_replacement = bpy.context.active_object
+        assert scaled_replacement.name == PREFIX + "ScaledTarget"
+        assert scaled_replacement.data == source_a.data
+        assert all(
+            obj.as_pointer() != scaled_pointer
+            for obj in bpy.data.objects
+        )
+        assert (bbox_size(scaled_replacement) - scaled_size).length < 1.0e-5
 
         batch_mesh = translated_reordered_cube(
             PREFIX + "BatchMesh",
@@ -193,7 +247,7 @@ def main():
         assert settings.preview_not_found == 1
         assert settings.preview_skipped == 1
         assert preview[batch_target.name].match_name == source_a.name
-        assert preview[batch_target.name].confidence == "Multiple Matches"
+        assert preview[batch_target.name].confidence == "Exact / Multiple"
         assert preview[no_match.name].confidence == "Not Found"
         assert preview[source_b.name].confidence == "Skipped"
 

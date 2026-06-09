@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `collection_linked_mesh_replacer`
-- バージョン: `1.0.2`
+- バージョン: `1.0.3`
 - 対応Blender: `4.5.0` 以降
 - 表示場所: `3D Viewport > Sidebar (N) > Mesh Replace`
 - キャッシュ: メモリのみ。Blender終了時に消去
@@ -16,6 +16,7 @@
 - 子Collectionを含む再帰検索
 - Object名、Mesh Data名、原点、頂点順に依存しない形状照合
 - 頂点、辺、面、bounding box寸法、正規化済み頂点・トポロジーによるSHA-256 hash
+- 完全一致が見つからない場合のプロポーション一致フォールバック
 - Source ObjectとMesh Dataを共有するlinked duplicateへの差し替え
 - 元Objectのworld transformと親子関係を引き継ぎ
 - world bounding box centerによる原点ずれ補正
@@ -48,7 +49,7 @@
 - 頂点の格納順
 - Objectのworld transform
 
-未適用Scaleによるworld-spaceの見た目差は照合対象に含みません。
+完全一致が見つからない場合は、uniform scale差や微小な寸法差を吸収する`Shape Match`として再検索します。この場合は置換後の見た目の大きさが変わりにくいよう、Source Meshのlocal bounding boxに合わせて新Objectのscaleを補正します。
 
 ## キャッシュ状態
 
