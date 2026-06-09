@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `modular_asset_renamer`
-- バージョン: `1.0.1`
+- バージョン: `1.0.2`
 - 対応Blender: `4.5.0`以降
 - 動作確認: `Blender 4.5.10 LTS`
 - 表示場所: `3D Viewport > Sidebar (N) > Rename Tools`
@@ -47,6 +47,8 @@ Module 2 Output + Separator 2 + ...
 Choiceモジュールを追加すると、パネル上部の`Quick Controls`にも同じドロップダウンが表示されます。ここで変更した選択値はModule Detail Editorと共通です。
 
 候補はModule Detail Editorで追加、削除、並べ替えできます。候補には内部IDが付くため、表示文字列を変更しても現在値とプリセットの対応が保たれます。
+
+プリセットの保存・読込後もQuick Controlsの候補リストは維持され、そのまま別の候補へ切り替えられます。
 
 ## Dimensions
 

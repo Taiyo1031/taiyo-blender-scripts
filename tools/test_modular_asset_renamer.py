@@ -11,7 +11,7 @@ SOURCE_ROOT = ROOT / "_Taiyo_Blender_Extensions_Repo"
 sys.path.insert(0, str(SOURCE_ROOT))
 
 import modular_asset_renamer
-from modular_asset_renamer import naming, preset_utils
+from modular_asset_renamer import naming, preset_utils, props
 
 
 PREFIX = "MAR_Test_"
@@ -356,6 +356,13 @@ def test_presets(temp_dir):
     text.text_value = "PresetText"
     choice = add_module("CHOICE")
     choice.choice_options[0].value = "Wood"
+    assert_finished(bpy.ops.mar.add_choice_option())
+    choice.choice_options[1].value = "Metal"
+    choice.choice_current = choice.choice_options[0].option_id
+
+    first_items = props.choice_enum_items(choice, bpy.context)
+    second_items = props.choice_enum_items(choice, bpy.context)
+    assert first_items is second_items
 
     assert_finished(
         bpy.ops.mar.save_preset_as(
@@ -370,6 +377,8 @@ def test_presets(temp_dir):
     assert saved is not None
     assert len(saved["modules"]) == 2
     assert saved["options"]["error_if_name_exists"] is True
+    choice.choice_current = choice.choice_options[1].option_id
+    assert choice.choice_current == choice.choice_options[1].option_id
 
     text.text_value = "Updated"
     settings.selected_preset = "Integration Test"
@@ -378,6 +387,21 @@ def test_presets(temp_dir):
     assert_finished(bpy.ops.mar.load_preset())
     assert settings.modules[0].text_value == "Updated"
     assert settings.error_if_name_exists is True
+    loaded_choice = settings.modules[1]
+    assert len(loaded_choice.choice_options) == 2
+    loaded_items = props.choice_enum_items(loaded_choice, bpy.context)
+    assert {item[0] for item in loaded_items} == {
+        option.option_id for option in loaded_choice.choice_options
+    }
+    loaded_choice.choice_current = loaded_choice.choice_options[1].option_id
+    assert loaded_choice.choice_current == loaded_choice.choice_options[1].option_id
+    assert naming.evaluate_module(
+        bpy.context,
+        settings,
+        loaded_choice,
+        bpy.context.active_object,
+        0,
+    ) == "Metal"
 
     export_path = temp_dir / "export.json"
     assert_finished(

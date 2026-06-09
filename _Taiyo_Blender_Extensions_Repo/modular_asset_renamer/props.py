@@ -58,21 +58,38 @@ COLLECTION_SOURCE_ITEMS = (
 )
 
 _CHOICE_ENUM_CACHE = {}
+_CHOICE_ENUM_RETIRED_ITEMS = []
+_EMPTY_CHOICE_ENUM_ITEMS = [("__NONE__", "No Options", "Add an option first")]
 
 
 def choice_enum_items(self, _context):
     if not self.choice_options:
-        return [("__NONE__", "No Options", "Add an option first")]
+        return _EMPTY_CHOICE_ENUM_ITEMS
+
+    signature = tuple(
+        (option.option_id, option.option_value, option.value)
+        for option in self.choice_options
+    )
+    cache_key = self.module_id or f"pointer:{self.as_pointer()}"
+    cached = _CHOICE_ENUM_CACHE.get(cache_key)
+    if cached is not None and cached["signature"] == signature:
+        return cached["items"]
+
     items = [
         (
-            option.option_id,
-            option.value or "(empty)",
-            option.value or "Empty option",
-            option.option_value,
+            option_id,
+            value or "(empty)",
+            value or "Empty option",
+            option_value,
         )
-        for option in self.choice_options
+        for option_id, option_value, value in signature
     ]
-    _CHOICE_ENUM_CACHE[self.as_pointer()] = items
+    if cached is not None:
+        _CHOICE_ENUM_RETIRED_ITEMS.append(cached["items"])
+    _CHOICE_ENUM_CACHE[cache_key] = {
+        "signature": signature,
+        "items": items,
+    }
     return items
 
 
