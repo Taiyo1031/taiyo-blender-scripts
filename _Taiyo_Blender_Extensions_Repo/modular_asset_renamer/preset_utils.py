@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import uuid
 
 import bpy
@@ -41,14 +42,40 @@ OPTION_FIELDS = (
     "replace_spaces",
     "remove_invalid_characters",
 )
+SAFE_CHOICE_ID_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+UNSAFE_CHOICE_ID_CHARACTER_PATTERN = re.compile(r"[^A-Za-z0-9_]")
 
 
 def new_id():
     return uuid.uuid4().hex
 
 
+def new_choice_option_id():
+    return f"option_{new_id()}"
+
+
 def new_option_value():
     return int(uuid.uuid4().hex[:7], 16) + 1
+
+
+def safe_choice_option_id(raw_id, fallback=None):
+    value = str(raw_id or "").strip()
+    value = UNSAFE_CHOICE_ID_CHARACTER_PATTERN.sub("_", value)
+    if not value:
+        value = str(fallback or new_choice_option_id())
+    if not SAFE_CHOICE_ID_PATTERN.match(value):
+        value = f"option_{value}"
+    return value
+
+
+def unique_choice_option_id(raw_id, existing):
+    base = safe_choice_option_id(raw_id)
+    candidate = base
+    suffix = 2
+    while candidate in existing:
+        candidate = f"{base}_{suffix}"
+        suffix += 1
+    return candidate
 
 
 def user_preset_path():
@@ -81,15 +108,20 @@ def _normalize_module(raw_module):
     raw_options = raw_module.get("choice_options", [])
     _require_type(raw_options, list, "Choice options")
     choice_options = []
+    seen_raw_option_ids = set()
     seen_option_ids = set()
+    option_id_map = {}
     for raw_option in raw_options:
         _require_type(raw_option, dict, "Choice option")
-        option_id = str(raw_option.get("option_id", "")).strip()
-        if not option_id:
+        raw_option_id = str(raw_option.get("option_id", "")).strip()
+        if not raw_option_id:
             raise ValueError("Choice option ID is empty.")
-        if option_id in seen_option_ids:
-            raise ValueError(f"Duplicate choice option ID: {option_id}")
+        if raw_option_id in seen_raw_option_ids:
+            raise ValueError(f"Duplicate choice option ID: {raw_option_id}")
+        seen_raw_option_ids.add(raw_option_id)
+        option_id = unique_choice_option_id(raw_option_id, seen_option_ids)
         seen_option_ids.add(option_id)
+        option_id_map[raw_option_id] = option_id
         choice_options.append(
             {
                 "option_id": option_id,
@@ -105,6 +137,7 @@ def _normalize_module(raw_module):
     if len(option_values) != len(set(option_values)):
         raise ValueError("Choice option values must be unique within a module.")
 
+    raw_choice_current = str(raw_module.get("choice_current", "")).strip()
     normalized = {
         "module_id": module_id,
         "module_type": module_type,
@@ -114,7 +147,7 @@ def _normalize_module(raw_module):
         "text_value": str(raw_module.get("text_value", "")),
         "choice_label": str(raw_module.get("choice_label", "Choice")),
         "choice_options": choice_options,
-        "choice_current": str(raw_module.get("choice_current", "")),
+        "choice_current": option_id_map.get(raw_choice_current, raw_choice_current),
         "axis_order": str(raw_module.get("axis_order", "XYZ")),
         "dimension_unit": str(raw_module.get("dimension_unit", "CM")),
         "axis_separator": str(raw_module.get("axis_separator", "x")),
@@ -156,6 +189,11 @@ def _normalize_module(raw_module):
     if normalized["original_part_index"] < 1:
         raise ValueError("Original-name part index must be 1 or greater.")
     option_ids = {option["option_id"] for option in choice_options}
+    if module_type == "CHOICE":
+        if not choice_options:
+            raise ValueError("Choice module must contain at least one option.")
+        if normalized["choice_current"] in {"", "__NONE__"}:
+            raise ValueError("Current choice option is empty.")
     if (
         normalized["choice_current"]
         and normalized["choice_current"] != "__NONE__"

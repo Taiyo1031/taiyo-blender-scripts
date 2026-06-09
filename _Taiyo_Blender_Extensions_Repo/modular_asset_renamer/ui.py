@@ -1,6 +1,6 @@
 from bpy.types import Panel, UIList
 
-from . import naming
+from . import naming, preset_utils
 
 
 DOCUMENTATION_URL = (
@@ -28,6 +28,28 @@ def _draw_separator_controls(layout, module):
     ):
         operator = row.operator("mar.set_separator", text=label)
         operator.value = value
+
+
+def _repair_choice_module(module):
+    if module.module_type != "CHOICE":
+        return
+
+    seen = set()
+    option_id_map = {}
+    for option in module.choice_options:
+        old_id = option.option_id
+        new_id = preset_utils.unique_choice_option_id(old_id, seen)
+        seen.add(new_id)
+        option_id_map[old_id] = new_id
+        if old_id != new_id:
+            option.option_id = new_id
+
+    if module.choice_current in option_id_map:
+        module.choice_current = option_id_map[module.choice_current]
+
+    option_ids = [option.option_id for option in module.choice_options]
+    if option_ids and module.choice_current not in option_ids:
+        module.choice_current = option_ids[0]
 
 
 class MAR_UL_modules(UIList):
@@ -121,10 +143,17 @@ class MAR_PT_main(Panel):
             box = layout.box()
             box.label(text="Quick Controls", icon="OPTIONS")
             for module in choice_modules:
+                _repair_choice_module(module)
                 row = box.row(align=True)
-                row.enabled = module.enabled and bool(module.choice_options)
                 row.label(text=module.choice_label or "Choice")
-                row.prop(module, "choice_current", text="")
+                if module.choice_options:
+                    row.prop(module, "choice_current", text="")
+                    if not module.enabled:
+                        row.label(text="Disabled", icon="HIDE_OFF")
+                else:
+                    row.label(text="No options", icon="ERROR")
+                    operator = row.operator("mar.add_choice_option", text="Add Option")
+                    operator.module_id = module.module_id
 
         box = layout.box()
         box.label(text="Presets", icon="PRESET")
@@ -190,7 +219,10 @@ class MAR_PT_main(Panel):
             if module.module_type == "TEXT":
                 box.prop(module, "text_value")
             elif module.module_type == "CHOICE":
+                _repair_choice_module(module)
                 box.prop(module, "choice_label")
+                if not module.choice_options:
+                    box.label(text="Choice has no options.", icon="ERROR")
                 box.template_list(
                     "MAR_UL_choice_options",
                     "",

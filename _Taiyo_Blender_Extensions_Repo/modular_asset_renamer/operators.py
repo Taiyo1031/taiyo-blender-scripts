@@ -21,9 +21,22 @@ def _active_module(settings):
     return settings.modules[index]
 
 
+def _module_by_id(settings, module_id):
+    if not module_id:
+        return None
+    return next(
+        (module for module in settings.modules if module.module_id == module_id),
+        None,
+    )
+
+
+def _active_or_target_module(settings, module_id):
+    return _module_by_id(settings, module_id) or _active_module(settings)
+
+
 def _add_default_choice(module):
     option = module.choice_options.add()
-    option.option_id = preset_utils.new_id()
+    option.option_id = preset_utils.new_choice_option_id()
     option.option_value = preset_utils.new_option_value()
     option.value = "Option"
     module.choice_current = option.option_id
@@ -53,7 +66,7 @@ def _copy_module(source, target):
     target.module_id = preset_utils.new_id()
     for raw_option in raw["choice_options"]:
         option = target.choice_options.add()
-        option.option_id = preset_utils.new_id()
+        option.option_id = preset_utils.new_choice_option_id()
         option.option_value = preset_utils.new_option_value()
         option.value = raw_option["value"]
         option_id_map[raw_option["option_id"]] = option.option_id
@@ -197,12 +210,14 @@ class MAR_OT_add_choice_option(Operator):
     bl_label = "Add Option"
     bl_options = {"REGISTER", "UNDO"}
 
+    module_id: StringProperty(name="Module ID", default="")
+
     def execute(self, context):
-        module = _active_module(_settings(context))
+        module = _active_or_target_module(_settings(context), self.module_id)
         if module is None or module.module_type != "CHOICE":
             return {"CANCELLED"}
         option = module.choice_options.add()
-        option.option_id = preset_utils.new_id()
+        option.option_id = preset_utils.new_choice_option_id()
         option.option_value = preset_utils.new_option_value()
         option.value = f"Option {len(module.choice_options)}"
         module.choice_option_index = len(module.choice_options) - 1
@@ -218,6 +233,9 @@ class MAR_OT_remove_choice_option(Operator):
     def execute(self, context):
         module = _active_module(_settings(context))
         if module is None or not module.choice_options:
+            return {"CANCELLED"}
+        if len(module.choice_options) == 1:
+            self.report({"ERROR"}, "Choice must contain at least one option.")
             return {"CANCELLED"}
         index = min(module.choice_option_index, len(module.choice_options) - 1)
         removed_id = module.choice_options[index].option_id
@@ -435,7 +453,11 @@ class MAR_OT_load_preset(Operator):
         if preset is None:
             self.report({"ERROR"}, "Preset not found.")
             return {"CANCELLED"}
-        preset_utils.load_preset_into_settings(settings, preset)
+        try:
+            preset_utils.load_preset_into_settings(settings, preset)
+        except Exception as exc:
+            self.report({"ERROR"}, str(exc))
+            return {"CANCELLED"}
         settings.preset_name = preset["name"]
         self.report({"INFO"}, f"Loaded preset '{preset['name']}'.")
         return {"FINISHED"}

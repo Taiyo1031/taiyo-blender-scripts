@@ -21,6 +21,15 @@ def assert_finished(result):
     assert result == {"FINISHED"}, result
 
 
+def assert_operator_error(operator_call, expected_message):
+    try:
+        result = operator_call()
+    except RuntimeError as exc:
+        assert expected_message in str(exc)
+    else:
+        assert result == {"CANCELLED"}, result
+
+
 def reset_scene():
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
@@ -82,6 +91,8 @@ def test_module_editing():
     settings.modules.clear()
 
     choice = add_module("CHOICE")
+    assert choice.choice_options[0].option_id.startswith("option_")
+    assert choice.choice_current == choice.choice_options[0].option_id
     choice.choice_options[0].value = "Wood"
     assert_finished(bpy.ops.mar.add_choice_option())
     choice.choice_options[1].value = "Metal"
@@ -115,6 +126,16 @@ def test_module_editing():
     assert settings.module_index == 0
     assert_finished(bpy.ops.mar.remove_module())
     assert len(settings.modules) == 1
+
+    only_choice = settings.modules[0]
+    while len(only_choice.choice_options) > 1:
+        only_choice.choice_option_index = 0
+        assert_finished(bpy.ops.mar.remove_choice_option())
+    assert_operator_error(
+        bpy.ops.mar.remove_choice_option,
+        "Choice must contain at least one option.",
+    )
+    assert len(only_choice.choice_options) == 1
 
 
 def test_module_outputs(parent, child, obj):
@@ -343,6 +364,43 @@ def test_duplicate_invalid_and_filter(child):
     bpy.data.objects.remove(blocker, do_unlink=True)
 
 
+def test_choice_empty_errors(obj):
+    settings = bpy.context.scene.mar_settings
+    settings.modules.clear()
+    settings.rename_only_mesh_objects = False
+    select_only(obj)
+
+    choice = add_module("CHOICE")
+    choice.choice_options[0].value = ""
+    records, _warning = naming.build_rename_plan(bpy.context, settings)
+    assert records[0].status == naming.STATUS_EMPTY
+    assert "selected option is empty" in records[0].message
+
+    choice.choice_options.clear()
+    choice.choice_current = "__NONE__"
+    records, _warning = naming.build_rename_plan(bpy.context, settings)
+    assert records[0].status == naming.STATUS_EMPTY
+    assert "has no options" in records[0].message
+
+    empty_choice_preset = preset_utils.settings_to_preset(settings, "Empty Choice")
+    try:
+        preset_utils.upsert_preset([], empty_choice_preset)
+    except ValueError as exc:
+        assert "must contain at least one option" in str(exc)
+    else:
+        raise AssertionError("Empty Choice preset should be rejected")
+
+    legacy = empty_choice_preset
+    legacy["modules"][0]["choice_options"] = [
+        {"option_id": "123legacy", "option_value": 1, "value": "Legacy"}
+    ]
+    legacy["modules"][0]["choice_current"] = "123legacy"
+    normalized = preset_utils.upsert_preset([], legacy)[0]
+    normalized_option = normalized["modules"][0]["choice_options"][0]
+    assert normalized_option["option_id"] == "option_123legacy"
+    assert normalized["modules"][0]["choice_current"] == "option_123legacy"
+
+
 def test_presets(temp_dir):
     settings = bpy.context.scene.mar_settings
     preset_utils.USER_PRESET_PATH_OVERRIDE = str(temp_dir / "presets.json")
@@ -463,6 +521,7 @@ def main():
         test_module_outputs(parent, child, sample)
         test_sort_preview_apply_revert(child)
         test_duplicate_invalid_and_filter(child)
+        test_choice_empty_errors(sample)
         with tempfile.TemporaryDirectory(prefix="mar_test_") as temp_dir:
             test_presets(Path(temp_dir))
         print("Modular Asset Renamer integration tests passed")

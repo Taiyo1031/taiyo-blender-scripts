@@ -99,6 +99,29 @@ def _choice_value(module):
     return ""
 
 
+def _choice_module_error(module):
+    if module.module_type != "CHOICE" or not module.enabled:
+        return ""
+    label = module.choice_label or "Choice"
+    if not module.choice_options:
+        return f"Choice module '{label}' has no options."
+    current = module.choice_current
+    for option in module.choice_options:
+        if option.option_id == current:
+            if not option.value:
+                return f"Choice module '{label}' selected option is empty."
+            return ""
+    return f"Choice module '{label}' has no selected option."
+
+
+def _module_configuration_error(settings):
+    for module in settings.modules:
+        error = _choice_module_error(module)
+        if error:
+            return error
+    return ""
+
+
 def evaluate_module(context, settings, module, obj, index_value):
     module_type = module.module_type
     if module_type == "TEXT":
@@ -342,6 +365,7 @@ def _apply_duplicate_policy(records, settings):
 
 
 def build_rename_plan(context, settings):
+    configuration_error = _module_configuration_error(settings)
     original_order = _selection_order(context)
     eligible = []
     skipped = []
@@ -362,6 +386,16 @@ def build_rename_plan(context, settings):
     ordered = _sorted_objects(context, settings, eligible)
     records = []
     for index_value, obj in enumerate(ordered):
+        if configuration_error:
+            records.append(
+                RenameRecord(
+                    obj=obj,
+                    old_name=obj.name,
+                    status=STATUS_EMPTY,
+                    message=configuration_error,
+                )
+            )
+            continue
         raw_name = _build_raw_name(context, settings, obj, index_value)
         sanitized = sanitize_name(raw_name, settings)
         record = RenameRecord(obj=obj, old_name=obj.name, new_name=sanitized)
