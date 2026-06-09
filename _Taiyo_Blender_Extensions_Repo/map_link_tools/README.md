@@ -10,7 +10,7 @@
 
 - 本体フォルダ: `map_link_tools`
 - 表示場所: `View3D > Sidebar (N) > Map Link Tools`
-- バージョン: `0.2.2`
+- バージョン: `0.2.3`
 - 対応Blender目安: `4.5.0` 以降
 - カテゴリ: `Object`
 
@@ -19,6 +19,7 @@
 - `Remove .001 From Selected Objects`
   - 選択Object名の末尾 `.001`, `.002` などを削除します。
   - 削除後の名前が既に存在する場合はリネームせず、スキップとして通知します。
+  - `Rename Unselected Conflicts` がONの場合、削除後の名前を選択外Objectが使っているときだけ、その選択外Objectを選択Objectの元の `.001` 名へリネームしてから実行します。
   - `_01` のような別suffixは作りません。
 - `Object Name -> Mesh Name`
   - 選択Mesh ObjectのMesh Data名をObject名に合わせます。

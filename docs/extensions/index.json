@@ -153,7 +153,7 @@
       "id": "map_link_tools",
       "name": "Map Link Tools",
       "tagline": "Minimal rename, check, and replace tools for map layouts",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -166,9 +166,9 @@
         "Scene",
         "Pipeline"
       ],
-      "archive_url": "./map_link_tools-0.2.2.zip",
-      "archive_size": 14371,
-      "archive_hash": "sha256:c9f7d5337340589b34f6e08b615935490ac91824a238c419728c558baab5201e"
+      "archive_url": "./map_link_tools-0.2.3.zip",
+      "archive_size": 15131,
+      "archive_hash": "sha256:f5abf0d85326c31ffc95e1eb5ae89293b6a5e3aa50ad017e9fdc7ece7dfa4967"
     },
     {
       "schema_version": "1.0.0",

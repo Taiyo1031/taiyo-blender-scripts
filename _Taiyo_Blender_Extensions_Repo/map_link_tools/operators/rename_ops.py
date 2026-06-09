@@ -5,6 +5,7 @@ from ..utils.naming import (
     has_blender_numeric_suffix,
     remove_blender_numeric_suffix,
     short_list,
+    unique_temporary_name,
 )
 
 
@@ -16,36 +17,95 @@ def _report_result(operator, label, changed, skipped, skipped_names):
         operator.report({"INFO"}, f"{label}: changed {changed}, skipped 0.")
 
 
+def _report_remove_suffix_result(operator, changed, skipped, renamed_conflicts, skipped_names):
+    status = f"Remove suffix: changed {changed}, renamed unselected conflicts {renamed_conflicts}, skipped {skipped}."
+    if skipped_names:
+        status = f"{status} {short_list(skipped_names)}"
+    operator.report({"WARNING"} if skipped_names else {"INFO"}, status)
+
+
+def _rename_exact(obj, name):
+    obj.name = name
+    return obj.name == name
+
+
+def _replace_name(name_to_object, existing_names, old_name, new_name, obj):
+    name_to_object.pop(old_name, None)
+    existing_names.discard(old_name)
+    name_to_object[new_name] = obj
+    existing_names.add(new_name)
+
+
+def _swap_with_unselected_conflict(obj, blocker, target_name, name_to_object, existing_names):
+    old_name = obj.name
+    blocker_name = blocker.name
+    temp_name = unique_temporary_name(existing_names)
+
+    if not _rename_exact(obj, temp_name):
+        return False
+    _replace_name(name_to_object, existing_names, old_name, temp_name, obj)
+
+    if not _rename_exact(blocker, old_name):
+        return False
+    _replace_name(name_to_object, existing_names, blocker_name, old_name, blocker)
+
+    if not _rename_exact(obj, target_name):
+        return False
+    _replace_name(name_to_object, existing_names, temp_name, target_name, obj)
+    return True
+
+
 class MAPLINK_OT_remove_suffix_selected(Operator):
     bl_idname = "maplink.remove_suffix_selected"
     bl_label = "Remove .001 From Selected Objects"
-    bl_description = "Remove Blender .001 style suffixes from selected object names; collisions are skipped"
+    bl_description = "Remove Blender .001 style suffixes from selected object names"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
-        existing_names = {obj.name for obj in bpy.data.objects}
+        settings = context.scene.maplink_settings
+        selected_objects = list(context.selected_objects)
+        selected_pointers = {obj.as_pointer() for obj in selected_objects}
+        name_to_object = {obj.name: obj for obj in bpy.data.objects}
+        existing_names = set(name_to_object)
         changed = 0
         skipped = 0
         skipped_names = []
+        renamed_conflicts = 0
 
-        for obj in context.selected_objects:
+        for obj in selected_objects:
             if not has_blender_numeric_suffix(obj.name):
                 skipped += 1
                 continue
 
+            old_name = obj.name
             target_name = remove_blender_numeric_suffix(obj.name)
-            existing_names.discard(obj.name)
-            if target_name in existing_names:
-                skipped += 1
-                skipped_names.append(f"{obj.name} -> {target_name}")
-                existing_names.add(obj.name)
+            blocker = name_to_object.get(target_name)
+            if blocker is not None and blocker != obj:
+                if blocker.as_pointer() in selected_pointers:
+                    skipped += 1
+                    skipped_names.append(f"{old_name} -> {target_name} (selected conflict)")
+                    continue
+                if not settings.rename_unselected_conflicts:
+                    skipped += 1
+                    skipped_names.append(f"{old_name} -> {target_name} (unselected conflict)")
+                    continue
+                if not _swap_with_unselected_conflict(obj, blocker, target_name, name_to_object, existing_names):
+                    skipped += 1
+                    skipped_names.append(f"{old_name} -> {target_name} (rename failed)")
+                    continue
+
+                renamed_conflicts += 1
+                changed += 1
                 continue
 
+            name_to_object.pop(old_name, None)
+            existing_names.discard(old_name)
             obj.name = target_name
+            name_to_object[target_name] = obj
             existing_names.add(target_name)
             changed += 1
 
-        _report_result(self, "Remove suffix", changed, skipped, skipped_names)
+        _report_remove_suffix_result(self, changed, skipped, renamed_conflicts, skipped_names)
         return {"FINISHED"}
 
 

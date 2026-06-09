@@ -52,6 +52,14 @@ class MapLinkToolsSettings(PropertyGroup):
         description="Also make the collection tree and objects selectable when unhiding",
         default=True,
     )
+    rename_unselected_conflicts: BoolProperty(
+        name="Rename Unselected Conflicts",
+        description=(
+            "When removing .001, rename an unselected object that already uses the target name "
+            "to the selected object's old name instead of skipping"
+        ),
+        default=False,
+    )
     check_result_message: StringProperty(default="")
     helper_result_message: StringProperty(default="")
 

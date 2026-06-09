@@ -51,6 +51,7 @@ class VIEW3D_PT_map_link_tools(Panel):
 
         if draw_foldout(layout, settings, "show_rename", "Rename"):
             box = layout.box()
+            box.prop(settings, "rename_unselected_conflicts")
             box.operator("maplink.remove_suffix_selected", icon="SORTALPHA")
             box.operator("maplink.object_name_to_mesh_name", icon="MESH_DATA")
             box.operator("maplink.mesh_name_to_object_name", icon="OBJECT_DATA")
