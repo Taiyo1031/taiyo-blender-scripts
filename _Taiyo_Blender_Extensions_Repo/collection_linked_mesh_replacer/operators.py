@@ -576,9 +576,39 @@ class CLMR_OT_replace_active_manual(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class CLMR_OT_find_selected(bpy.types.Operator):
+    bl_idname = "clmr.find_selected"
+    bl_label = "Find"
+    bl_description = "Find source matches for every selected object and show the list"
+
+    def execute(self, context):
+        settings = context.scene.clmr_settings
+        selected, _candidates = _prepare_selected_preview(
+            self,
+            context,
+            settings,
+        )
+        if selected is None:
+            return {"CANCELLED"}
+
+        level = {"WARNING"} if (
+            settings.preview_not_found or settings.preview_multiple
+        ) else {"INFO"}
+        self.report(
+            level,
+            (
+                f"Found: {settings.preview_matched}, "
+                f"Not Found: {settings.preview_not_found}, "
+                f"Skipped: {settings.preview_skipped}, "
+                f"Multiple: {settings.preview_multiple}"
+            ),
+        )
+        return {"FINISHED"}
+
+
 class CLMR_OT_replace_all_selected(bpy.types.Operator):
     bl_idname = "clmr.replace_all_selected"
-    bl_label = "Replace All Selected"
+    bl_label = "Replace"
     bl_description = "Replace every selected mesh object that has a source match"
     bl_options = {"REGISTER", "UNDO"}
 

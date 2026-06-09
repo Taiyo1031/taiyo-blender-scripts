@@ -65,6 +65,7 @@ class CLMR_PT_actions(bpy.types.Panel):
         column = layout.column(align=True)
         column.enabled = ready
         column.scale_y = 1.25
+        column.operator("clmr.find_selected", icon="FILE_REFRESH")
         column.operator("clmr.replace_all_selected", icon="FILE_REFRESH")
 
 
@@ -89,7 +90,7 @@ class CLMR_PT_match_result(bpy.types.Panel):
 
         layout.separator(factor=0.5)
         box = layout.box()
-        box.label(text="Last Selection Preview", icon="FILE_REFRESH")
+        box.label(text="Selected Match List", icon="FILE_REFRESH")
         if settings.preview_items:
             box.label(
                 text=(
@@ -113,7 +114,7 @@ class CLMR_PT_match_result(bpy.types.Panel):
                 rows=min(8, max(2, len(settings.preview_items))),
             )
         else:
-            box.label(text="Preview appears before every replacement")
+            box.label(text="Press Find to show selected results")
 
 
 class CLMR_PT_fallback(bpy.types.Panel):

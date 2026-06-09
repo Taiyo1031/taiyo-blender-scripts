@@ -183,6 +183,10 @@ def main():
         assert settings.result_candidates == 2
         assert settings.result_match == source_a.name
 
+        assert bpy.ops.clmr.find_selected() == {"FINISHED"}
+        assert len(settings.preview_items) == 1
+        assert settings.preview_items[0].target_name == target.name
+        assert settings.preview_items[0].match_name == source_a.name
         assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
         assert settings.preview_matched == 1
         assert settings.preview_multiple == 1
@@ -324,11 +328,12 @@ def main():
         select_only(batch_target, no_match, source_b, active=batch_target)
 
         select_only()
+        assert bpy.ops.clmr.find_selected() == {"CANCELLED"}
         assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"CANCELLED"}
         assert settings.result_confidence == "Not Searched"
 
         select_only(batch_target, no_match, source_b, active=batch_target)
-        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
+        assert bpy.ops.clmr.find_selected() == {"FINISHED"}
         preview = {
             item.target_name: item
             for item in settings.preview_items
@@ -343,6 +348,7 @@ def main():
         assert preview[batch_target_name].using_first is True
         assert preview[no_match_name].confidence == "Not Found"
         assert preview[source_b_name].confidence == "Skipped"
+        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
         assert settings.batch_replaced == 1
         assert settings.batch_not_found == 1
         assert settings.batch_skipped == 1
@@ -403,6 +409,9 @@ def main():
         select_only(stale_cache_target)
         stale_pointer = stale_cache_target.as_pointer()
         settings.auto_rebuild_on_no_match = True
+        assert bpy.ops.clmr.find_selected() == {"FINISHED"}
+        assert settings.preview_matched == 1
+        assert settings.preview_not_found == 0
         assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
         assert settings.preview_matched == 1
         assert settings.preview_not_found == 0
@@ -426,6 +435,9 @@ def main():
 
         settings.auto_rebuild_on_no_match = False
         select_only(no_rebuild_target)
+        assert bpy.ops.clmr.find_selected() == {"FINISHED"}
+        assert settings.preview_matched == 0
+        assert settings.preview_not_found == 1
         assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
         assert settings.preview_matched == 0
         assert settings.preview_not_found == 1
@@ -444,6 +456,9 @@ def main():
         auto_build_pointer = auto_build_target.as_pointer()
         settings.auto_rebuild_on_no_match = True
         select_only(auto_build_target)
+        assert bpy.ops.clmr.find_selected() == {"FINISHED"}
+        assert cache.cache_status(source_root, True) == "VALID"
+        assert settings.preview_matched == 1
         assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
         assert cache.cache_status(source_root, True) == "VALID"
         assert settings.preview_matched == 1

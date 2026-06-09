@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `collection_linked_mesh_replacer`
-- バージョン: `1.0.7`
+- バージョン: `1.0.8`
 - 対応Blender: `4.5.0` 以降
 - 表示場所: `3D Viewport > Sidebar (N) > Mesh Replace`
 - キャッシュ: メモリのみ。Blender終了時に消去
@@ -23,7 +23,7 @@
 - 元Objectのworld transformと親子関係を引き継ぎ
 - world bounding box centerによる原点ずれ補正
 - 選択Meshの一括置換（1個選択も同じ操作）
-- 置換前に必ず表示される選択中Objectごとのプレビュー
+- `Find`で表示する選択中ObjectごとのMatch List
 - 候補なし時に一度だけキャッシュを自動再構築するオプション
 - 複数候補があるObjectを警告表示し、first matchを使うことを明示
 - 元Objectのバックアップ移動、削除、非表示、保持
@@ -34,10 +34,11 @@
 1. 正規アセットをまとめたCollectionを`Source Collection`に指定します。
 2. `Build / Update Cache`を押します。
 3. 差し替えたいMesh Objectをすべて選択します。
-4. リロードアイコンの`Replace All Selected`を押します。
-5. 必ず表示されるプレビューで、各ObjectのSource Object、候補数、Not Found、Skippedを確認してから実行します。
+4. リロードアイコンの`Find`を押します。
+5. `Selected Match List`で、各ObjectのSource Object、候補数、Not Found、Skippedを確認します。
+6. リロードアイコンの`Replace`を押して、選択中すべての一致Objectを置換します。
 
-単体専用の置換ボタンはありません。Objectを1個だけ選択した場合も、同じ`Replace All Selected`を使用します。プレビュー専用ボタンもなく、置換前の確認ダイアログへ常に表示されます。
+メイン操作のボタンは`Find`と`Replace`の2つです。単体専用の置換ボタンはありません。Objectを1個だけ選択した場合も同じ2ボタンを使用します。`Find`は選択中すべてを検索し、以前のプレビューと同じ形式でリスト表示します。`Replace`は安全のため選択を再照合してから一括置換します。
 候補が複数あるObjectは`Multiple Candidate Targets`として警告し、名前順のfirst matchを使用します。
 
 ## 形状照合

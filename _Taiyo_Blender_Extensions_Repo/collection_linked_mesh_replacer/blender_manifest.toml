@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "collection_linked_mesh_replacer"
-version = "1.0.7"
+version = "1.0.8"
 name = "Collection Linked Mesh Replacer"
 tagline = "Replace meshes with linked matches from a collection"
 maintainer = "Taiyo"
