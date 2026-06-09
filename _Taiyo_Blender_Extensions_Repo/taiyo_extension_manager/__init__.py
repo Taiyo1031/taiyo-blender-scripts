@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 7),
+    "version": (1, 0, 8),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -75,6 +75,11 @@ TAG_ALIASES = {
     "move_selected_to_own_collections": (
         "collection", "move", "organize", "selected", "sort", "cleanup",
         "移動", "整理", "選択", "コレクション", "片付け",
+    ),
+    "modular_asset_renamer": (
+        "asset", "batch", "choice", "dimensions", "index", "module", "name",
+        "naming", "preset", "rename", "unreal",
+        "アセット", "一括", "寸法", "名前", "名前整理", "命名", "連番", "リネーム",
     ),
     "overlap_selector": (
         "collision", "detect", "overlap", "review", "select", "selection", "check",
@@ -158,6 +163,10 @@ DESCRIPTION_ALIASES = {
     "move_selected_to_own_collections": {
         "ja": "選択オブジェクトを名前に対応した子コレクションへ移動します。",
         "en": "Move selected objects into matching child collections.",
+    },
+    "modular_asset_renamer": {
+        "ja": "モジュール式の命名ルールで選択ObjectとMesh Dataを一括リネームします。",
+        "en": "Build modular naming rules and batch rename selected objects and mesh data.",
     },
     "overlap_selector": {
         "ja": "シーン内の重なりオブジェクトを検出して確認できます。",

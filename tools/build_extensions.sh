@@ -33,6 +33,7 @@ packages=(
   "gn_parameter_csv_exporter"
   "instance_name_fixer"
   "map_link_tools"
+  "modular_asset_renamer"
   "move_selected_to_own_collections"
   "overlap_selector"
   "proportional_dimensions"

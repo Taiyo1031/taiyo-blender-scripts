@@ -194,6 +194,28 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "modular_asset_renamer",
+      "name": "Modular Asset Renamer",
+      "tagline": "Build and apply modular names to selected assets",
+      "version": "1.0.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/modular_asset_renamer/README.md",
+      "tags": [
+        "Object",
+        "Scene",
+        "Pipeline"
+      ],
+      "archive_url": "./modular_asset_renamer-1.0.0.zip",
+      "archive_size": 19274,
+      "archive_hash": "sha256:f36ccd86d5448d2aa21c699a650c5d457d9c819c218f2b6000efa67cbb8520f6"
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "move_selected_to_own_collections",
       "name": "Move Objects to Own Collections",
       "tagline": "Move selected objects into matching child collections",
@@ -282,7 +304,7 @@
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
       "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -290,9 +312,9 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.7.zip",
-      "archive_size": 10500,
-      "archive_hash": "sha256:664160de1885bb4b423f0a34dd53161d13db9339b84d7d03f9f08168536385a0"
+      "archive_url": "./taiyo_extension_manager-1.0.8.zip",
+      "archive_size": 10634,
+      "archive_hash": "sha256:4ff408c8e1e2dcdb87a20080f7690a530386bcdabeb2153ebb89e59bba771875"
     },
     {
       "schema_version": "1.0.0",
