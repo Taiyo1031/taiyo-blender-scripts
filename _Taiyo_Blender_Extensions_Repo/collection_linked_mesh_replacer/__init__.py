@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Collection Linked Mesh Replacer",
     "author": "Taiyo",
-    "version": (1, 0, 8),
+    "version": (1, 0, 9),
     "blender": (4, 5, 0),
     "location": "View3D > Sidebar (N) > Mesh Replace",
     "description": "Replace mesh objects with linked copies matched from a source collection",
@@ -64,6 +64,7 @@ def register():
 
 def unregister():
     cache.clear_cache()
+    operators.THOROUGH_RESULTS.clear()
     if hasattr(bpy.types.Scene, "clmr_settings"):
         del bpy.types.Scene.clmr_settings
     for cls in reversed(classes):

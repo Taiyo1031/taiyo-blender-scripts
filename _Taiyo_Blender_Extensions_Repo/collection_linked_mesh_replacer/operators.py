@@ -4,6 +4,68 @@ from mathutils import Vector
 from . import cache
 
 
+THOROUGH_RESULTS = {}
+
+
+def _store_thorough_results(target, candidates):
+    pointer = target.as_pointer()
+    if not candidates:
+        THOROUGH_RESULTS.pop(pointer, None)
+        return
+    THOROUGH_RESULTS[pointer] = {
+        "target_ref": target,
+        "target_hash": cache.mesh_signature(target.data)["hash"],
+        "candidates": [dict(candidate) for candidate in candidates],
+    }
+
+
+def _stored_thorough_results(target):
+    pointer = target.as_pointer()
+    stored = THOROUGH_RESULTS.get(pointer)
+    if stored is None:
+        return []
+
+    try:
+        if stored["target_ref"].as_pointer() != pointer:
+            THOROUGH_RESULTS.pop(pointer, None)
+            return []
+    except ReferenceError:
+        THOROUGH_RESULTS.pop(pointer, None)
+        return []
+
+    if cache.mesh_signature(target.data)["hash"] != stored["target_hash"]:
+        THOROUGH_RESULTS.pop(pointer, None)
+        return []
+
+    confidence_labels = {
+        "EXACT": "Thorough Exact",
+        "PROPORTIONAL": "Thorough Shape",
+        "VERTEX_SHAPE": "Thorough Vertex Shape",
+        "THOROUGH_SHAPE": "Thorough Tolerant Shape",
+        "THOROUGH_VERTEX_SHAPE": "Thorough Tolerant Vertex Shape",
+    }
+    candidates = []
+    for previous in stored["candidates"]:
+        source = cache.resolve_source_object(previous)
+        if source is None or source.type != "MESH" or source.data is None:
+            continue
+        match_kind = cache.thorough_mesh_match_kind(target.data, source.data)
+        if match_kind is None:
+            continue
+        candidate = dict(previous)
+        candidate.update(cache.mesh_signature(source.data))
+        candidate["object_name"] = source.name
+        candidate["object_ref"] = source
+        candidate["mesh_name"] = source.data.name
+        candidate["match_kind"] = match_kind
+        candidate["confidence"] = confidence_labels[match_kind]
+        candidates.append(candidate)
+
+    if not candidates:
+        THOROUGH_RESULTS.pop(pointer, None)
+    return candidates
+
+
 def _clear_match_result(settings):
     _clear_single_match_result(settings)
     settings.preview_items.clear()
@@ -340,6 +402,8 @@ def _prepare_selected_preview(operator, context, settings):
             if not _is_valid_target(obj, settings):
                 continue
             _signature, candidates = cache.find_candidates(obj)
+            if not candidates:
+                candidates = _stored_thorough_results(obj)
             result[obj.as_pointer()] = candidates
             if not candidates:
                 missing = True
@@ -377,6 +441,7 @@ class CLMR_OT_build_cache(bpy.types.Operator):
             settings.source_collection,
             settings.recursive_search,
         )
+        THOROUGH_RESULTS.clear()
         _clear_match_result(settings)
         self.report(
             {"INFO"},
@@ -395,6 +460,7 @@ class CLMR_OT_clear_cache(bpy.types.Operator):
 
     def execute(self, context):
         cache.clear_cache()
+        THOROUGH_RESULTS.clear()
         _clear_match_result(context.scene.clmr_settings)
         self.report({"INFO"}, "Mesh replacement cache cleared")
         return {"FINISHED"}
@@ -457,6 +523,7 @@ class CLMR_OT_thorough_find_match(bpy.types.Operator):
             settings.source_collection,
             settings.recursive_search,
         )
+        _store_thorough_results(target, candidates)
         _set_match_result(settings, target, candidates)
         if not candidates:
             self.report({"WARNING"}, "No match found after thorough check")
@@ -506,6 +573,7 @@ class CLMR_OT_thorough_replace_active(bpy.types.Operator):
             self.report({"WARNING"}, "No match found after thorough check")
             return {"CANCELLED"}
 
+        target_pointer = target.as_pointer()
         status, new_obj = _replace_object(
             context,
             target,
@@ -516,6 +584,7 @@ class CLMR_OT_thorough_replace_active(bpy.types.Operator):
             self.report({"ERROR"}, "Thorough match verification failed")
             return {"CANCELLED"}
 
+        THOROUGH_RESULTS.pop(target_pointer, None)
         _select_replacement(context, settings, new_obj)
         level = {"WARNING"} if len(candidates) > 1 else {"INFO"}
         self.report(
@@ -677,7 +746,8 @@ class CLMR_OT_replace_all_selected(bpy.types.Operator):
             if not _is_valid_target(target, settings):
                 skipped += 1
                 continue
-            candidates = candidates_by_pointer.get(target.as_pointer(), [])
+            target_pointer = target.as_pointer()
+            candidates = candidates_by_pointer.get(target_pointer, [])
             if len(candidates) > 1:
                 multiple += 1
             try:
@@ -694,6 +764,7 @@ class CLMR_OT_replace_all_selected(bpy.types.Operator):
             if status == "REPLACED":
                 replaced += 1
                 created.append(new_obj)
+                THOROUGH_RESULTS.pop(target_pointer, None)
             elif status == "NOT_FOUND":
                 not_found += 1
             else:

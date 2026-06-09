@@ -48,7 +48,7 @@
       "id": "collection_linked_mesh_replacer",
       "name": "Collection Linked Mesh Replacer",
       "tagline": "Replace meshes with linked matches from a collection",
-      "version": "1.0.8",
+      "version": "1.0.9",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -61,10 +61,10 @@
         "Mesh",
         "Pipeline"
       ],
-      "archive_url": "./collection_linked_mesh_replacer-1.0.8.zip",
-      "archive_size": 15781,
-      "archive_hash": "sha256:b58f4b5aef4202d401d650eedb493701da145b3abaa9a6e6d7d3215b3cb7b4cd",
-      "taiyo_updated_at": 1781046347
+      "archive_url": "./collection_linked_mesh_replacer-1.0.9.zip",
+      "archive_size": 16292,
+      "archive_hash": "sha256:101a1b9e3d0f61bd5040e3cc7d73a2f0c6aba95d232f5a116a4401c498dd3697",
+      "taiyo_updated_at": 1781047185
     },
     {
       "schema_version": "1.0.0",

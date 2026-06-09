@@ -292,7 +292,17 @@ def main():
         assert settings.result_confidence == (
             "Thorough Tolerant Shape / Multiple"
         )
-        assert bpy.ops.clmr.thorough_replace_active("EXEC_DEFAULT") == {"FINISHED"}
+        assert bpy.ops.clmr.find_selected() == {"FINISHED"}
+        assert settings.preview_matched == 1
+        assert settings.preview_items[0].confidence == (
+            "Thorough Tolerant Shape / Multiple"
+        )
+        assert bpy.ops.clmr.replace_all_selected("EXEC_DEFAULT") == {"FINISHED"}
+        assert settings.preview_matched == 1
+        assert settings.preview_items[0].confidence == (
+            "Thorough Tolerant Shape / Multiple"
+        )
+        assert settings.batch_replaced == 1
         thorough_replacement = bpy.context.active_object
         assert thorough_replacement.name == PREFIX + "ThoroughTarget"
         assert thorough_replacement.data == source_a.data

@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `collection_linked_mesh_replacer`
-- バージョン: `1.0.8`
+- バージョン: `1.0.9`
 - 対応Blender: `4.5.0` 以降
 - 表示場所: `3D Viewport > Sidebar (N) > Mesh Replace`
 - キャッシュ: メモリのみ。Blender終了時に消去
@@ -63,6 +63,8 @@
 - `Thorough Replace Active`: 同じ完全走査を実行し、見つかった名前順の最初の候補でActive Objectを置換します。実行前に確認ダイアログを表示します。
 
 Thorough Searchは通常のhash照合に加え、bounding box比率、全頂点の対応付け、辺・面の接続を許容誤差付きで比較します。キャッシュ作成後にSource Mesh内部を編集し、Cache Statusが`Valid`のまま通常検索できない場合にも使用できます。Source数や頂点数が多いほど時間がかかるため、通常検索で見つからない場合の最終手段として使用してください。
+
+`Thorough Check Active`で候補が見つかった場合、その結果はActive ObjectのMesh状態とともに一時保持されます。そのままメインの`Replace`を押しても、Thorough候補を再検証して置換できます。
 
 ## Manual Replacement
 
