@@ -266,6 +266,19 @@ class MAR_PT_main(Panel):
             )
             index = min(settings.preview_index, len(settings.preview_items) - 1)
             item = settings.preview_items[index]
+            box.label(text=f"New Name: {item.new_name or '(empty)'}")
+            row = box.row(align=True)
+            row.operator("mar.copy_preview_name", text="Copy Name", icon="COPYDOWN")
+            row.operator(
+                "mar.copy_all_preview_names",
+                text="Copy All",
+                icon="COPYDOWN",
+            )
+            box.operator(
+                "mar.select_preview_name_matches",
+                text="Select Same Name",
+                icon="RESTRICT_SELECT_OFF",
+            )
             if item.message:
                 box.label(text=item.message[:100], icon="INFO")
         else:

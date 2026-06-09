@@ -101,6 +101,26 @@ def _selected_preset(settings):
     )
 
 
+def _active_preview_item(settings):
+    if not settings.preview_items:
+        return None
+    index = min(settings.preview_index, len(settings.preview_items) - 1)
+    return settings.preview_items[index]
+
+
+def _active_preview_name(settings):
+    item = _active_preview_item(settings)
+    return item.new_name if item is not None else ""
+
+
+def _all_preview_names_text(settings):
+    return "\n".join(
+        item.new_name
+        for item in settings.preview_items
+        if item.new_name
+    )
+
+
 class MAR_OT_add_module(Operator):
     bl_idname = "mar.add_module"
     bl_label = "Add Naming Module"
@@ -462,6 +482,107 @@ class MAR_OT_clear_preview(Operator):
         settings = _settings(context)
         settings.preview_items.clear()
         settings.last_target_count = 0
+        return {"FINISHED"}
+
+
+class MAR_OT_copy_preview_name(Operator):
+    bl_idname = "mar.copy_preview_name"
+    bl_label = "Copy Preview Name"
+
+    def execute(self, context):
+        name = _active_preview_name(_settings(context))
+        if not name:
+            self.report({"ERROR"}, "The selected preview name is empty.")
+            return {"CANCELLED"}
+        context.window_manager.clipboard = name
+        self.report({"INFO"}, f"Copied preview name: {name}")
+        return {"FINISHED"}
+
+
+class MAR_OT_copy_all_preview_names(Operator):
+    bl_idname = "mar.copy_all_preview_names"
+    bl_label = "Copy All Preview Names"
+
+    def execute(self, context):
+        settings = _settings(context)
+        text = _all_preview_names_text(settings)
+        if not text:
+            self.report({"ERROR"}, "No preview names are available to copy.")
+            return {"CANCELLED"}
+        context.window_manager.clipboard = text
+        count = sum(bool(item.new_name) for item in settings.preview_items)
+        self.report({"INFO"}, f"Copied {count} preview name(s).")
+        return {"FINISHED"}
+
+
+class MAR_OT_select_preview_name_matches(Operator):
+    bl_idname = "mar.select_preview_name_matches"
+    bl_label = "Select Same Name"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        item = _active_preview_item(_settings(context))
+        if item is None or not item.new_name:
+            self.report({"ERROR"}, "The selected preview name is empty.")
+            return {"CANCELLED"}
+
+        target_name = item.new_name
+        source = item.object_ref
+        source_mesh = (
+            source.data
+            if source is not None and source.type == "MESH"
+            else None
+        )
+        matches = []
+        for obj in context.view_layer.objects:
+            object_match = obj != source and obj.name == target_name
+            mesh_match = (
+                obj.type == "MESH"
+                and obj.data is not None
+                and obj.data != source_mesh
+                and obj.data.name == target_name
+            )
+            if object_match or mesh_match:
+                matches.append(obj)
+
+        if not matches:
+            self.report(
+                {"WARNING"},
+                f"No Object or Mesh uses the name '{target_name}' in this View Layer.",
+            )
+            return {"CANCELLED"}
+
+        previous_selected = list(context.selected_objects)
+        previous_active = context.view_layer.objects.active
+        for obj in previous_selected:
+            obj.select_set(False)
+
+        selected = []
+        for obj in matches:
+            try:
+                obj.select_set(True)
+            except RuntimeError:
+                continue
+            if obj.select_get():
+                selected.append(obj)
+
+        context.view_layer.objects.active = selected[0] if selected else None
+        if not selected:
+            for obj in previous_selected:
+                try:
+                    obj.select_set(True)
+                except RuntimeError:
+                    continue
+            context.view_layer.objects.active = previous_active
+            self.report(
+                {"WARNING"},
+                f"No selectable Object or Mesh uses the name '{target_name}'.",
+            )
+            return {"CANCELLED"}
+        self.report(
+            {"INFO"},
+            f"Selected {len(selected)} object(s) matching '{target_name}'.",
+        )
         return {"FINISHED"}
 
 

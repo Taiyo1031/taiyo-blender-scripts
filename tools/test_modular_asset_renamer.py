@@ -11,7 +11,7 @@ SOURCE_ROOT = ROOT / "_Taiyo_Blender_Extensions_Repo"
 sys.path.insert(0, str(SOURCE_ROOT))
 
 import modular_asset_renamer
-from modular_asset_renamer import naming, preset_utils, props
+from modular_asset_renamer import naming, operators, preset_utils, props
 
 
 PREFIX = "MAR_Test_"
@@ -426,6 +426,48 @@ def test_choice_empty_errors(obj):
     assert normalized["modules"][0]["choice_current"] == "option_123legacy"
 
 
+def test_preview_copy_and_same_name_selection(child, obj):
+    settings = bpy.context.scene.mar_settings
+    settings.modules.clear()
+    settings.rename_object = True
+    settings.rename_mesh_data = True
+    settings.rename_only_mesh_objects = False
+    settings.auto_resolve_duplicates = True
+    settings.error_if_name_exists = False
+
+    text = add_module("TEXT")
+    text.text_value = PREFIX + "PreviewClipboard"
+    text.separator_after = ""
+    select_only(obj)
+    assert_finished(bpy.ops.mar.preview())
+    assert len(settings.preview_items) == 1
+    preview_name = settings.preview_items[0].new_name
+
+    assert operators._active_preview_name(settings) == preview_name
+    assert_finished(bpy.ops.mar.copy_preview_name())
+    assert operators._all_preview_names_text(settings) == preview_name
+    assert_finished(bpy.ops.mar.copy_all_preview_names())
+
+    object_match = create_object(
+        preview_name,
+        create_mesh(PREFIX + "ObjectMatchMesh"),
+        child,
+    )
+    mesh_match = create_object(
+        PREFIX + "MeshMatchObject",
+        create_mesh(preview_name),
+        child,
+    )
+    assert_finished(bpy.ops.mar.select_preview_name_matches())
+    selected = set(bpy.context.selected_objects)
+    assert selected == {object_match, mesh_match}
+    assert bpy.context.view_layer.objects.active in selected
+
+    bpy.data.objects.remove(object_match, do_unlink=True)
+    bpy.data.objects.remove(mesh_match, do_unlink=True)
+    select_only(obj)
+
+
 def test_presets(temp_dir):
     settings = bpy.context.scene.mar_settings
     preset_utils.USER_PRESET_PATH_OVERRIDE = str(temp_dir / "presets.json")
@@ -547,6 +589,7 @@ def main():
         test_sort_preview_apply_revert(child)
         test_duplicate_invalid_and_filter(child)
         test_choice_empty_errors(sample)
+        test_preview_copy_and_same_name_selection(child, sample)
         with tempfile.TemporaryDirectory(prefix="mar_test_") as temp_dir:
             test_presets(Path(temp_dir))
         print("Modular Asset Renamer integration tests passed")

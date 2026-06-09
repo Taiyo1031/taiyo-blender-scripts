@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Modular Asset Renamer",
     "author": "Taiyo",
-    "version": (1, 0, 5),
+    "version": (1, 0, 6),
     "blender": (4, 5, 0),
     "location": "View3D > Sidebar (N) > Rename Tools",
     "description": "Build names from reusable modules and rename selected assets",
@@ -55,6 +55,9 @@ classes = (
     operators.MAR_OT_apply,
     operators.MAR_OT_revert,
     operators.MAR_OT_clear_preview,
+    operators.MAR_OT_copy_preview_name,
+    operators.MAR_OT_copy_all_preview_names,
+    operators.MAR_OT_select_preview_name_matches,
     operators.MAR_OT_clear_history,
     operators.MAR_OT_load_preset,
     operators.MAR_OT_save_preset,

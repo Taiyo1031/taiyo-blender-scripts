@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `modular_asset_renamer`
-- バージョン: `1.0.5`
+- バージョン: `1.0.6`
 - 対応Blender: `4.5.0`以降
 - 動作確認: `Blender 4.5.10 LTS`
 - 表示場所: `3D Viewport > Sidebar (N) > Rename Tools`
@@ -96,6 +96,8 @@ X180_Y240_Z30cm
 - `Skipped`: Optionsまたは安全条件により対象外
 
 PreviewはObjectやMesh Dataの名前を変更しません。
+
+Previewで項目を選択すると、`Copy Name`でその生成名を、`Copy All`で全生成名を改行区切りでクリップボードへコピーできます。`Select Same Name`は、選択中の生成名と同じObject名、または同じMesh Data名を持つObjectを現在のView Layerから選択します。
 
 ## Optionsと安全動作
 
