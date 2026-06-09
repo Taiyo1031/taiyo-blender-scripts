@@ -7,6 +7,7 @@
   const details = document.getElementById("details");
   const legend = document.getElementById("legend");
   const search = document.getElementById("search");
+  const githubUrl = "https://github.com/Taiyo1031/taiyo-blender-scripts/tree/main/_Taiyo_Blender_Extensions_Repo/blend_reference_graph";
 
   const colors = {
     COLLECTION: "#f5c65b",
@@ -584,6 +585,9 @@
 
   document.getElementById("reload").addEventListener("click", () => window.location.reload());
   document.getElementById("fit").addEventListener("click", fitView);
+  document.getElementById("github").addEventListener("click", () => {
+    window.open(githubUrl, "_blank", "noopener");
+  });
   search.addEventListener("input", (event) => {
     state.query = event.target.value;
     applySearch();

@@ -119,6 +119,30 @@ aside {
   background: rgba(94, 180, 255, 0.14);
 }
 
+.graph-bottom-help {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  left: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 10px;
+  color: #b8c2cf;
+  font-size: 11px;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+.graph-bottom-help span {
+  max-width: min(100%, 720px);
+  padding: 3px 7px;
+  border: 1px solid rgba(104, 117, 134, 0.55);
+  border-radius: 4px;
+  background: rgba(21, 24, 29, 0.78);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+}
+
 .meta {
   flex: 1;
   color: var(--muted);
@@ -292,5 +316,10 @@ aside {
 
   #details {
     display: none;
+  }
+
+  .graph-bottom-help {
+    align-items: center;
+    font-size: 10px;
   }
 }

@@ -10,6 +10,7 @@
   <header>
     <h1>Blend Reference Graph</h1>
     <div class="meta" id="meta"></div>
+    <button id="github" type="button">GitHub</button>
     <button id="reload">Reload Data</button>
     <button id="fit">Fit View</button>
   </header>
@@ -24,6 +25,10 @@
     <section id="graph-wrap">
       <svg id="graph" aria-label="Reference graph"></svg>
       <div id="selection-box"></div>
+      <div class="graph-bottom-help">
+        <span id="usage-hint">Click a node for Details. Edge labels show relationship types.</span>
+        <span id="shortcuts">Shortcuts: drag empty space or B = box select / Shift = add-toggle / middle drag or Space+drag = pan / wheel = zoom / Esc = cancel</span>
+      </div>
     </section>
     <aside id="details">
       <h2>Details</h2>

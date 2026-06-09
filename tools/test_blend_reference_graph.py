@@ -298,9 +298,13 @@ def test_output_folders():
         assert (expected / filename).is_file(), f"Missing generated viewer file: {filename}"
     viewer_js = (expected / "viewer.js").read_text(encoding="utf-8")
     viewer_css = (expected / "viewer.css").read_text(encoding="utf-8")
+    viewer_html = (expected / "viewer.html").read_text(encoding="utf-8")
     assert 'class: "edge-label"' in viewer_js
     assert 'class: "node-selected-badge"' in viewer_js
+    assert "githubUrl" in viewer_js
     assert ".node.selected .node-selection-halo" in viewer_css
+    assert 'id="github"' in viewer_html
+    assert 'id="shortcuts"' in viewer_html
 
     with tempfile.TemporaryDirectory() as custom_directory:
         custom_preferences = SimpleNamespace(
