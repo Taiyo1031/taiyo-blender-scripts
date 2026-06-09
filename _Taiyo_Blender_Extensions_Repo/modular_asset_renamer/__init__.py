@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Modular Asset Renamer",
     "author": "Taiyo",
-    "version": (1, 0, 4),
+    "version": (1, 0, 5),
     "blender": (4, 5, 0),
     "location": "View3D > Sidebar (N) > Rename Tools",
     "description": "Build names from reusable modules and rename selected assets",

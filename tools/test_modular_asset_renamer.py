@@ -98,6 +98,23 @@ def test_module_editing():
     choice.choice_options[1].value = "Metal"
     choice.choice_current = choice.choice_options[1].option_id
     current_id = choice.choice_current
+    enum_items = props.choice_enum_items(choice, bpy.context)
+    assert all(len(item) == 3 for item in enum_items)
+    data_path = "scene.mar_settings.modules[0].choice_current"
+    assert_finished(
+        bpy.ops.wm.context_set_enum(
+            data_path=data_path,
+            value=choice.choice_options[0].option_id,
+        )
+    )
+    assert choice.choice_current == choice.choice_options[0].option_id
+    assert_finished(
+        bpy.ops.wm.context_set_enum(
+            data_path=data_path,
+            value=choice.choice_options[1].option_id,
+        )
+    )
+    assert choice.choice_current == current_id
 
     move = bpy.ops.mar.move_choice_option
     assert_finished(move(direction="UP"))

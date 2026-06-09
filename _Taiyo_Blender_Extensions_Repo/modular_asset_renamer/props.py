@@ -80,7 +80,6 @@ def choice_enum_items(self, _context):
             option_id,
             value or "(empty)",
             value or "Empty option",
-            option_value,
         )
         for option_id, option_value, value in signature
     ]

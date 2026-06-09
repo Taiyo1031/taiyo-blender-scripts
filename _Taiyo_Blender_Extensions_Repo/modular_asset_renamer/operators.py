@@ -274,8 +274,12 @@ class MAR_OT_move_choice_option(Operator):
             and 0 <= target < len(module.choice_options)
         ):
             return {"CANCELLED"}
+        current = preset_utils.safe_choice_current(module)
         module.choice_options.move(index, target)
         module.choice_option_index = target
+        option_ids = {option.option_id for option in module.choice_options}
+        if current in option_ids:
+            module.choice_current = current
         return {"FINISHED"}
 
 
