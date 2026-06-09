@@ -285,6 +285,7 @@ def test_duplicate_invalid_and_filter(child):
     settings.rename_object = True
     settings.rename_mesh_data = False
     settings.auto_resolve_duplicates = False
+    settings.error_if_name_exists = False
     settings.remove_invalid_characters = True
 
     text = add_module("TEXT")
@@ -313,6 +314,14 @@ def test_duplicate_invalid_and_filter(child):
 
     settings.rename_only_mesh_objects = False
     settings.auto_resolve_duplicates = True
+    settings.error_if_name_exists = True
+    text.text_value = PREFIX + "Taken"
+    select_only(target)
+    records, _warning = naming.build_rename_plan(bpy.context, settings)
+    assert records[0].status == naming.STATUS_DUPLICATE
+    assert records[0].new_name == PREFIX + "Taken"
+
+    settings.error_if_name_exists = False
     text.text_value = PREFIX + "Repeated"
     duplicate_a = create_object(
         PREFIX + "DuplicateA",
@@ -342,6 +351,7 @@ def test_presets(temp_dir):
 
     settings.modules.clear()
     settings.rename_only_mesh_objects = False
+    settings.error_if_name_exists = True
     text = add_module("TEXT")
     text.text_value = "PresetText"
     choice = add_module("CHOICE")
@@ -359,6 +369,7 @@ def test_presets(temp_dir):
     )
     assert saved is not None
     assert len(saved["modules"]) == 2
+    assert saved["options"]["error_if_name_exists"] is True
 
     text.text_value = "Updated"
     settings.selected_preset = "Integration Test"
@@ -366,6 +377,7 @@ def test_presets(temp_dir):
     settings.modules.clear()
     assert_finished(bpy.ops.mar.load_preset())
     assert settings.modules[0].text_value == "Updated"
+    assert settings.error_if_name_exists is True
 
     export_path = temp_dir / "export.json"
     assert_finished(

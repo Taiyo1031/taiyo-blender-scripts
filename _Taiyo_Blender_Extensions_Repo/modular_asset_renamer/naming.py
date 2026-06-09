@@ -291,7 +291,7 @@ def _assign_mesh_ownership(records, settings):
 
 def _apply_duplicate_policy(records, settings):
     valid = [record for record in records if record.status == STATUS_OK]
-    if settings.auto_resolve_duplicates:
+    if settings.auto_resolve_duplicates and not settings.error_if_name_exists:
         reserved = set()
         valid_objects = {
             record.obj.as_pointer()

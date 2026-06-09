@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `modular_asset_renamer`
-- バージョン: `1.0.0`
+- バージョン: `1.0.1`
 - 対応Blender: `4.5.0`以降
 - 動作確認: `Blender 4.5.10 LTS`
 - 表示場所: `3D Viewport > Sidebar (N) > Rename Tools`
@@ -82,7 +82,7 @@ X180_Y240_Z30cm
 ## Preview Status
 
 - `OK`: 適用可能
-- `Duplicate`: 重複し、自動解決がOFF
+- `Duplicate`: 既存名エラーがON、または重複自動解決がOFF
 - `Empty Name`: 有効なモジュールから名前が生成されない
 - `Invalid Character`: 禁止文字の置換がOFFで、禁止文字が残っている
 - `Skipped`: Optionsまたは安全条件により対象外
@@ -93,6 +93,7 @@ PreviewはObjectやMesh Dataの名前を変更しません。
 
 - Object名とMesh Data名は個別に有効化できます。
 - 空白と `/ \ : * ? " < > |` は、設定がONなら`_`へ置換します。
+- `Error If Name Exists`がONの場合、生成名が既存Object名またはMesh名と衝突すると`Duplicate`として停止します。この設定は重複自動解決より優先されます。
 - 重複自動解決は末尾に`_001`、`_002`を追加します。
 - 重複判定は既存Object名と、Mesh Dataを変更する場合は既存Mesh名も確認します。
 - 共有Meshはリンク解除せず、処理順で最初のObjectの生成名へ1回だけ変更します。

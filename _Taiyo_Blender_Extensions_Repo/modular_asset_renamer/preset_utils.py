@@ -33,6 +33,7 @@ OPTION_FIELDS = (
     "rename_mesh_data",
     "strip_blender_numeric_suffix",
     "auto_resolve_duplicates",
+    "error_if_name_exists",
     "store_original_name",
     "rename_only_mesh_objects",
     "skip_hidden_objects",

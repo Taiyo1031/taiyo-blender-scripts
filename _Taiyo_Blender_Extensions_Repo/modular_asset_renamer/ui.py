@@ -256,7 +256,10 @@ class MAR_PT_main(Panel):
         box.prop(settings, "rename_object")
         box.prop(settings, "rename_mesh_data")
         box.prop(settings, "strip_blender_numeric_suffix")
-        box.prop(settings, "auto_resolve_duplicates")
+        box.prop(settings, "error_if_name_exists")
+        row = box.row()
+        row.enabled = not settings.error_if_name_exists
+        row.prop(settings, "auto_resolve_duplicates")
         box.prop(settings, "store_original_name")
         box.prop(settings, "rename_only_mesh_objects")
         box.prop(settings, "skip_hidden_objects")

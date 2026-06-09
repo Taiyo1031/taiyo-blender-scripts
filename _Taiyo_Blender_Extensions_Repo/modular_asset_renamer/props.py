@@ -187,6 +187,14 @@ class MAR_Settings(PropertyGroup):
         name="Auto Resolve Duplicates",
         default=True,
     )
+    error_if_name_exists: BoolProperty(
+        name="Error If Name Exists",
+        description=(
+            "Mark the item as Duplicate instead of automatically resolving "
+            "a generated name that already exists"
+        ),
+        default=False,
+    )
     store_original_name: BoolProperty(
         name="Store Original Name as Custom Property",
         default=True,
