@@ -246,8 +246,11 @@ def main():
         assert settings.preview_matched == 1
         assert settings.preview_not_found == 1
         assert settings.preview_skipped == 1
+        assert settings.preview_multiple == 1
         assert preview[batch_target.name].match_name == source_a.name
         assert preview[batch_target.name].confidence == "Exact / Multiple"
+        assert preview[batch_target.name].candidate_count == 2
+        assert preview[batch_target.name].using_first is True
         assert preview[no_match.name].confidence == "Not Found"
         assert preview[source_b.name].confidence == "Skipped"
 
@@ -270,6 +273,7 @@ def main():
         assert settings.batch_replaced == 1
         assert settings.batch_not_found == 1
         assert settings.batch_skipped == 1
+        assert settings.batch_multiple == 1
         assert bpy.data.objects.get(PREFIX + "BatchTarget") is not None
         assert all(
             obj.as_pointer() != batch_target_pointer

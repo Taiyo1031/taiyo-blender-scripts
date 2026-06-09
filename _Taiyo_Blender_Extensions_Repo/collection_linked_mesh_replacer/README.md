@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `collection_linked_mesh_replacer`
-- バージョン: `1.0.3`
+- バージョン: `1.0.4`
 - 対応Blender: `4.5.0` 以降
 - 表示場所: `3D Viewport > Sidebar (N) > Mesh Replace`
 - キャッシュ: メモリのみ。Blender終了時に消去
@@ -22,6 +22,7 @@
 - world bounding box centerによる原点ずれ補正
 - 単体置換と選択Meshの一括置換
 - 選択中Objectごとの対応先を一覧表示する複数プレビュー
+- 複数候補があるObjectを警告表示し、first matchを使うことを明示
 - 元Objectのバックアップ移動、削除、非表示、保持
 - 複数候補時は名前順の最初の候補を使用
 
@@ -36,6 +37,7 @@
 
 複数Objectを処理する前に`Preview Selected`を押すと、選択中の各Objectについて対応するSource Object、候補数、Not Found、Skippedを一覧で確認できます。
 選択を変えて再度プレビューした場合は、前回の単体Match Resultを消してから現在の選択結果を表示します。
+候補が複数あるObjectは`Multiple Candidate Targets`として警告し、v1.0.4では名前順のfirst matchを使用します。
 
 ## 形状照合
 

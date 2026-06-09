@@ -88,7 +88,7 @@ class CLMR_PT_match_result(bpy.types.Panel):
         box.label(text=f"Confidence: {settings.result_confidence}")
         box.label(text=f"Candidates: {settings.result_candidates}")
         if settings.result_candidates > 1:
-            box.label(text="Using: First Match", icon="INFO")
+            box.label(text="Multiple candidates: using first match", icon="ERROR")
 
         if settings.preview_items:
             layout.separator(factor=0.5)
@@ -101,6 +101,11 @@ class CLMR_PT_match_result(bpy.types.Panel):
                     f"Skipped: {settings.preview_skipped}"
                 )
             )
+            if settings.preview_multiple:
+                box.label(
+                    text=f"Multiple Candidate Targets: {settings.preview_multiple}",
+                    icon="ERROR",
+                )
             box.template_list(
                 "CLMR_UL_preview_results",
                 "",
@@ -130,7 +135,8 @@ class CLMR_UL_preview_results(bpy.types.UIList):
             match_text = item.match_name or item.confidence or "-"
             row.label(text=f"-> {match_text}")
             if item.candidate_count:
-                row.label(text=str(item.candidate_count), icon="INFO")
+                icon_name = "ERROR" if item.using_first else "INFO"
+                row.label(text=str(item.candidate_count), icon=icon_name)
         elif self.layout_type == "GRID":
             layout.alignment = "CENTER"
             layout.label(text=item.target_name[:8])

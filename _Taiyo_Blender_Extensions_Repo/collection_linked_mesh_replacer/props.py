@@ -15,6 +15,7 @@ class CLMR_PreviewItem(bpy.types.PropertyGroup):
     source_mesh: StringProperty(default="")
     confidence: StringProperty(default="")
     candidate_count: IntProperty(default=0, min=0)
+    using_first: BoolProperty(default=False)
 
 
 class CLMR_Settings(bpy.types.PropertyGroup):
@@ -120,8 +121,10 @@ class CLMR_Settings(bpy.types.PropertyGroup):
     preview_matched: IntProperty(default=0, min=0)
     preview_not_found: IntProperty(default=0, min=0)
     preview_skipped: IntProperty(default=0, min=0)
+    preview_multiple: IntProperty(default=0, min=0)
 
     batch_replaced: IntProperty(default=0, min=0)
     batch_not_found: IntProperty(default=0, min=0)
     batch_failed: IntProperty(default=0, min=0)
     batch_skipped: IntProperty(default=0, min=0)
+    batch_multiple: IntProperty(default=0, min=0)

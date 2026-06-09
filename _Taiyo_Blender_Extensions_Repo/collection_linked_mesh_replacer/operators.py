@@ -11,6 +11,7 @@ def _clear_match_result(settings):
     settings.preview_matched = 0
     settings.preview_not_found = 0
     settings.preview_skipped = 0
+    settings.preview_multiple = 0
 
 
 def _clear_single_match_result(settings):
@@ -36,6 +37,16 @@ def _set_match_result(settings, target, candidates):
     confidence = first.get("confidence", "Exact")
     settings.result_confidence = (
         confidence if len(candidates) == 1 else f"{confidence} / Multiple"
+    )
+
+
+def _multiple_match_message(target_name, candidates):
+    names = ", ".join(candidate["object_name"] for candidate in candidates[:5])
+    if len(candidates) > 5:
+        names += ", ..."
+    return (
+        f"Multiple matches for {target_name}: {len(candidates)} candidates. "
+        f"Using first: {candidates[0]['object_name']} ({names})"
     )
 
 
@@ -263,8 +274,8 @@ class CLMR_OT_find_match(bpy.types.Operator):
 
         if len(candidates) > 1:
             self.report(
-                {"INFO"},
-                f"Found {len(candidates)} matches; using {candidates[0]['object_name']}",
+                {"WARNING"},
+                _multiple_match_message(target.name, candidates),
             )
         else:
             self.report({"INFO"}, f"Match found: {candidates[0]['object_name']}")
@@ -287,12 +298,14 @@ class CLMR_OT_preview_selected(bpy.types.Operator):
         matched = 0
         not_found = 0
         skipped = 0
+        multiple = 0
 
         if not context.selected_objects:
             self.report({"WARNING"}, "No objects selected")
             settings.preview_matched = 0
             settings.preview_not_found = 0
             settings.preview_skipped = 0
+            settings.preview_multiple = 0
             return {"CANCELLED"}
 
         for obj in context.selected_objects:
@@ -319,14 +332,22 @@ class CLMR_OT_preview_selected(bpy.types.Operator):
             first = candidates[0]
             item.match_name = first["object_name"]
             item.source_mesh = first["mesh_name"]
+            item.using_first = len(candidates) > 1
             confidence = first.get("confidence", "Exact")
             item.confidence = (
                 confidence if len(candidates) == 1 else f"{confidence} / Multiple"
             )
             matched += 1
+            if len(candidates) > 1:
+                multiple += 1
 
             if obj == context.active_object:
                 _set_match_result(settings, obj, candidates)
+                if len(candidates) > 1:
+                    self.report(
+                        {"WARNING"},
+                        _multiple_match_message(obj.name, candidates),
+                    )
 
         if settings.preview_items and not settings.result_selected:
             first_item = settings.preview_items[0]
@@ -339,6 +360,7 @@ class CLMR_OT_preview_selected(bpy.types.Operator):
         settings.preview_matched = matched
         settings.preview_not_found = not_found
         settings.preview_skipped = skipped
+        settings.preview_multiple = multiple
         if matched == 0:
             self.report(
                 {"WARNING"},
@@ -350,10 +372,11 @@ class CLMR_OT_preview_selected(bpy.types.Operator):
             return {"FINISHED"}
 
         self.report(
-            {"INFO"},
+            {"WARNING"} if multiple else {"INFO"},
             (
                 f"Previewed: {len(settings.preview_items)}, Matched: {matched}, "
-                f"Not Found: {not_found}, Skipped: {skipped}"
+                f"Not Found: {not_found}, Skipped: {skipped}, "
+                f"Multiple: {multiple}"
             ),
         )
         return {"FINISHED"}
@@ -392,7 +415,16 @@ class CLMR_OT_replace_selected(bpy.types.Operator):
             new_obj.select_set(True)
             context.view_layer.objects.active = new_obj
 
-        self.report({"INFO"}, f"Replaced with linked mesh: {new_obj.name}")
+        if settings.result_candidates > 1:
+            self.report(
+                {"WARNING"},
+                (
+                    f"Replaced with linked mesh: {new_obj.name}; "
+                    f"multiple candidates existed, used {settings.result_match}"
+                ),
+            )
+        else:
+            self.report({"INFO"}, f"Replaced with linked mesh: {new_obj.name}")
         return {"FINISHED"}
 
 
@@ -430,11 +462,15 @@ class CLMR_OT_replace_all_selected(bpy.types.Operator):
         not_found = 0
         failed = 0
         skipped = 0
+        multiple = 0
 
         for target in selected:
             if not _is_valid_target(target, settings):
                 skipped += 1
                 continue
+            _target_signature, candidates = cache.find_candidates(target)
+            if len(candidates) > 1:
+                multiple += 1
             try:
                 status, new_obj = _replace_object(context, target, settings)
             except (ReferenceError, RuntimeError, ValueError):
@@ -453,6 +489,7 @@ class CLMR_OT_replace_all_selected(bpy.types.Operator):
         settings.batch_not_found = not_found
         settings.batch_failed = failed
         settings.batch_skipped = skipped
+        settings.batch_multiple = multiple
 
         if settings.select_new_objects:
             bpy.ops.object.select_all(action="DESELECT")
@@ -463,10 +500,10 @@ class CLMR_OT_replace_all_selected(bpy.types.Operator):
                 context.view_layer.objects.active = created[-1]
 
         self.report(
-            {"INFO"},
+            {"WARNING"} if multiple else {"INFO"},
             (
                 f"Replaced: {replaced}, Not Found: {not_found}, "
-                f"Failed: {failed}, Skipped: {skipped}"
+                f"Failed: {failed}, Skipped: {skipped}, Multiple: {multiple}"
             ),
         )
         return {"FINISHED"}
