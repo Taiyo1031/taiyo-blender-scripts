@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "laid_collection_instance_linker"
-version = "1.0.1"
+version = "1.0.2"
 name = "CW_Laid Collection Instance Linker"
 tagline = "Rebuild laid maps with matched collection instances"
 maintainer = "Taiyo"

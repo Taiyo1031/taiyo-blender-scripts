@@ -69,6 +69,7 @@ class LCIL_PT_main(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         settings = context.scene.lcil_settings
+        realize_running = settings.realize_is_running
 
         box = layout.box()
         box.label(text="Collections", icon="OUTLINER_COLLECTION")
@@ -86,6 +87,7 @@ class LCIL_PT_main(bpy.types.Panel):
 
         column = layout.column(align=True)
         column.scale_y = 1.2
+        column.enabled = not realize_running
         column.operator("lcil.preview_link", icon="VIEWZOOM")
         column.operator("lcil.generate_instances", icon="OUTLINER_OB_GROUP_INSTANCE")
 
@@ -124,5 +126,33 @@ class LCIL_PT_main(bpy.types.Panel):
 
         box = layout.box()
         box.label(text="Generated Instances", icon="OUTLINER_OB_GROUP_INSTANCE")
-        box.operator("lcil.realize_instances", icon="DUPLICATE")
-        box.operator("lcil.delete_generated_empties", icon="TRASH")
+        if realize_running:
+            if settings.realize_current_instance:
+                box.label(
+                    text=f"Current: {settings.realize_current_instance}",
+                    icon="OBJECT_DATA",
+                )
+            box.label(
+                text=(
+                    f"Instances: {settings.realize_completed_instances} | "
+                    f"Steps: {settings.realize_processed} / {settings.realize_total}"
+                )
+            )
+            if hasattr(box, "progress"):
+                box.progress(
+                    factor=settings.realize_progress,
+                    type="BAR",
+                    text=f"{int(settings.realize_progress * 100)}%",
+                )
+            else:
+                box.label(
+                    text=f"Progress: {settings.realize_progress * 100:.1f}%"
+                )
+            box.operator("lcil.cancel_realize", icon="CANCEL")
+            box.label(text="ESC also cancels. Completed instances are kept.", icon="INFO")
+        else:
+            box.operator("lcil.realize_instances", icon="DUPLICATE")
+            delete_row = box.row()
+            delete_row.operator("lcil.delete_generated_empties", icon="TRASH")
+        if settings.realize_status:
+            box.label(text=settings.realize_status, icon="INFO")

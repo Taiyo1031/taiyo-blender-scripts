@@ -7,7 +7,7 @@
 ## 基本情報
 
 - Extension ID: `laid_collection_instance_linker`
-- バージョン: `1.0.1`
+- バージョン: `1.0.2`
 - 配布対象Blender: `4.2.0`以降
 - アドオンコードのAPI基準: Blender `4.0.0`以降
 - 表示場所: `3D Viewport > Sidebar (N) > Laid Linker`
@@ -100,6 +100,8 @@ LCIL_generated = True
 ## Realize
 
 `Realize Generated Instances`は生成済みCollection Instance Emptyだけを対象にします。参照Collection配下のObjectを再帰的に複製し、Mesh Dataは共有したまま実体Objectを作ります。
+
+RealizeはTimerを使ったModal処理です。パーツObject単位で複数ティックに分割し、NパネルとBlenderのステータスバーへ進捗を表示します。`Cancel Realize`または`Esc`で中断できます。中断時は処理途中だった1インスタンスだけを巻き戻し、完了済みインスタンスは保持します。もう一度実行すると残りのEmptyから続行できます。
 
 ```text
 Realized Matrix World

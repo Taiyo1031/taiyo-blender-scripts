@@ -1,7 +1,30 @@
+import time
+import traceback
+
 import bpy
 from bpy.props import StringProperty
 
 from . import core
+
+
+REALIZE_TIMER_INTERVAL = 0.02
+REALIZE_SECONDS_PER_TICK = 0.012
+
+
+def _redraw_view3d(context):
+    screen = getattr(context, "screen", None)
+    if screen is None:
+        return
+    for area in screen.areas:
+        if area.type == "VIEW_3D":
+            area.tag_redraw()
+
+
+def _realize_operation_running(operator, settings):
+    if not settings.realize_is_running:
+        return False
+    operator.report({"WARNING"}, "Realize Generated Instances is already running")
+    return True
 
 
 def _validate_source_collections(operator, settings):
@@ -36,6 +59,8 @@ class LCIL_OT_preview_link(bpy.types.Operator):
 
     def execute(self, context):
         settings = context.scene.lcil_settings
+        if _realize_operation_running(self, settings):
+            return {"CANCELLED"}
         if not _validate_source_collections(self, settings):
             return {"CANCELLED"}
 
@@ -152,6 +177,8 @@ class LCIL_OT_generate_instances(bpy.types.Operator):
 
     def execute(self, context):
         settings = context.scene.lcil_settings
+        if _realize_operation_running(self, settings):
+            return {"CANCELLED"}
         if not _validate_source_collections(self, settings):
             return {"CANCELLED"}
 
@@ -240,28 +267,178 @@ class LCIL_OT_realize_instances(bpy.types.Operator):
     bl_description = "Duplicate instance contents as real objects and remove generated empties"
     bl_options = {"REGISTER", "UNDO"}
 
+    _timer = None
+    _queue = None
+
+    def invoke(self, context, event):
+        if context.window is None:
+            return self.execute(context)
+        result = self._initialize(context)
+        if result is not None:
+            return result
+
+        self._timer = context.window_manager.event_timer_add(
+            REALIZE_TIMER_INTERVAL,
+            window=context.window,
+        )
+        context.window_manager.modal_handler_add(self)
+        return {"RUNNING_MODAL"}
+
     def execute(self, context):
+        result = self._initialize(context)
+        if result is not None:
+            return result
+
+        try:
+            while not self._queue.done:
+                self._queue.process_one()
+                self._update_progress(context)
+        except Exception as exc:
+            traceback.print_exc()
+            self._queue.cancel_current()
+            return self._finish(
+                context,
+                cancelled=True,
+                error_message=str(exc),
+            )
+        return self._finish(context)
+
+    def modal(self, context, event):
+        settings = context.scene.lcil_settings
+        if event.type == "ESC" or settings.realize_cancel_requested:
+            self._queue.cancel_current()
+            return self._finish(context, cancelled=True)
+        if event.type != "TIMER":
+            return {"PASS_THROUGH"}
+
+        started = time.perf_counter()
+        processed_this_tick = 0
+        try:
+            while not self._queue.done:
+                self._queue.process_one()
+                processed_this_tick += 1
+                if (
+                    processed_this_tick > 0
+                    and time.perf_counter() - started >= REALIZE_SECONDS_PER_TICK
+                ):
+                    break
+        except Exception as exc:
+            traceback.print_exc()
+            self._queue.cancel_current()
+            return self._finish(
+                context,
+                cancelled=True,
+                error_message=str(exc),
+            )
+
+        self._update_progress(context)
+        _redraw_view3d(context)
+        if self._queue.done:
+            return self._finish(context)
+        return {"PASS_THROUGH"}
+
+    def _initialize(self, context):
+        settings = context.scene.lcil_settings
+        if _realize_operation_running(self, settings):
+            return {"CANCELLED"}
+
         output = _get_output(self, context)
         if output is None:
             return {"CANCELLED"}
 
-        empties = core.generated_instance_empties(output)
-        if not empties:
+        self._queue = core.RealizeQueue(output)
+        if not self._queue.jobs:
             self.report(
                 {"WARNING"},
                 "No generated collection instance empties found",
             )
             return {"CANCELLED"}
 
-        realized_count = 0
-        for empty in empties:
-            realized_count += len(core.realize_instance(empty, output))
-            bpy.data.objects.remove(empty, do_unlink=True)
-
-        self.report(
-            {"INFO"},
-            f"Realized {len(empties)} instance(s) as {realized_count} object(s)",
+        settings.realize_is_running = True
+        settings.realize_cancel_requested = False
+        settings.realize_progress = 0.0
+        settings.realize_processed = 0
+        settings.realize_total = self._queue.total_steps
+        settings.realize_completed_instances = 0
+        settings.realize_current_instance = self._queue.current_instance_name
+        settings.realize_status = (
+            f"Starting {len(self._queue.jobs)} generated instance(s)..."
         )
+        context.window_manager.progress_begin(
+            0,
+            max(1, self._queue.total_steps),
+        )
+        return None
+
+    def _update_progress(self, context):
+        settings = context.scene.lcil_settings
+        settings.realize_processed = self._queue.processed_steps
+        settings.realize_completed_instances = self._queue.completed_instances
+        settings.realize_current_instance = self._queue.current_instance_name
+        settings.realize_progress = (
+            self._queue.processed_steps / max(1, self._queue.total_steps)
+        )
+        context.window_manager.progress_update(self._queue.processed_steps)
+        settings.realize_status = (
+            f"Realized {self._queue.completed_instances} / "
+            f"{len(self._queue.jobs)} instance(s), "
+            f"{self._queue.realized_objects} object(s)"
+        )
+
+    def _finish(self, context, cancelled=False, error_message=""):
+        settings = context.scene.lcil_settings
+        if self._timer is not None:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+
+        self._update_progress(context)
+        try:
+            context.window_manager.progress_end()
+        except RuntimeError:
+            pass
+
+        settings.realize_is_running = False
+        settings.realize_cancel_requested = False
+        settings.realize_current_instance = ""
+
+        if error_message:
+            settings.realize_status = f"Realize failed: {error_message}"
+            self.report({"ERROR"}, settings.realize_status)
+            _redraw_view3d(context)
+            return {"CANCELLED"}
+
+        if cancelled:
+            settings.realize_status = (
+                f"Canceled after {self._queue.completed_instances} / "
+                f"{len(self._queue.jobs)} instance(s). Run again to continue."
+            )
+            self.report({"WARNING"}, settings.realize_status)
+            _redraw_view3d(context)
+            return {"CANCELLED"}
+
+        settings.realize_progress = 1.0
+        settings.realize_processed = self._queue.total_steps
+        settings.realize_status = (
+            f"Realized {self._queue.completed_instances} instance(s) as "
+            f"{self._queue.realized_objects} object(s)"
+        )
+        self.report({"INFO"}, settings.realize_status)
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
+class LCIL_OT_cancel_realize(bpy.types.Operator):
+    bl_idname = "lcil.cancel_realize"
+    bl_label = "Cancel Realize"
+    bl_description = "Cancel after the current object copy finishes"
+
+    def execute(self, context):
+        settings = context.scene.lcil_settings
+        if not settings.realize_is_running:
+            self.report({"WARNING"}, "Realize is not running")
+            return {"CANCELLED"}
+        settings.realize_cancel_requested = True
+        self.report({"INFO"}, "Cancel requested")
         return {"FINISHED"}
 
 
@@ -272,6 +449,9 @@ class LCIL_OT_delete_generated_empties(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
+        settings = context.scene.lcil_settings
+        if _realize_operation_running(self, settings):
+            return {"CANCELLED"}
         output = _get_output(self, context)
         if output is None:
             return {"CANCELLED"}

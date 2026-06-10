@@ -1,7 +1,7 @@
 bl_info = {
     "name": "CW_Laid Collection Instance Linker",
     "author": "Taiyo",
-    "version": (1, 0, 1),
+    "version": (1, 0, 2),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar (N) > Laid Linker",
     "description": "Match laid map objects to collections and generate collection instances",
@@ -43,6 +43,7 @@ classes = (
     operators.LCIL_OT_select_issue_objects,
     operators.LCIL_OT_generate_instances,
     operators.LCIL_OT_realize_instances,
+    operators.LCIL_OT_cancel_realize,
     operators.LCIL_OT_delete_generated_empties,
     ui.LCIL_UL_preview_results,
     ui.LCIL_PT_main,

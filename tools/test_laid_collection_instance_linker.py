@@ -1,6 +1,7 @@
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import bpy
 from mathutils import Matrix
@@ -92,6 +93,12 @@ def main():
             "WallPartMesh",
             wall_target,
             location=(1.0, 2.0, 3.0),
+        )
+        wall_part_secondary = new_mesh_object(
+            "WallPartSecondary",
+            "WallPartSecondaryMesh",
+            wall_target,
+            location=(2.0, 0.0, 1.0),
         )
 
         roof_target = new_collection("Roof_A", individual_nested)
@@ -204,26 +211,62 @@ def main():
 
         manual = bpy.data.objects.new("Manual_Output_Object", None)
         output.objects.link(manual)
-        old_instance_pointers = {obj.as_pointer() for obj in instances}
+        old_instances = list(instances)
         result = bpy.ops.lcil.generate_instances()
         assert result == {"FINISHED"}, result
         instances = generated_objects(output, "COLLECTION_INSTANCE_EMPTY")
         assert len(instances) == 2
-        assert not old_instance_pointers.intersection(
-            {obj.as_pointer() for obj in instances}
-        )
+        for old_instance in old_instances:
+            try:
+                old_instance.name
+            except ReferenceError:
+                continue
+            raise AssertionError("Expected the previous generated instance to be removed")
         assert manual.name in output.objects
+        wall_empty = next(
+            obj
+            for obj in instances
+            if obj["LCIL_target_collection"] == wall_target.name
+        )
+
+        queue = addon.operators.core.RealizeQueue(output)
+        assert queue.total_steps == 3, queue.total_steps
+        while (
+            not queue.done
+            and queue.current_target_collection != wall_target
+        ):
+            queue.process_one()
+        assert queue.current_target_collection == wall_target
+        queue.process_one()
+        partial_wall = [
+            obj
+            for obj in generated_objects(output, "REALIZED_OBJECT")
+            if obj["LCIL_target_collection"] == wall_target.name
+        ]
+        assert len(partial_wall) == 1
+        queue.cancel_current()
+        assert not [
+            obj
+            for obj in generated_objects(output, "REALIZED_OBJECT")
+            if obj["LCIL_target_collection"] == wall_target.name
+        ]
+        assert wall_empty.name in bpy.data.objects
 
         result = bpy.ops.lcil.realize_instances()
         assert result == {"FINISHED"}, result
         assert not generated_objects(output, "COLLECTION_INSTANCE_EMPTY")
         realized = generated_objects(output, "REALIZED_OBJECT")
-        assert len(realized) == 2, [obj.name for obj in realized]
+        assert len(realized) == 3, [obj.name for obj in realized]
 
         realized_wall = next(
             obj
             for obj in realized
-            if obj["LCIL_target_collection"] == wall_target.name
+            if obj["LCIL_source_part_object"] == wall_part.name
+        )
+        realized_wall_secondary = next(
+            obj
+            for obj in realized
+            if obj["LCIL_source_part_object"] == wall_part_secondary.name
         )
         realized_roof = next(
             obj
@@ -231,6 +274,7 @@ def main():
             if obj["LCIL_target_collection"] == roof_target.name
         )
         assert realized_wall.data == wall_part.data
+        assert realized_wall_secondary.data == wall_part_secondary.data
         assert realized_roof.data == roof_part.data
         assert_vector_close(
             realized_wall.matrix_world.translation,
@@ -238,16 +282,64 @@ def main():
             + wall_part.matrix_world.translation,
         )
         assert_vector_close(
+            realized_wall_secondary.matrix_world.translation,
+            wall_source.matrix_world.translation
+            + wall_part_secondary.matrix_world.translation,
+        )
+        assert_vector_close(
             realized_roof.matrix_world.translation,
             roof_source.matrix_world.translation
             + roof_part.matrix_world.translation,
         )
+        assert settings.realize_progress == 1.0
+        assert settings.realize_processed == settings.realize_total == 2
+        assert settings.realize_completed_instances == 1
+        assert not settings.realize_is_running
 
         result = bpy.ops.lcil.generate_instances()
         assert result == {"FINISHED"}, result
         assert not generated_objects(output, "REALIZED_OBJECT")
         assert len(generated_objects(output, "COLLECTION_INSTANCE_EMPTY")) == 2
         assert manual.name in output.objects
+
+        original_tick_budget = addon.operators.REALIZE_SECONDS_PER_TICK
+        addon.operators.REALIZE_SECONDS_PER_TICK = 0.0
+        realize_operator_type = addon.operators.LCIL_OT_realize_instances
+
+        class ModalRealizeHarness:
+            _timer = None
+            _queue = None
+            _initialize = realize_operator_type._initialize
+            _update_progress = realize_operator_type._update_progress
+            _finish = realize_operator_type._finish
+            modal = realize_operator_type.modal
+
+            @staticmethod
+            def report(_level, _message):
+                pass
+
+        modal_operator = ModalRealizeHarness()
+        try:
+            assert modal_operator._initialize(bpy.context) is None
+            result = modal_operator.modal(
+                bpy.context,
+                SimpleNamespace(type="TIMER"),
+            )
+            assert result == {"PASS_THROUGH"}, result
+            assert settings.realize_is_running
+            assert 0.0 < settings.realize_progress < 1.0
+
+            result = bpy.ops.lcil.cancel_realize()
+            assert result == {"FINISHED"}, result
+            result = modal_operator.modal(
+                bpy.context,
+                SimpleNamespace(type="TIMER"),
+            )
+            assert result == {"CANCELLED"}, result
+            assert not settings.realize_is_running
+            assert "Run again to continue" in settings.realize_status
+        finally:
+            addon.operators.REALIZE_SECONDS_PER_TICK = original_tick_budget
 
         result = bpy.ops.lcil.delete_generated_empties()
         assert result == {"FINISHED"}, result

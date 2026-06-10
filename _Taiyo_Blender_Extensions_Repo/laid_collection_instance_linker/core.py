@@ -278,11 +278,12 @@ def generated_instance_empties(output):
     ]
 
 
-def output_collection_for_object(output, obj):
-    output_collections = {
-        collection.as_pointer(): collection
-        for collection, _path in walk_collections(output)
-    }
+def output_collection_for_object(output, obj, output_collections=None):
+    if output_collections is None:
+        output_collections = {
+            collection.as_pointer(): collection
+            for collection, _path in walk_collections(output)
+        }
     candidates = [
         collection
         for collection in obj.users_collection
@@ -293,28 +294,130 @@ def output_collection_for_object(output, obj):
     return sorted(candidates, key=lambda item: item.name.casefold())[0]
 
 
-def realize_instance(empty, output):
+def realize_source_part(empty, source_part, destination):
     target_collection = empty.instance_collection
+    copy = source_part.copy()
+    copy.parent = None
+    copy.matrix_parent_inverse.identity()
+    copy.name = f"REAL_{empty.name}__{source_part.name}"
+    destination.objects.link(copy)
+    copy.matrix_world = empty.matrix_world @ source_part.matrix_world
+    copy[GENERATED_KEY] = True
+    copy[GENERATED_KIND_KEY] = REALIZED_KIND
+    copy["LCIL_source_object"] = empty.get("LCIL_source_object", "")
+    copy["LCIL_source_part_object"] = source_part.name
+    copy["LCIL_target_collection"] = empty.get(
+        "LCIL_target_collection",
+        target_collection.name,
+    )
+    copy["LCIL_target_collection_path"] = empty.get(
+        "LCIL_target_collection_path",
+        "",
+    )
+    return copy
+
+
+class RealizeQueue:
+    def __init__(self, output):
+        self.output = output
+        self.jobs = []
+        part_cache = {}
+        output_collections = {
+            collection.as_pointer(): collection
+            for collection, _path in walk_collections(output)
+        }
+        for empty in generated_instance_empties(output):
+            target_collection = empty.instance_collection
+            pointer = target_collection.as_pointer()
+            parts = part_cache.get(pointer)
+            if parts is None:
+                parts = tuple(walk_objects(target_collection))
+                part_cache[pointer] = parts
+            self.jobs.append(
+                {
+                    "empty": empty,
+                    "destination": output_collection_for_object(
+                        output,
+                        empty,
+                        output_collections,
+                    ),
+                    "parts": parts,
+                    "steps": max(1, len(parts)),
+                }
+            )
+
+        self.total_steps = sum(job["steps"] for job in self.jobs)
+        self.processed_steps = 0
+        self.realized_objects = 0
+        self.completed_instances = 0
+        self.job_index = 0
+        self.part_index = 0
+        self._current_created = []
+
+    @property
+    def done(self):
+        return self.job_index >= len(self.jobs)
+
+    @property
+    def current_instance_name(self):
+        if self.done:
+            return ""
+        return self.jobs[self.job_index]["empty"].name
+
+    @property
+    def current_target_collection(self):
+        if self.done:
+            return None
+        return self.jobs[self.job_index]["empty"].instance_collection
+
+    def process_one(self):
+        if self.done:
+            return False
+
+        job = self.jobs[self.job_index]
+        empty = job["empty"]
+        parts = job["parts"]
+        if self.part_index < len(parts):
+            copy = realize_source_part(
+                empty,
+                parts[self.part_index],
+                job["destination"],
+            )
+            self._current_created.append(copy)
+            self.part_index += 1
+            self.processed_steps += 1
+            self.realized_objects += 1
+        else:
+            self.processed_steps += 1
+
+        if self.part_index >= len(parts):
+            bpy.data.objects.remove(empty, do_unlink=True)
+            self.completed_instances += 1
+            self.job_index += 1
+            self.part_index = 0
+            self._current_created = []
+        return True
+
+    def cancel_current(self):
+        if not self._current_created:
+            return
+        removed = 0
+        for obj in reversed(self._current_created):
+            try:
+                bpy.data.objects.remove(obj, do_unlink=True)
+                removed += 1
+            except ReferenceError:
+                pass
+        self.processed_steps = max(0, self.processed_steps - removed)
+        self.realized_objects = max(0, self.realized_objects - removed)
+        self.part_index = 0
+        self._current_created = []
+
+
+def realize_instance(empty, output):
     destination = output_collection_for_object(output, empty)
-    realized = []
-    for source_part in walk_objects(target_collection):
-        copy = source_part.copy()
-        copy.parent = None
-        copy.matrix_parent_inverse.identity()
-        copy.name = f"REAL_{empty.name}__{source_part.name}"
-        destination.objects.link(copy)
-        copy.matrix_world = empty.matrix_world @ source_part.matrix_world
-        copy[GENERATED_KEY] = True
-        copy[GENERATED_KIND_KEY] = REALIZED_KIND
-        copy["LCIL_source_object"] = empty.get("LCIL_source_object", "")
-        copy["LCIL_source_part_object"] = source_part.name
-        copy["LCIL_target_collection"] = empty.get(
-            "LCIL_target_collection",
-            target_collection.name,
-        )
-        copy["LCIL_target_collection_path"] = empty.get(
-            "LCIL_target_collection_path",
-            "",
-        )
-        realized.append(copy)
+    realized = [
+        realize_source_part(empty, source_part, destination)
+        for source_part in walk_objects(empty.instance_collection)
+    ]
     return realized

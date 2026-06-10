@@ -3,6 +3,7 @@ from bpy.props import (
     BoolProperty,
     CollectionProperty,
     EnumProperty,
+    FloatProperty,
     IntProperty,
     PointerProperty,
     StringProperty,
@@ -91,3 +92,15 @@ class LCIL_Settings(bpy.types.PropertyGroup):
     preview_missing: IntProperty(default=0, min=0)
     preview_duplicate: IntProperty(default=0, min=0)
     preview_skipped: IntProperty(default=0, min=0)
+    realize_is_running: BoolProperty(default=False)
+    realize_cancel_requested: BoolProperty(default=False)
+    realize_progress: FloatProperty(
+        default=0.0,
+        min=0.0,
+        max=1.0,
+    )
+    realize_processed: IntProperty(default=0, min=0)
+    realize_total: IntProperty(default=0, min=0)
+    realize_completed_instances: IntProperty(default=0, min=0)
+    realize_current_instance: StringProperty(default="")
+    realize_status: StringProperty(default="")
