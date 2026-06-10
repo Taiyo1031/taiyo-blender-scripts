@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Material Painter",
     "author": "Taiyo",
-    "version": (1, 0, 2),
+    "version": (1, 0, 3),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > VC Painter",
     "description": "Paint selected edit-mode faces with scene-saved material ID colors",
@@ -18,6 +18,7 @@ from bpy.props import (
     StringProperty,
 )
 from bpy.types import Operator, Panel, PropertyGroup, UIList
+from mathutils import Color
 
 
 DEFAULT_ATTRIBUTE_NAME = "mat_color"
@@ -137,6 +138,22 @@ def _bmesh_layer_collection(bm, attribute_type):
     return bm.loops.layers.color
 
 
+def _scene_linear_to_bmesh_color(color, attribute_type):
+    if attribute_type != 'BYTE_COLOR':
+        return tuple(color)
+
+    rgb = Color(color[:3]).from_scene_linear_to_srgb()
+    return (*rgb, color[3])
+
+
+def _bmesh_color_to_scene_linear(color, attribute_type):
+    if attribute_type != 'BYTE_COLOR':
+        return tuple(color)
+
+    rgb = Color(color[:3]).from_srgb_to_scene_linear()
+    return (*rgb, color[3])
+
+
 def _ensure_bmesh_color_attribute(mesh, bm, attribute_name, requested_type):
     attribute = mesh.color_attributes.get(attribute_name)
 
@@ -216,10 +233,11 @@ def _paint_selected_faces(obj, attribute_name, attribute_type, color):
         attribute_name,
         attribute_type,
     )
+    bmesh_color = _scene_linear_to_bmesh_color(color, actual_type)
 
     for face in selected_faces:
         for loop in face.loops:
-            loop[color_layer] = color
+            loop[color_layer] = bmesh_color
 
     bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
 
@@ -283,7 +301,11 @@ def _select_faces_by_color(obj, attribute_name, color):
 
     for face in bm.faces:
         face_matches = bool(face.loops) and all(
-            _colors_match(loop[color_layer], color, attribute_type)
+            _colors_match(
+                _bmesh_color_to_scene_linear(loop[color_layer], attribute_type),
+                color,
+                attribute_type,
+            )
             for loop in face.loops
         )
         face.select_set(face_matches)
@@ -311,7 +333,14 @@ def _copy_bmesh_color_attribute(obj, source_name, target_name, target_type):
 
     for face in bm.faces:
         for loop in face.loops:
-            loop[target_layer] = tuple(loop[source_layer])
+            scene_linear_color = _bmesh_color_to_scene_linear(
+                loop[source_layer],
+                source_type,
+            )
+            loop[target_layer] = _scene_linear_to_bmesh_color(
+                scene_linear_color,
+                actual_target_type,
+            )
 
     bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
 
@@ -376,6 +405,64 @@ def _copy_object_mode_meshes(objects, source_name, target_name, target_type):
             created_count += 1
 
     return object_count, face_count, created_count
+
+
+def _repair_target_objects(context):
+    if context.mode == 'EDIT_MESH':
+        candidates = getattr(context, "objects_in_mode", ())
+    else:
+        candidates = context.selected_objects
+
+    return [
+        obj for obj in candidates
+        if obj is not None and obj.type == 'MESH' and obj.data is not None
+    ]
+
+
+def _legacy_color_repair_preview(context, attribute_name):
+    objects = _repair_target_objects(context)
+    meshes = _unique_meshes(objects)
+    matching_meshes = [
+        mesh for mesh in meshes
+        if (
+            getattr(mesh, "is_editable", True)
+            and (attribute := mesh.color_attributes.get(attribute_name)) is not None
+            and attribute.data_type == 'BYTE_COLOR'
+            and attribute.domain == 'CORNER'
+        )
+    ]
+
+    return {
+        "object_count": len(objects),
+        "unique_mesh_count": len(meshes),
+        "matching_mesh_count": len(matching_meshes),
+        "matching_meshes": matching_meshes,
+    }
+
+
+def _repair_legacy_edit_mode_colors(context, attribute_name):
+    preview = _legacy_color_repair_preview(context, attribute_name)
+
+    if not preview["object_count"]:
+        raise ValueError("選択中またはEdit Mode中のMeshオブジェクトがありません。")
+
+    if not preview["matching_mesh_count"]:
+        raise ValueError(f"修復対象のBYTE_COLOR / CORNER Attributeがありません: {attribute_name}")
+
+    color_count = 0
+
+    for mesh in preview["matching_meshes"]:
+        attribute = mesh.color_attributes[attribute_name]
+
+        for data in attribute.data:
+            color = tuple(data.color)
+            rgb = Color(color[:3]).from_scene_linear_to_srgb()
+            data.color = (*rgb, color[3])
+            color_count += 1
+
+        mesh.update()
+
+    return preview["matching_mesh_count"], color_count
 
 
 def _remove_target_objects(context):
@@ -1012,6 +1099,64 @@ class VCMP_OT_remove_attribute(Operator):
         return {'FINISHED'}
 
 
+class VCMP_OT_repair_legacy_edit_colors(Operator):
+    bl_idname = "vcmp.repair_legacy_edit_colors"
+    bl_label = "Fix Selected Legacy Edit Colors"
+    bl_description = "旧バージョンのEdit Modeで暗く書かれたBYTE_COLORをObject Modeの色基準へ補正します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def invoke(self, context, event):
+        attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
+        preview = _legacy_color_repair_preview(context, attribute_name)
+
+        if not preview["object_count"]:
+            self.report({'ERROR'}, "選択中またはEdit Mode中のMeshオブジェクトがありません。")
+            return {'CANCELLED'}
+
+        if not preview["matching_mesh_count"]:
+            self.report(
+                {'ERROR'},
+                f"修復対象のBYTE_COLOR / CORNER Attributeがありません: {attribute_name}",
+            )
+            return {'CANCELLED'}
+
+        return context.window_manager.invoke_props_dialog(self, width=430)
+
+    def draw(self, context):
+        layout = self.layout
+        attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
+        preview = _legacy_color_repair_preview(context, attribute_name)
+
+        layout.label(text="旧Edit Modeで暗くなった色だけに使用してください。", icon='ERROR')
+        layout.label(text=f"Attribute: {attribute_name}", icon='GROUP_VCOL')
+        layout.label(
+            text=(
+                f"Selected Meshes: {preview['object_count']} / "
+                f"Repair Meshes: {preview['matching_mesh_count']}"
+            ),
+            icon='MESH_DATA',
+        )
+        layout.label(text="既に正しい色へ使うと明るくなります。", icon='INFO')
+
+    def execute(self, context):
+        attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
+
+        try:
+            mesh_count, color_count = _repair_legacy_edit_mode_colors(
+                context,
+                attribute_name,
+            )
+        except ValueError as error:
+            self.report({'ERROR'}, str(error))
+            return {'CANCELLED'}
+
+        self.report(
+            {'INFO'},
+            f"{mesh_count} Mesh / {color_count} ColorをObject Mode基準へ補正しました。",
+        )
+        return {'FINISHED'}
+
+
 class VCMP_OT_ensure_attribute(Operator):
     bl_idname = "vcmp.ensure_attribute"
     bl_label = "Ensure Color Attribute"
@@ -1103,6 +1248,16 @@ class VCMP_PT_panel(Panel):
         box.prop(scene, "vcmp_copy_target_name", text="Destination")
         box.prop(scene, "vcmp_copy_target_type", text="New Type")
         box.operator(VCMP_OT_copy_attribute.bl_idname, icon='DUPLICATE')
+
+        box.separator()
+        box.label(text="Legacy Color Fix", icon='COLOR')
+        repair_preview = _legacy_color_repair_preview(
+            context,
+            _clean_attribute_name(scene.vcmp_attribute_name),
+        )
+        repair_row = box.row()
+        repair_row.enabled = repair_preview["matching_mesh_count"] > 0
+        repair_row.operator(VCMP_OT_repair_legacy_edit_colors.bl_idname, icon='FILE_REFRESH')
 
         box.separator()
         box.label(text="Remove", icon='TRASH')
@@ -1206,6 +1361,7 @@ classes = (
     VCMP_OT_select_by_color,
     VCMP_OT_copy_attribute,
     VCMP_OT_remove_attribute,
+    VCMP_OT_repair_legacy_edit_colors,
     VCMP_OT_ensure_attribute,
     VCMP_PT_panel,
 )

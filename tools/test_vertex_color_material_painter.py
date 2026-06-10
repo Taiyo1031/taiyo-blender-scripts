@@ -4,6 +4,8 @@ import tempfile
 from pathlib import Path
 
 import bpy
+import bmesh
+from mathutils import Color
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,6 +86,115 @@ def configure_remove(
 
 def assert_finished(result):
     assert result == {'FINISHED'}, result
+
+
+def assert_color_close(actual, expected, tolerance=0.005):
+    assert all(
+        abs(float(actual[index]) - float(expected[index])) <= tolerance
+        for index in range(4)
+    ), (tuple(actual), tuple(expected))
+
+
+def test_paint_color_consistency(addon):
+    for attribute_type in ('BYTE_COLOR', 'FLOAT_COLOR'):
+        reset_scene()
+        color = (0.45, 0.24, 0.09, 1.0)
+        object_mode_obj = new_mesh_object(f"ObjectPaint{attribute_type}")
+        edit_mode_obj = new_mesh_object(f"EditPaint{attribute_type}")
+
+        object_count, face_count, created_count = addon._paint_object_mode_meshes(
+            [object_mode_obj],
+            "paint_color",
+            attribute_type,
+            color,
+        )
+        assert (object_count, face_count, created_count) == (1, 1, 1)
+
+        select_only(edit_mode_obj)
+        bpy.ops.object.mode_set(mode='EDIT')
+        bm = bmesh.from_edit_mesh(edit_mode_obj.data)
+        for face in bm.faces:
+            face.select_set(True)
+        bmesh.update_edit_mesh(edit_mode_obj.data, loop_triangles=False, destructive=False)
+
+        painted_faces, created, actual_type = addon._paint_selected_faces(
+            edit_mode_obj,
+            "paint_color",
+            attribute_type,
+            color,
+        )
+        assert painted_faces == 1
+        assert created is True
+        assert actual_type == attribute_type
+
+        selected_faces = addon._select_faces_by_color(
+            edit_mode_obj,
+            "paint_color",
+            color,
+        )
+        assert selected_faces == 1
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        object_color = object_mode_obj.data.color_attributes["paint_color"].data[0].color
+        edit_color = edit_mode_obj.data.color_attributes["paint_color"].data[0].color
+        assert_color_close(edit_color, object_color)
+        assert_color_close(edit_color, color)
+
+
+def test_edit_mode_color_copy_consistency(addon):
+    reset_scene()
+    color = (0.45, 0.24, 0.09, 1.0)
+    obj = new_mesh_object("EditCopy")
+    addon._paint_object_mode_meshes([obj], "byte_source", 'BYTE_COLOR', color)
+
+    select_only(obj)
+    bpy.ops.object.mode_set(mode='EDIT')
+    copied_faces, source_type, target_type, created = addon._copy_bmesh_color_attribute(
+        obj,
+        "byte_source",
+        "float_target",
+        'FLOAT_COLOR',
+    )
+    assert copied_faces == 1
+    assert source_type == 'BYTE_COLOR'
+    assert target_type == 'FLOAT_COLOR'
+    assert created is True
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    source_color = obj.data.color_attributes["byte_source"].data[0].color
+    target_color = obj.data.color_attributes["float_target"].data[0].color
+    assert_color_close(target_color, source_color)
+    assert_color_close(target_color, color)
+
+
+def test_legacy_color_repair(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    desired_color = (0.45, 0.24, 0.09, 1.0)
+    wrong_rgb = Color(desired_color[:3]).from_srgb_to_scene_linear()
+    wrong_color = (*wrong_rgb, desired_color[3])
+
+    shared_mesh = new_mesh("LegacySharedMesh")
+    selected_a = new_mesh_object("LegacySelectedA", shared_mesh)
+    selected_b = new_mesh_object("LegacySelectedB", shared_mesh)
+    attribute = shared_mesh.color_attributes.new(
+        name="mat_color",
+        type='BYTE_COLOR',
+        domain='CORNER',
+    )
+    for data in attribute.data:
+        data.color = wrong_color
+
+    select_only(selected_a, selected_b, active=selected_a)
+    scene.vcmp_attribute_name = "mat_color"
+    preview = addon._legacy_color_repair_preview(bpy.context, "mat_color")
+    assert preview["object_count"] == 2, preview
+    assert preview["unique_mesh_count"] == 1, preview
+    assert preview["matching_mesh_count"] == 1, preview
+
+    assert_finished(bpy.ops.vcmp.repair_legacy_edit_colors('EXEC_DEFAULT'))
+    for data in attribute.data:
+        assert_color_close(data.color, desired_color)
 
 
 def test_same_name(addon):
@@ -333,6 +444,9 @@ def main():
     addon.register()
 
     try:
+        test_paint_color_consistency(addon)
+        test_edit_mode_color_copy_consistency(addon)
+        test_legacy_color_repair(addon)
         test_same_name(addon)
         test_data_type_direct_and_reference(addon)
         test_domain_and_type_domain(addon)

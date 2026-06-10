@@ -25,6 +25,8 @@ Edit Mode で選択している面、または Object Mode で選択している
 - Attribute HelperのRemoveで、選択中の複数Meshから条件に一致するAttributeを一括削除できます。
 - 削除条件は `Same Name`、`Data Type`、`Domain`、`Type + Domain`、`All Removable` の5種類です。
 - 内部Attributeと必須Attributeは削除対象から常に除外されます。
+- Edit ModeとObject Modeで同じ線形RGBA値を書き込み、`BYTE_COLOR`でも同じ色になります。
+- `Fix Selected Legacy Edit Colors`で、旧Edit Modeペイントにより暗くなった選択中MeshのPaint AttributeをObject Mode基準へ一括補正できます。
 
 ## Edit Mode で面だけ塗る
 
@@ -77,6 +79,15 @@ Edit ModeではアクティブMeshのAttribute全体をコピーします。Obje
 `Direct` は名前、データ型、ドメインをUIで直接指定します。`Reference Attribute` はアクティブMeshで選んだAttributeの名前、データ型、ドメインを条件として使います。
 
 同じMeshデータを共有する選択Objectは固有Mesh単位で1回だけ処理します。未選択Objectも同じMeshを共有している場合は、そのObjectにも削除結果が反映されるため、パネルと確認画面に警告が表示されます。
+
+## 旧Edit Modeで暗くなった色を修復する
+
+1. 修復対象のMeshオブジェクトを選択します。
+2. `Paint Attribute > Name` に修復するAttribute名を指定します。
+3. `Attribute Helper > Legacy Color Fix > Fix Selected Legacy Edit Colors` を押します。
+4. 対象Mesh数を確認して実行します。
+
+このボタンはバージョン1.0.2以前のEdit Modeで暗く書き込まれた `BYTE_COLOR` / `CORNER` 専用です。既に正しい色へ実行すると明るくなるため使用しないでください。
 
 ## 注意
 
