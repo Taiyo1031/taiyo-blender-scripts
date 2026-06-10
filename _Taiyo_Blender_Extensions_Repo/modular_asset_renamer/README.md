@@ -5,7 +5,7 @@
 ## 基本情報
 
 - Extension ID: `modular_asset_renamer`
-- バージョン: `1.0.7`
+- バージョン: `1.0.8`
 - 対応Blender: `4.5.0`以降
 - 動作確認: `Blender 4.5.10 LTS`
 - 表示場所: `3D Viewport > Sidebar (N) > Rename Tools`
@@ -141,6 +141,8 @@ Blender user config/modular_asset_renamer/presets.json
 - Options
 
 `Save`は選択中プリセットを更新し、`Save As New`は別名で保存します。Exportは全プリセットを書き出し、Importは同名プリセットを上書きしてマージします。
+
+複数のプリセットがある場合、Presetドロップダウンを切り替えた時点で選択したプリセットを自動的に読み込みます。`Load`は現在選択中のプリセットをもう一度読み込むために使用できます。
 
 ## 注意事項
 

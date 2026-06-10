@@ -631,19 +631,51 @@ def test_presets(temp_dir):
         "Integration Test",
     )
     assert saved is not None
+    assert settings.selected_preset == "Integration Test"
+    assert settings.modules[0].text_value == "PresetText"
     assert len(saved["modules"]) == 3
     assert saved["modules"][2]["dimension_parts"] == [
         {"axis": "Z", "separator_after": "-"},
         {"axis": "LARGEST", "separator_after": ""},
     ]
     assert saved["options"]["error_if_name_exists"] is True
+    choice = settings.modules[1]
     choice.choice_current = choice.choice_options[1].option_id
     assert choice.choice_current == choice.choice_options[1].option_id
 
-    text.text_value = "Updated"
-    settings.selected_preset = "Integration Test"
+    settings.modules[0].text_value = "Updated"
     assert_finished(bpy.ops.mar.save_preset())
-    settings.modules.clear()
+
+    settings.modules[0].text_value = "Second Preset"
+    assert_finished(
+        bpy.ops.mar.save_preset_as(
+            "EXEC_DEFAULT",
+            preset_name="Second Integration Test",
+        )
+    )
+    preset_items = props.preset_enum_items(settings, bpy.context)
+    assert preset_items is props.preset_enum_items(settings, bpy.context)
+    assert {item[0] for item in preset_items} == {
+        "Integration Test",
+        "Second Integration Test",
+    }
+    assert settings.selected_preset == "Second Integration Test"
+    assert settings.modules[0].text_value == "Second Preset"
+
+    preset_path = "scene.mar_settings.selected_preset"
+    assert_finished(
+        bpy.ops.wm.context_set_enum(
+            data_path=preset_path,
+            value="Integration Test",
+        )
+    )
+    assert settings.selected_preset == "Integration Test"
+    assert settings.modules[0].text_value == "Updated", (
+        settings.modules[0].text_value,
+        settings.preset_name,
+        settings.last_warning,
+    )
+    settings.modules[0].text_value = "Unsaved Change"
     assert_finished(bpy.ops.mar.load_preset())
     assert settings.modules[0].text_value == "Updated"
     assert settings.error_if_name_exists is True
@@ -670,6 +702,15 @@ def test_presets(temp_dir):
     assert [
         part.separator_after for part in loaded_dimensions.dimension_parts
     ] == ["-", ""]
+
+    assert_finished(
+        bpy.ops.wm.context_set_enum(
+            data_path=preset_path,
+            value="Second Integration Test",
+        )
+    )
+    assert settings.selected_preset == "Second Integration Test"
+    assert settings.modules[0].text_value == "Second Preset"
 
     legacy_preset = preset_utils.settings_to_preset(settings, "Legacy Dimensions")
     legacy_dimension = legacy_preset["modules"][2]
@@ -706,6 +747,10 @@ def test_presets(temp_dir):
     assert export_path.exists()
 
     assert_finished(bpy.ops.mar.delete_preset("EXEC_DEFAULT"))
+    assert settings.selected_preset == "Integration Test"
+    assert settings.modules[0].text_value == "Updated"
+    assert len(preset_utils.load_presets()) == 1
+    assert_finished(bpy.ops.mar.delete_preset("EXEC_DEFAULT"))
     assert preset_utils.load_presets() == []
     assert_finished(
         bpy.ops.mar.import_presets(
@@ -717,6 +762,12 @@ def test_presets(temp_dir):
         preset_utils.load_presets(),
         "Integration Test",
     ) is not None
+    assert preset_utils.find_preset(
+        preset_utils.load_presets(),
+        "Second Integration Test",
+    ) is not None
+    assert settings.selected_preset == "Integration Test"
+    assert settings.modules[0].text_value == "Updated"
 
     invalid_path = temp_dir / "invalid.json"
     invalid_path.write_text(

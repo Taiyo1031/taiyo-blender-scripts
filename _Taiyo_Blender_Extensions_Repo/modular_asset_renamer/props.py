@@ -71,6 +71,11 @@ COLLECTION_SOURCE_ITEMS = (
 _CHOICE_ENUM_CACHE = {}
 _CHOICE_ENUM_RETIRED_ITEMS = []
 _EMPTY_CHOICE_ENUM_ITEMS = [("__NONE__", "No Options", "Add an option first")]
+_PRESET_ENUM_CACHE = None
+_PRESET_ENUM_RETIRED_ITEMS = []
+_EMPTY_PRESET_ENUM_ITEMS = [
+    ("__NONE__", "No Presets", "No presets are available")
+]
 
 
 def choice_enum_items(self, _context):
@@ -104,6 +109,8 @@ def choice_enum_items(self, _context):
 
 
 def preset_enum_items(_self, _context):
+    global _PRESET_ENUM_CACHE
+
     from . import preset_utils
 
     try:
@@ -111,11 +118,57 @@ def preset_enum_items(_self, _context):
     except Exception:
         presets = []
     if not presets:
-        return [("__NONE__", "No Presets", "No presets are available")]
-    return [
+        return _EMPTY_PRESET_ENUM_ITEMS
+
+    signature = tuple(
+        (preset["name"], len(preset["modules"]))
+        for preset in presets
+    )
+    if (
+        _PRESET_ENUM_CACHE is not None
+        and _PRESET_ENUM_CACHE["signature"] == signature
+    ):
+        return _PRESET_ENUM_CACHE["items"]
+
+    items = [
         (preset["name"], preset["name"], f"{len(preset['modules'])} modules")
         for preset in presets
     ]
+    if _PRESET_ENUM_CACHE is not None:
+        _PRESET_ENUM_RETIRED_ITEMS.append(_PRESET_ENUM_CACHE["items"])
+    _PRESET_ENUM_CACHE = {
+        "signature": signature,
+        "items": items,
+    }
+    return items
+
+
+def selected_preset_updated(self, _context):
+    from . import preset_utils
+
+    try:
+        selected = self.selected_preset
+    except Exception:
+        return
+    if not selected or selected == "__NONE__":
+        self.preset_name = ""
+        return
+
+    try:
+        preset = preset_utils.find_preset(
+            preset_utils.load_presets(),
+            selected,
+        )
+        if preset is None:
+            self.last_warning = f"Preset not found: {selected}"
+            return
+        preset_utils.load_preset_into_settings(self, preset)
+    except Exception as exc:
+        self.last_warning = f"Preset load failed: {exc}"
+        return
+
+    self.preset_name = selected
+    self.last_warning = ""
 
 
 class MAR_ChoiceOption(PropertyGroup):
@@ -217,7 +270,11 @@ class MAR_Settings(PropertyGroup):
     preview_index: IntProperty(name="Preview Index", default=0, min=0)
     history_items: CollectionProperty(type=MAR_HistoryItem)
 
-    selected_preset: EnumProperty(name="Preset", items=preset_enum_items)
+    selected_preset: EnumProperty(
+        name="Preset",
+        items=preset_enum_items,
+        update=selected_preset_updated,
+    )
     preset_name: StringProperty(name="Preset Name", default="")
 
     rename_object: BoolProperty(name="Rename Object", default=True)

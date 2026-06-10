@@ -207,7 +207,7 @@
       "id": "modular_asset_renamer",
       "name": "Modular Asset Renamer",
       "tagline": "Build and apply modular names to selected assets",
-      "version": "1.0.7",
+      "version": "1.0.8",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -220,10 +220,10 @@
         "Scene",
         "Pipeline"
       ],
-      "archive_url": "./modular_asset_renamer-1.0.7.zip",
-      "archive_size": 24037,
-      "archive_hash": "sha256:049a4063d9ff5377ec00ca0f2d30252181dcbe97ab4e486a64c49557fcda47b3",
-      "taiyo_updated_at": 1781084925
+      "archive_url": "./modular_asset_renamer-1.0.8.zip",
+      "archive_size": 24390,
+      "archive_hash": "sha256:43be8cabd1fc640bb5bc79699401fd32c680a08484a2776fc48fb44f156f00ca",
+      "taiyo_updated_at": 1781091245
     },
     {
       "schema_version": "1.0.0",

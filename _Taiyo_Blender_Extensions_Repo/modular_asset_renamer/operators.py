@@ -808,8 +808,9 @@ class MAR_OT_delete_preset(Operator):
             return {"CANCELLED"}
         remaining = preset_utils.delete_preset(presets, name)
         preset_utils.save_presets(remaining)
-        settings.selected_preset = remaining[0]["name"] if remaining else "__NONE__"
-        settings.preset_name = ""
+        next_name = remaining[0]["name"] if remaining else "__NONE__"
+        settings.selected_preset = next_name
+        settings.preset_name = "" if next_name == "__NONE__" else next_name
         self.report({"INFO"}, f"Deleted preset '{name}'.")
         return {"FINISHED"}
 

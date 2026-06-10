@@ -63,6 +63,7 @@ compatibility_archives=(
   "modular_asset_renamer-1.0.4.zip"
   "modular_asset_renamer-1.0.5.zip"
   "modular_asset_renamer-1.0.6.zip"
+  "modular_asset_renamer-1.0.7.zip"
   "move_selected_to_own_collections-1.3.0.zip"
   "move_selected_to_own_collections-1.4.0.zip"
 )
