@@ -1,5 +1,6 @@
 import importlib.util
 import sys
+import tempfile
 from pathlib import Path
 
 import bpy
@@ -34,26 +35,297 @@ def reset_scene():
         bpy.data.meshes.remove(mesh)
 
 
-def new_mesh_object(name, mesh=None):
-    if mesh is None:
-        mesh = bpy.data.meshes.new(f"{name}Mesh")
-        mesh.from_pydata(
-            [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
-            [],
-            [(0, 1, 2)],
-        )
+def new_mesh(name):
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(
+        [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
+        [],
+        [(0, 1, 2)],
+    )
+    return mesh
 
+
+def new_mesh_object(name, mesh=None):
+    mesh = mesh or new_mesh(f"{name}Mesh")
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.scene.collection.objects.link(obj)
     return obj
 
 
-def select_only(obj):
+def select_only(*objects, active=None):
+    if bpy.context.object is not None and bpy.context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+
     for candidate in bpy.context.view_layer.objects:
         candidate.select_set(False)
 
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
+    for obj in objects:
+        obj.select_set(True)
+
+    bpy.context.view_layer.objects.active = active or (objects[0] if objects else None)
+
+
+def configure_remove(
+    scene,
+    match_mode,
+    source='DIRECT',
+    name="mat_color",
+    data_type='BYTE_COLOR',
+    domain='CORNER',
+    reference="mat_color",
+):
+    scene.vcmp_remove_match_mode = match_mode
+    scene.vcmp_remove_filter_source = source
+    scene.vcmp_remove_attribute_name = name
+    scene.vcmp_remove_data_type = data_type
+    scene.vcmp_remove_domain = domain
+    scene.vcmp_remove_reference_attribute_name = reference
+
+
+def assert_finished(result):
+    assert result == {'FINISHED'}, result
+
+
+def test_same_name(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    obj_a = new_mesh_object("SameNameA")
+    obj_b = new_mesh_object("SameNameB")
+
+    obj_a.data.attributes.new("remove_me", 'FLOAT', 'POINT')
+    obj_a.data.attributes.new("keep_a", 'INT', 'POINT')
+    obj_b.data.attributes.new("remove_me", 'BYTE_COLOR', 'CORNER')
+    obj_b.data.attributes.new("keep_b", 'BOOLEAN', 'FACE')
+
+    select_only(obj_a, obj_b, active=obj_a)
+    configure_remove(scene, 'SAME_NAME', name="remove_me")
+
+    preview = addon._build_remove_preview(bpy.context)
+    assert preview["selected_object_count"] == 2, preview
+    assert preview["unique_mesh_count"] == 2, preview
+    assert preview["attribute_count"] == 2, preview
+
+    assert_finished(bpy.ops.vcmp.remove_attribute('EXEC_DEFAULT'))
+    assert obj_a.data.attributes.get("remove_me") is None
+    assert obj_b.data.attributes.get("remove_me") is None
+    assert obj_a.data.attributes.get("keep_a") is not None
+    assert obj_b.data.attributes.get("keep_b") is not None
+
+    reference_a = new_mesh_object("SameNameReferenceA")
+    reference_b = new_mesh_object("SameNameReferenceB")
+    reference_a.data.attributes.new("reference_name", 'FLOAT', 'POINT')
+    reference_b.data.attributes.new("reference_name", 'INT', 'FACE')
+
+    select_only(reference_a, reference_b, active=reference_a)
+    configure_remove(
+        scene,
+        'SAME_NAME',
+        source='REFERENCE',
+        reference="reference_name",
+    )
+    preview = addon._build_remove_preview(bpy.context)
+    assert preview["filter_spec"]["name"] == "reference_name", preview
+    assert preview["attribute_count"] == 2, preview
+    assert_finished(bpy.ops.vcmp.remove_attribute('EXEC_DEFAULT'))
+    assert reference_a.data.attributes.get("reference_name") is None
+    assert reference_b.data.attributes.get("reference_name") is None
+
+
+def test_data_type_direct_and_reference(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    direct_a = new_mesh_object("DirectTypeA")
+    direct_b = new_mesh_object("DirectTypeB")
+
+    direct_a.data.attributes.new("float_a", 'FLOAT', 'POINT')
+    direct_a.data.attributes.new("int_a", 'INT', 'POINT')
+    direct_b.data.attributes.new("float_b", 'FLOAT', 'FACE')
+    direct_b.data.attributes.new("int_b", 'INT', 'FACE')
+
+    select_only(direct_a, direct_b, active=direct_a)
+    configure_remove(scene, 'DATA_TYPE', data_type='FLOAT')
+    assert addon._build_remove_preview(bpy.context)["attribute_count"] == 2
+    assert_finished(bpy.ops.vcmp.remove_attribute('EXEC_DEFAULT'))
+    assert direct_a.data.attributes.get("float_a") is None
+    assert direct_b.data.attributes.get("float_b") is None
+    assert direct_a.data.attributes.get("int_a") is not None
+    assert direct_b.data.attributes.get("int_b") is not None
+
+    reference_a = new_mesh_object("ReferenceTypeA")
+    reference_b = new_mesh_object("ReferenceTypeB")
+    reference_a.data.attributes.new("type_reference", 'FLOAT', 'POINT')
+    reference_a.data.attributes.new("float_c", 'FLOAT', 'FACE')
+    reference_a.data.attributes.new("int_c", 'INT', 'POINT')
+    reference_b.data.attributes.new("float_d", 'FLOAT', 'CORNER')
+    reference_b.data.attributes.new("int_d", 'INT', 'FACE')
+
+    select_only(reference_a, reference_b, active=reference_a)
+    configure_remove(
+        scene,
+        'DATA_TYPE',
+        source='REFERENCE',
+        reference="type_reference",
+    )
+    preview = addon._build_remove_preview(bpy.context)
+    assert preview["filter_spec"]["data_type"] == 'FLOAT', preview
+    assert preview["attribute_count"] == 3, preview
+    assert_finished(bpy.ops.vcmp.remove_attribute('EXEC_DEFAULT'))
+    assert reference_a.data.attributes.get("type_reference") is None
+    assert reference_a.data.attributes.get("float_c") is None
+    assert reference_b.data.attributes.get("float_d") is None
+    assert reference_a.data.attributes.get("int_c") is not None
+    assert reference_b.data.attributes.get("int_d") is not None
+
+
+def test_domain_and_type_domain(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    domain_a = new_mesh_object("DomainA")
+    domain_b = new_mesh_object("DomainB")
+
+    domain_a.data.attributes.new("face_float", 'FLOAT', 'FACE')
+    domain_a.data.attributes.new("point_float", 'FLOAT', 'POINT')
+    domain_b.data.attributes.new("face_int", 'INT', 'FACE')
+    domain_b.data.attributes.new("point_int", 'INT', 'POINT')
+
+    select_only(domain_a, domain_b, active=domain_a)
+    configure_remove(scene, 'DOMAIN', domain='FACE')
+    assert addon._build_remove_preview(bpy.context)["attribute_count"] >= 2
+    assert_finished(bpy.ops.vcmp.remove_attribute('EXEC_DEFAULT'))
+    assert domain_a.data.attributes.get("face_float") is None
+    assert domain_b.data.attributes.get("face_int") is None
+    assert domain_a.data.attributes.get("point_float") is not None
+    assert domain_b.data.attributes.get("point_int") is not None
+
+    combo_a = new_mesh_object("ComboA")
+    combo_b = new_mesh_object("ComboB")
+    combo_a.data.attributes.new("combo_reference", 'FLOAT', 'POINT')
+    combo_a.data.attributes.new("float_face", 'FLOAT', 'FACE')
+    combo_a.data.attributes.new("int_point", 'INT', 'POINT')
+    combo_b.data.attributes.new("float_point", 'FLOAT', 'POINT')
+    combo_b.data.attributes.new("float_corner", 'FLOAT', 'CORNER')
+
+    select_only(combo_a, combo_b, active=combo_a)
+    configure_remove(
+        scene,
+        'TYPE_DOMAIN',
+        source='REFERENCE',
+        reference="combo_reference",
+    )
+    preview = addon._build_remove_preview(bpy.context)
+    assert preview["filter_spec"]["data_type"] == 'FLOAT', preview
+    assert preview["filter_spec"]["domain"] == 'POINT', preview
+    assert preview["attribute_count"] == 2, preview
+    assert_finished(bpy.ops.vcmp.remove_attribute('EXEC_DEFAULT'))
+    assert combo_a.data.attributes.get("combo_reference") is None
+    assert combo_b.data.attributes.get("float_point") is None
+    assert combo_a.data.attributes.get("float_face") is not None
+    assert combo_a.data.attributes.get("int_point") is not None
+    assert combo_b.data.attributes.get("float_corner") is not None
+
+
+def test_all_removable_protects_internal_and_required(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    obj = new_mesh_object("AllRemovable")
+    mesh = obj.data
+    mesh.attributes.new("custom_float", 'FLOAT', 'POINT')
+    mesh.attributes.new("custom_color", 'BYTE_COLOR', 'CORNER')
+
+    select_only(obj)
+    configure_remove(scene, 'ALL_REMOVABLE')
+    preview = addon._build_remove_preview(bpy.context)
+    assert preview["attribute_count"] >= 2, preview
+    assert preview["protected_attribute_count"] >= 1, preview
+
+    assert_finished(bpy.ops.vcmp.remove_attribute('EXEC_DEFAULT'))
+    assert mesh.attributes.get("custom_float") is None
+    assert mesh.attributes.get("custom_color") is None
+    assert mesh.attributes.get("position") is not None
+    assert all(
+        attribute.is_internal or attribute.is_required
+        for attribute in mesh.attributes
+    ), [(attribute.name, attribute.is_internal, attribute.is_required) for attribute in mesh.attributes]
+
+
+def test_shared_mesh_preview_and_unique_processing(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    shared_mesh = new_mesh("SharedMesh")
+    selected_a = new_mesh_object("SharedSelectedA", shared_mesh)
+    selected_b = new_mesh_object("SharedSelectedB", shared_mesh)
+    unselected = new_mesh_object("SharedUnselected", shared_mesh)
+    shared_mesh.attributes.new("shared_remove", 'FLOAT', 'POINT')
+
+    select_only(selected_a, selected_b, active=selected_a)
+    configure_remove(scene, 'SAME_NAME', name="shared_remove")
+    preview = addon._build_remove_preview(bpy.context)
+    assert preview["selected_object_count"] == 2, preview
+    assert preview["unique_mesh_count"] == 1, preview
+    assert preview["attribute_count"] == 1, preview
+    assert preview["unselected_shared_object_count"] == 1, preview
+
+    result = addon._remove_matching_attributes(bpy.context)
+    assert result["deleted_attribute_count"] == 1, result
+    assert result["processed_mesh_count"] == 1, result
+    assert result["skipped_mesh_count"] == 0, result
+    assert unselected.data.attributes.get("shared_remove") is None
+
+
+def test_multi_object_edit_mode(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    obj_a = new_mesh_object("EditA")
+    obj_b = new_mesh_object("EditB")
+    obj_a.data.attributes.new("edit_remove", 'FLOAT_COLOR', 'CORNER')
+    obj_b.data.attributes.new("edit_remove", 'FLOAT_COLOR', 'CORNER')
+
+    select_only(obj_a, obj_b, active=obj_a)
+    bpy.ops.object.mode_set(mode='EDIT')
+    configure_remove(scene, 'SAME_NAME', name="edit_remove")
+
+    preview = addon._build_remove_preview(bpy.context)
+    assert preview["selected_object_count"] == 2, preview
+    assert preview["unique_mesh_count"] == 2, preview
+    assert preview["attribute_count"] == 2, preview
+    assert_finished(bpy.ops.vcmp.remove_attribute('EXEC_DEFAULT'))
+    assert obj_a.data.attributes.get("edit_remove") is None
+    assert obj_b.data.attributes.get("edit_remove") is None
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+def test_empty_and_non_editable_targets(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    configure_remove(scene, 'SAME_NAME', name="missing")
+    select_only()
+    preview = addon._build_remove_preview(bpy.context)
+    assert preview["error"], preview
+
+    with tempfile.TemporaryDirectory(prefix="vcmp_test_") as temp_dir:
+        source_mesh = new_mesh("LinkedSourceMesh")
+        source_mesh.attributes.new("linked_remove", 'FLOAT', 'POINT')
+        library_path = Path(temp_dir) / "linked_mesh.blend"
+        bpy.data.libraries.write(str(library_path), {source_mesh})
+        bpy.data.meshes.remove(source_mesh)
+
+        with bpy.data.libraries.load(str(library_path), link=True) as (data_from, data_to):
+            data_to.meshes = ["LinkedSourceMesh"]
+
+        linked_mesh = data_to.meshes[0]
+        linked_obj = new_mesh_object("LinkedObject", linked_mesh)
+        editable_obj = new_mesh_object("EditableObject")
+        editable_obj.data.attributes.new("linked_remove", 'FLOAT', 'POINT')
+        select_only(linked_obj, editable_obj, active=editable_obj)
+        configure_remove(scene, 'SAME_NAME', name="linked_remove")
+        preview = addon._build_remove_preview(bpy.context)
+        assert preview["non_editable_mesh_count"] == 1, preview
+        assert preview["attribute_count"] == 1, preview
+        result = addon._remove_matching_attributes(bpy.context)
+        assert result["deleted_attribute_count"] == 1, result
+        assert result["processed_mesh_count"] == 1, result
+        assert result["skipped_mesh_count"] == 1, result
+        assert linked_mesh.attributes.get("linked_remove") is not None
 
 
 def main():
@@ -61,45 +333,13 @@ def main():
     addon.register()
 
     try:
-        reset_scene()
-        scene = bpy.context.scene
-
-        shared_mesh = bpy.data.meshes.new("VCMPSharedMesh")
-        shared_mesh.from_pydata(
-            [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
-            [],
-            [(0, 1, 2)],
-        )
-        shared_a = new_mesh_object("VCMPSharedA", shared_mesh)
-        shared_b = new_mesh_object("VCMPSharedB", shared_mesh)
-        shared_mesh.attributes.new("remove_point", 'FLOAT', 'POINT')
-
-        scene.vcmp_remove_target_object = shared_a
-        scene.vcmp_remove_attribute_name = "remove_point"
-        result = bpy.ops.vcmp.remove_attribute('EXEC_DEFAULT')
-        assert result == {'FINISHED'}, result
-        assert shared_mesh.attributes.get("remove_point") is None
-        assert shared_b.data.attributes.get("remove_point") is None
-
-        try:
-            addon._remove_mesh_attribute(shared_a, "remove_point")
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("Missing attributes must not be silently removed.")
-
-        edit_object = new_mesh_object("VCMPEdit")
-        edit_object.data.attributes.new("remove_corner", 'FLOAT_COLOR', 'CORNER')
-        select_only(edit_object)
-        bpy.ops.object.mode_set(mode='EDIT')
-
-        scene.vcmp_remove_target_object = edit_object
-        scene.vcmp_remove_attribute_name = "remove_corner"
-        result = bpy.ops.vcmp.remove_attribute('EXEC_DEFAULT')
-        assert result == {'FINISHED'}, result
-        assert edit_object.data.attributes.get("remove_corner") is None
-
-        bpy.ops.object.mode_set(mode='OBJECT')
+        test_same_name(addon)
+        test_data_type_direct_and_reference(addon)
+        test_domain_and_type_domain(addon)
+        test_all_removable_protects_internal_and_required(addon)
+        test_shared_mesh_preview_and_unique_processing(addon)
+        test_multi_object_edit_mode(addon)
+        test_empty_and_non_editable_targets(addon)
         print("Vertex Color Material Painter integration tests passed.")
     finally:
         addon.unregister()

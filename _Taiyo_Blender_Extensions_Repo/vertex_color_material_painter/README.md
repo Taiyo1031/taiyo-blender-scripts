@@ -22,7 +22,9 @@ Edit Mode で選択している面、または Object Mode で選択している
 - Object Mode では選択中の Mesh オブジェクトそれぞれの全フェイスを塗ります。
 - Attribute HelperのCopyで、Paint Attribute全体を別のColor Attributeへコピーできます。
 - Attribute HelperのCopyは `BYTE_COLOR` と `FLOAT_COLOR` の相互コピーに対応します。
-- Attribute HelperのRemoveで、指定したMeshオブジェクトから指定Attribute全体を削除できます。
+- Attribute HelperのRemoveで、選択中の複数Meshから条件に一致するAttributeを一括削除できます。
+- 削除条件は `Same Name`、`Data Type`、`Domain`、`Type + Domain`、`All Removable` の5種類です。
+- 内部Attributeと必須Attributeは削除対象から常に除外されます。
 
 ## Edit Mode で面だけ塗る
 
@@ -56,14 +58,25 @@ Edit Mode で選択している面、または Object Mode で選択している
 
 Edit ModeではアクティブMeshのAttribute全体をコピーします。Object Modeでは選択中Meshオブジェクトすべてに対して、Attribute全体をコピーします。
 
-## 指定オブジェクトのAttributeを削除する
+## 選択中の複数MeshからAttributeを削除する
 
-1. `Attribute Helper > Remove` の Object で対象Meshオブジェクトを指定します。
-2. Attributeから削除する属性を選びます。
-3. `Remove Attribute` を押します。
-4. 対象オブジェクト名とAttribute名を確認して、削除を確定します。
+1. Object Modeで対象Meshを複数選択します。複数Object Edit Modeの場合は、Edit Modeに参加しているMeshが対象です。
+2. `Attribute Helper > Remove` の `Match Mode` を選びます。
+3. `Filter Source` を `Direct` または `Reference Attribute` にします。
+4. 削除条件を設定して `Remove Matching Attributes` を押します。
+5. 選択Object数、固有Mesh数、削除Attribute数、共有Meshへの影響を確認して削除を確定します。
 
-対象オブジェクトが共有Meshデータを使用している場合、同じMeshを使うすべてのオブジェクトからAttributeが削除されます。パネルと確認画面に共有Meshの警告が表示されます。
+### Match Mode
+
+- `Same Name`: 入力した名前と完全一致するAttributeを削除します。
+- `Data Type`: `FLOAT`、`BYTE_COLOR` など同じデータ型のAttributeを削除します。
+- `Domain`: `POINT`、`EDGE`、`FACE`、`CORNER` の同じドメインを削除します。
+- `Type + Domain`: データ型とドメインが両方一致するAttributeを削除します。
+- `All Removable`: 内部・必須属性を除く、削除可能なAttributeをすべて削除します。
+
+`Direct` は名前、データ型、ドメインをUIで直接指定します。`Reference Attribute` はアクティブMeshで選んだAttributeの名前、データ型、ドメインを条件として使います。
+
+同じMeshデータを共有する選択Objectは固有Mesh単位で1回だけ処理します。未選択Objectも同じMeshを共有している場合は、そのObjectにも削除結果が反映されるため、パネルと確認画面に警告が表示されます。
 
 ## 注意
 
@@ -71,5 +84,6 @@ Edit ModeではアクティブMeshのAttribute全体をコピーします。Obje
 - Vertex / Edge Select でも、Blender 側で `face.select` が立っている面だけを塗ります。
 - 色で選択するときは、指定色と面の全ループカラーが一致する面だけを選択します。
 - Attribute HelperのCopyは面選択範囲ではなく、Attribute全体をコピーします。
-- Attribute HelperのRemoveはColor Attribute以外を含むMesh Attribute全体を削除します。
+- Attribute HelperのRemoveはColor Attribute以外を含むMesh Attributeを条件指定で削除します。
+- `is_internal` または `is_required` のAttributeは、`All Removable`を含むすべての削除条件で保護されます。
 - 同名の Color Attribute が `BYTE_COLOR` / `CORNER` または `FLOAT_COLOR` / `CORNER` 以外で存在する場合は、上書きせずエラーにします。

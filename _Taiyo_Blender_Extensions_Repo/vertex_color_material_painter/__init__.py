@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Material Painter",
     "author": "Taiyo",
-    "version": (1, 0, 1),
+    "version": (1, 0, 2),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > VC Painter",
     "description": "Paint selected edit-mode faces with scene-saved material ID colors",
@@ -15,7 +15,6 @@ from bpy.props import (
     EnumProperty,
     FloatVectorProperty,
     IntProperty,
-    PointerProperty,
     StringProperty,
 )
 from bpy.types import Operator, Panel, PropertyGroup, UIList
@@ -32,6 +31,38 @@ SUPPORTED_COLOR_TYPES = {'BYTE_COLOR', 'FLOAT_COLOR'}
 COLOR_TYPE_ITEMS = (
     ('BYTE_COLOR', "Byte Color", "軽量な8bit Color Attributeを作成します"),
     ('FLOAT_COLOR', "Float Color", "高精度なFloat Color Attributeを作成します"),
+)
+REMOVE_MATCH_MODE_ITEMS = (
+    ('SAME_NAME', "Same Name", "同じ名前のAttributeを削除します"),
+    ('DATA_TYPE', "Data Type", "同じデータ型のAttributeを削除します"),
+    ('DOMAIN', "Domain", "同じドメインのAttributeを削除します"),
+    ('TYPE_DOMAIN', "Type + Domain", "データ型とドメインが両方一致するAttributeを削除します"),
+    ('ALL_REMOVABLE', "All Removable", "内部・必須属性を除くすべてのAttributeを削除します"),
+)
+REMOVE_FILTER_SOURCE_ITEMS = (
+    ('DIRECT', "Direct", "名前、データ型、ドメインを直接指定します"),
+    ('REFERENCE', "Reference Attribute", "アクティブMeshのAttributeから削除条件を取得します"),
+)
+REMOVE_DATA_TYPE_ITEMS = (
+    ('FLOAT', "Float", "Float Attribute"),
+    ('INT', "Integer", "Integer Attribute"),
+    ('FLOAT_VECTOR', "Vector", "Vector Attribute"),
+    ('FLOAT_COLOR', "Color", "Float Color Attribute"),
+    ('BYTE_COLOR', "Byte Color", "Byte Color Attribute"),
+    ('STRING', "String", "String Attribute"),
+    ('BOOLEAN', "Boolean", "Boolean Attribute"),
+    ('FLOAT2', "2D Vector", "2D Vector Attribute"),
+    ('INT8', "8-Bit Integer", "8-Bit Integer Attribute"),
+    ('INT16_2D', "2D 16-Bit Integer Vector", "2D 16-Bit Integer Vector Attribute"),
+    ('INT32_2D', "2D Integer Vector", "2D Integer Vector Attribute"),
+    ('QUATERNION', "Quaternion", "Quaternion Attribute"),
+    ('FLOAT4X4', "4x4 Matrix", "4x4 Matrix Attribute"),
+)
+REMOVE_DOMAIN_ITEMS = (
+    ('POINT', "Point", "Mesh point domain"),
+    ('EDGE', "Edge", "Mesh edge domain"),
+    ('FACE', "Face", "Mesh face domain"),
+    ('CORNER', "Face Corner", "Mesh face corner domain"),
 )
 
 
@@ -53,10 +84,6 @@ def _clean_attribute_name(name):
 
 def _clean_copy_target_name(name):
     return name.strip() or DEFAULT_COPY_TARGET_NAME
-
-
-def _mesh_object_poll(_self, obj):
-    return obj is not None and obj.type == 'MESH' and obj.data is not None
 
 
 def _clean_attribute_type(attribute_type):
@@ -351,24 +378,231 @@ def _copy_object_mode_meshes(objects, source_name, target_name, target_type):
     return object_count, face_count, created_count
 
 
-def _remove_mesh_attribute(obj, attribute_name):
-    mesh = obj.data
-    attribute = mesh.attributes.get(attribute_name)
+def _remove_target_objects(context):
+    if context.mode == 'EDIT_MESH':
+        candidates = getattr(context, "objects_in_mode", ())
+    else:
+        candidates = context.selected_objects
 
-    if attribute is None:
-        raise ValueError(f"Attribute がありません: {attribute_name}")
+    return [
+        obj for obj in candidates
+        if obj is not None and obj.type == 'MESH' and obj.data is not None
+    ]
 
-    if not getattr(mesh, "is_editable", True):
-        raise ValueError(f"Meshデータを編集できません: {mesh.name}")
 
-    try:
-        mesh.attributes.remove(attribute)
-    except RuntimeError as error:
-        raise ValueError(f"Attributeを削除できません: {attribute_name}") from error
+def _unique_meshes(objects):
+    meshes = []
+    seen = set()
 
-    mesh.update()
+    for obj in objects:
+        mesh = obj.data
+        key = mesh.as_pointer()
 
-    return sum(1 for candidate in bpy.data.objects if candidate.data == mesh)
+        if key in seen:
+            continue
+
+        seen.add(key)
+        meshes.append(mesh)
+
+    return meshes
+
+
+def _active_remove_reference_object(context, target_objects):
+    obj = context.view_layer.objects.active
+
+    if obj is None or obj.type != 'MESH' or obj.data is None:
+        return None
+
+    if not any(candidate == obj for candidate in target_objects):
+        return None
+
+    return obj
+
+
+def _resolve_remove_filter(context, target_objects):
+    scene = context.scene
+    match_mode = scene.vcmp_remove_match_mode
+
+    if match_mode == 'ALL_REMOVABLE':
+        return {"match_mode": match_mode}, None
+
+    source = scene.vcmp_remove_filter_source
+    if source == 'REFERENCE':
+        reference_obj = _active_remove_reference_object(context, target_objects)
+
+        if reference_obj is None:
+            return None, "選択中のアクティブMeshがありません。"
+
+        attribute_name = scene.vcmp_remove_reference_attribute_name.strip()
+        if not attribute_name:
+            return None, "参照するAttributeを選択してください。"
+
+        attribute = reference_obj.data.attributes.get(attribute_name)
+        if attribute is None:
+            return None, f"{reference_obj.name} に参照Attributeがありません: {attribute_name}"
+
+        return {
+            "match_mode": match_mode,
+            "name": attribute.name,
+            "data_type": attribute.data_type,
+            "domain": attribute.domain,
+            "source": source,
+        }, None
+
+    return {
+        "match_mode": match_mode,
+        "name": scene.vcmp_remove_attribute_name.strip(),
+        "data_type": scene.vcmp_remove_data_type,
+        "domain": scene.vcmp_remove_domain,
+        "source": source,
+    }, None
+
+
+def _attribute_matches_remove_filter(attribute, filter_spec):
+    match_mode = filter_spec["match_mode"]
+
+    if match_mode == 'ALL_REMOVABLE':
+        return True
+    if match_mode == 'SAME_NAME':
+        return attribute.name == filter_spec["name"]
+    if match_mode == 'DATA_TYPE':
+        return attribute.data_type == filter_spec["data_type"]
+    if match_mode == 'DOMAIN':
+        return attribute.domain == filter_spec["domain"]
+    if match_mode == 'TYPE_DOMAIN':
+        return (
+            attribute.data_type == filter_spec["data_type"]
+            and attribute.domain == filter_spec["domain"]
+        )
+
+    return False
+
+
+def _attribute_is_removable(attribute):
+    return not attribute.is_internal and not attribute.is_required
+
+
+def _remove_filter_description(filter_spec):
+    match_mode = filter_spec["match_mode"]
+
+    if match_mode == 'ALL_REMOVABLE':
+        return "All Removable"
+    if match_mode == 'SAME_NAME':
+        return f"Name = {filter_spec['name']}"
+    if match_mode == 'DATA_TYPE':
+        return f"Data Type = {filter_spec['data_type']}"
+    if match_mode == 'DOMAIN':
+        return f"Domain = {filter_spec['domain']}"
+
+    return f"Data Type = {filter_spec['data_type']}, Domain = {filter_spec['domain']}"
+
+
+def _build_remove_preview(context):
+    target_objects = _remove_target_objects(context)
+    target_meshes = _unique_meshes(target_objects)
+    filter_spec, error = _resolve_remove_filter(context, target_objects)
+
+    selected_object_pointers = {obj.as_pointer() for obj in target_objects}
+    unselected_shared_object_count = sum(
+        1
+        for mesh in target_meshes
+        for obj in bpy.data.objects
+        if obj.data == mesh and obj.as_pointer() not in selected_object_pointers
+    )
+
+    preview = {
+        "objects": target_objects,
+        "meshes": target_meshes,
+        "filter_spec": filter_spec,
+        "error": error,
+        "selected_object_count": len(target_objects),
+        "unique_mesh_count": len(target_meshes),
+        "attribute_count": 0,
+        "protected_attribute_count": 0,
+        "non_editable_mesh_count": 0,
+        "unselected_shared_object_count": unselected_shared_object_count,
+    }
+
+    if not target_objects:
+        preview["error"] = "選択中またはEdit Mode中のMeshオブジェクトがありません。"
+        return preview
+
+    if error:
+        return preview
+
+    if filter_spec["match_mode"] == 'SAME_NAME' and not filter_spec["name"]:
+        preview["error"] = "削除するAttribute名を入力してください。"
+        return preview
+
+    for mesh in target_meshes:
+        if not getattr(mesh, "is_editable", True):
+            preview["non_editable_mesh_count"] += 1
+            continue
+
+        for attribute in mesh.attributes:
+            if not _attribute_matches_remove_filter(attribute, filter_spec):
+                continue
+
+            if _attribute_is_removable(attribute):
+                preview["attribute_count"] += 1
+            else:
+                preview["protected_attribute_count"] += 1
+
+    return preview
+
+
+def _remove_matching_attributes(context):
+    preview = _build_remove_preview(context)
+
+    if preview["error"]:
+        raise ValueError(preview["error"])
+
+    if preview["attribute_count"] == 0:
+        raise ValueError("削除条件に一致する削除可能なAttributeがありません。")
+
+    deleted_attribute_count = 0
+    processed_mesh_count = 0
+    failed_attribute_count = 0
+
+    for mesh in preview["meshes"]:
+        if not getattr(mesh, "is_editable", True):
+            continue
+
+        attribute_names = [
+            attribute.name
+            for attribute in mesh.attributes
+            if (
+                _attribute_matches_remove_filter(attribute, preview["filter_spec"])
+                and _attribute_is_removable(attribute)
+            )
+        ]
+        mesh_deleted_count = 0
+
+        for attribute_name in attribute_names:
+            attribute = mesh.attributes.get(attribute_name)
+
+            if attribute is None:
+                continue
+
+            try:
+                mesh.attributes.remove(attribute)
+            except RuntimeError:
+                failed_attribute_count += 1
+                continue
+
+            deleted_attribute_count += 1
+            mesh_deleted_count += 1
+
+        if mesh_deleted_count:
+            mesh.update()
+            processed_mesh_count += 1
+
+    return {
+        "deleted_attribute_count": deleted_attribute_count,
+        "processed_mesh_count": processed_mesh_count,
+        "skipped_mesh_count": len(preview["meshes"]) - processed_mesh_count,
+        "failed_attribute_count": failed_attribute_count,
+    }
 
 
 class VCMP_ColorItem(PropertyGroup):
@@ -700,78 +934,79 @@ class VCMP_OT_copy_attribute(Operator):
 
 class VCMP_OT_remove_attribute(Operator):
     bl_idname = "vcmp.remove_attribute"
-    bl_label = "Remove Attribute"
-    bl_description = "指定したMeshオブジェクトから指定Attribute全体を削除します"
+    bl_label = "Remove Matching Attributes"
+    bl_description = "選択中のMeshオブジェクトから条件に一致するAttributeを一括削除します"
     bl_options = {'REGISTER', 'UNDO'}
 
-    @staticmethod
-    def _target_and_attribute(context):
-        scene = context.scene
-        obj = scene.vcmp_remove_target_object
-        attribute_name = scene.vcmp_remove_attribute_name.strip()
-
-        if obj is None or obj.type != 'MESH' or obj.data is None:
-            return None, "", "削除対象のMeshオブジェクトを指定してください。"
-
-        if not attribute_name:
-            return None, "", "削除するAttributeを指定してください。"
-
-        if obj.data.attributes.get(attribute_name) is None:
-            return None, "", f"{obj.name} に Attribute がありません: {attribute_name}"
-
-        return obj, attribute_name, None
-
     def invoke(self, context, event):
-        _obj, _attribute_name, error = self._target_and_attribute(context)
+        preview = _build_remove_preview(context)
 
-        if error:
-            self.report({'ERROR'}, error)
+        if preview["error"]:
+            self.report({'ERROR'}, preview["error"])
+            return {'CANCELLED'}
+
+        if preview["attribute_count"] == 0:
+            self.report({'ERROR'}, "削除条件に一致する削除可能なAttributeがありません。")
             return {'CANCELLED'}
 
         return context.window_manager.invoke_props_dialog(self, width=420)
 
     def draw(self, context):
         layout = self.layout
-        obj, attribute_name, _error = self._target_and_attribute(context)
+        preview = _build_remove_preview(context)
 
-        if obj is None:
-            return
-
-        layout.label(text="このAttributeを削除します。", icon='ERROR')
-        layout.label(text=f"Object: {obj.name}", icon='OBJECT_DATA')
-        layout.label(text=f"Attribute: {attribute_name}", icon='GROUP_VCOL')
-
-        object_user_count = sum(
-            1 for candidate in bpy.data.objects
-            if candidate.data == obj.data
+        layout.label(text="一致するAttributeを一括削除します。", icon='ERROR')
+        layout.label(
+            text=(
+                f"Selected Meshes: {preview['selected_object_count']} / "
+                f"Unique Meshes: {preview['unique_mesh_count']}"
+            ),
+            icon='MESH_DATA',
         )
-        if object_user_count > 1:
+        layout.label(
+            text=f"Attributes: {preview['attribute_count']}",
+            icon='GROUP_VCOL',
+        )
+        if preview["filter_spec"] is not None:
             layout.label(
-                text=f"共有Meshのため {object_user_count}個のオブジェクトへ影響します。",
+                text=_remove_filter_description(preview["filter_spec"]),
+                icon='FILTER',
+            )
+        if preview["non_editable_mesh_count"]:
+            layout.label(
+                text=f"Non-editable Meshes: {preview['non_editable_mesh_count']}",
+                icon='LOCKED',
+            )
+        if preview["protected_attribute_count"]:
+            layout.label(
+                text=f"Protected Attributes: {preview['protected_attribute_count']}",
+                icon='LOCKED',
+            )
+        if preview["unselected_shared_object_count"]:
+            layout.label(
+                text=(
+                    "共有Meshを使う未選択Object "
+                    f"{preview['unselected_shared_object_count']}個にも影響します。"
+                ),
                 icon='LINKED',
             )
 
     def execute(self, context):
-        obj, attribute_name, error = self._target_and_attribute(context)
-
-        if error:
-            self.report({'ERROR'}, error)
-            return {'CANCELLED'}
-
         try:
-            object_user_count = _remove_mesh_attribute(obj, attribute_name)
+            result = _remove_matching_attributes(context)
         except ValueError as error:
             self.report({'ERROR'}, str(error))
             return {'CANCELLED'}
 
-        suffix = (
-            f" 共有Meshを使用する{object_user_count}個のオブジェクトへ反映されます。"
-            if object_user_count > 1
-            else ""
-        )
+        report_type = {'WARNING'} if result["failed_attribute_count"] else {'INFO'}
         self.report(
-            {'INFO'},
-            f"{obj.name} から Attribute '{attribute_name}' を削除しました。{suffix}",
+            report_type,
+            (
+                f"{result['deleted_attribute_count']} Attribute / "
+                f"{result['processed_mesh_count']} Meshから削除しました。"
+                f" スキップMesh: {result['skipped_mesh_count']} / "
+                f"失敗Attribute: {result['failed_attribute_count']}"
+            ),
         )
 
         return {'FINISHED'}
@@ -871,38 +1106,84 @@ class VCMP_PT_panel(Panel):
 
         box.separator()
         box.label(text="Remove", icon='TRASH')
-        box.prop(scene, "vcmp_remove_target_object", text="Object")
+        remove_preview = _build_remove_preview(context)
+        box.label(
+            text=(
+                f"Selected Meshes: {remove_preview['selected_object_count']} / "
+                f"Unique Meshes: {remove_preview['unique_mesh_count']}"
+            ),
+            icon='MESH_DATA',
+        )
+        box.prop(scene, "vcmp_remove_match_mode", text="Match Mode")
 
-        remove_target = scene.vcmp_remove_target_object
-        if remove_target is not None and remove_target.type == 'MESH' and remove_target.data is not None:
-            box.prop_search(
-                scene,
-                "vcmp_remove_attribute_name",
-                remove_target.data,
-                "attributes",
-                text="Attribute",
+        match_mode = scene.vcmp_remove_match_mode
+        active_obj = _active_remove_reference_object(context, remove_preview["objects"])
+
+        if match_mode != 'ALL_REMOVABLE':
+            box.prop(scene, "vcmp_remove_filter_source", text="Filter Source")
+
+            if scene.vcmp_remove_filter_source == 'REFERENCE':
+                if active_obj is not None:
+                    box.prop_search(
+                        scene,
+                        "vcmp_remove_reference_attribute_name",
+                        active_obj.data,
+                        "attributes",
+                        text="Reference",
+                    )
+                else:
+                    row = box.row()
+                    row.enabled = False
+                    row.prop(scene, "vcmp_remove_reference_attribute_name", text="Reference")
+            elif match_mode == 'SAME_NAME':
+                if active_obj is not None:
+                    box.prop_search(
+                        scene,
+                        "vcmp_remove_attribute_name",
+                        active_obj.data,
+                        "attributes",
+                        text="Name",
+                    )
+                else:
+                    box.prop(scene, "vcmp_remove_attribute_name", text="Name")
+            else:
+                if match_mode in {'DATA_TYPE', 'TYPE_DOMAIN'}:
+                    box.prop(scene, "vcmp_remove_data_type", text="Data Type")
+                if match_mode in {'DOMAIN', 'TYPE_DOMAIN'}:
+                    box.prop(scene, "vcmp_remove_domain", text="Domain")
+
+        if remove_preview["filter_spec"] is not None:
+            box.label(
+                text=_remove_filter_description(remove_preview["filter_spec"]),
+                icon='FILTER',
             )
-        else:
-            row = box.row()
-            row.enabled = False
-            row.prop(scene, "vcmp_remove_attribute_name", text="Attribute")
 
         remove_row = box.row()
         remove_row.enabled = bool(
-            remove_target is not None
-            and remove_target.type == 'MESH'
-            and remove_target.data is not None
-            and remove_target.data.attributes.get(scene.vcmp_remove_attribute_name.strip()) is not None
+            not remove_preview["error"] and remove_preview["attribute_count"] > 0
         )
         remove_row.operator(VCMP_OT_remove_attribute.bl_idname, icon='TRASH')
 
-        if (
-            remove_target is not None
-            and remove_target.type == 'MESH'
-            and remove_target.data is not None
-            and sum(1 for candidate in bpy.data.objects if candidate.data == remove_target.data) > 1
-        ):
-            box.label(text="共有Meshを使う全オブジェクトへ影響します。", icon='LINKED')
+        if remove_preview["error"]:
+            box.label(text=remove_preview["error"], icon='INFO')
+        else:
+            box.label(
+                text=f"Matched Attributes: {remove_preview['attribute_count']}",
+                icon='GROUP_VCOL',
+            )
+        if remove_preview["non_editable_mesh_count"]:
+            box.label(
+                text=f"編集不可Mesh: {remove_preview['non_editable_mesh_count']}",
+                icon='LOCKED',
+            )
+        if remove_preview["unselected_shared_object_count"]:
+            box.label(
+                text=(
+                    "共有Meshを使う未選択Object "
+                    f"{remove_preview['unselected_shared_object_count']}個にも影響します。"
+                ),
+                icon='LINKED',
+            )
 
         layout.separator()
 
@@ -970,22 +1251,50 @@ def register():
         items=COLOR_TYPE_ITEMS,
         default=DEFAULT_ATTRIBUTE_TYPE,
     )
-    bpy.types.Scene.vcmp_remove_target_object = PointerProperty(
-        name="Remove Target Object",
-        description="Attributeを削除するMeshオブジェクト",
-        type=bpy.types.Object,
-        poll=_mesh_object_poll,
+    bpy.types.Scene.vcmp_remove_match_mode = EnumProperty(
+        name="Remove Match Mode",
+        description="削除するAttributeの一致条件",
+        items=REMOVE_MATCH_MODE_ITEMS,
+        default='SAME_NAME',
+    )
+    bpy.types.Scene.vcmp_remove_filter_source = EnumProperty(
+        name="Remove Filter Source",
+        description="削除条件を直接指定するか参照Attributeから取得するか",
+        items=REMOVE_FILTER_SOURCE_ITEMS,
+        default='DIRECT',
     )
     bpy.types.Scene.vcmp_remove_attribute_name = StringProperty(
         name="Remove Attribute",
-        description="指定Meshオブジェクトから削除するAttribute名",
+        description="選択中Meshから完全一致で削除するAttribute名",
         default=DEFAULT_ATTRIBUTE_NAME,
+    )
+    bpy.types.Scene.vcmp_remove_reference_attribute_name = StringProperty(
+        name="Reference Attribute",
+        description="削除条件の名前、データ型、ドメインを取得するアクティブMeshのAttribute",
+        default=DEFAULT_ATTRIBUTE_NAME,
+    )
+    bpy.types.Scene.vcmp_remove_data_type = EnumProperty(
+        name="Remove Data Type",
+        description="削除対象にするAttributeのデータ型",
+        items=REMOVE_DATA_TYPE_ITEMS,
+        default=DEFAULT_ATTRIBUTE_TYPE,
+    )
+    bpy.types.Scene.vcmp_remove_domain = EnumProperty(
+        name="Remove Domain",
+        description="削除対象にするAttributeのドメイン",
+        items=REMOVE_DOMAIN_ITEMS,
+        default='CORNER',
     )
 
 
 def unregister():
     for prop_name in (
+        "vcmp_remove_domain",
+        "vcmp_remove_data_type",
+        "vcmp_remove_reference_attribute_name",
         "vcmp_remove_attribute_name",
+        "vcmp_remove_filter_source",
+        "vcmp_remove_match_mode",
         "vcmp_remove_target_object",
         "vcmp_copy_target_type",
         "vcmp_copy_target_name",
