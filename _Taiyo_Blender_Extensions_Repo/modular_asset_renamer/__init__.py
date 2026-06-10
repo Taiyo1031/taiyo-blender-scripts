@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Modular Asset Renamer",
     "author": "Taiyo",
-    "version": (1, 0, 6),
+    "version": (1, 0, 7),
     "blender": (4, 5, 0),
     "location": "View3D > Sidebar (N) > Rename Tools",
     "description": "Build names from reusable modules and rename selected assets",
@@ -37,6 +37,7 @@ class MAR_AddonPreferences(bpy.types.AddonPreferences):
 classes = (
     MAR_AddonPreferences,
     props.MAR_ChoiceOption,
+    props.MAR_DimensionPart,
     props.MAR_Module,
     props.MAR_PreviewItem,
     props.MAR_HistoryItem,
@@ -50,6 +51,9 @@ classes = (
     operators.MAR_OT_add_choice_option,
     operators.MAR_OT_remove_choice_option,
     operators.MAR_OT_move_choice_option,
+    operators.MAR_OT_add_dimension_part,
+    operators.MAR_OT_remove_dimension_part,
+    operators.MAR_OT_move_dimension_part,
     operators.MAR_OT_repair_choice_modules,
     operators.MAR_OT_preview,
     operators.MAR_OT_apply,
@@ -67,12 +71,13 @@ classes = (
     operators.MAR_OT_export_presets,
     ui.MAR_UL_modules,
     ui.MAR_UL_choice_options,
+    ui.MAR_UL_dimension_parts,
     ui.MAR_UL_preview,
     ui.MAR_PT_main,
 )
 
 
-def _repair_existing_choice_modules():
+def _repair_existing_modules():
     for scene in bpy.data.scenes:
         settings = getattr(scene, "mar_settings", None)
         if settings is not None:
@@ -84,13 +89,13 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.mar_settings = PointerProperty(type=props.MAR_Settings)
-    if not bpy.app.timers.is_registered(_repair_existing_choice_modules):
-        bpy.app.timers.register(_repair_existing_choice_modules, first_interval=0.1)
+    if not bpy.app.timers.is_registered(_repair_existing_modules):
+        bpy.app.timers.register(_repair_existing_modules, first_interval=0.1)
 
 
 def unregister():
-    if bpy.app.timers.is_registered(_repair_existing_choice_modules):
-        bpy.app.timers.unregister(_repair_existing_choice_modules)
+    if bpy.app.timers.is_registered(_repair_existing_modules):
+        bpy.app.timers.unregister(_repair_existing_modules)
     if hasattr(bpy.types.Scene, "mar_settings"):
         del bpy.types.Scene.mar_settings
     for cls in reversed(classes):

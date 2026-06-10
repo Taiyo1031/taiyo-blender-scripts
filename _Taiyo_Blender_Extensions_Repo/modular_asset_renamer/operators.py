@@ -6,7 +6,7 @@ from bpy.types import Operator
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
 from . import naming, preset_utils
-from .props import MODULE_TYPE_ITEMS
+from .props import DIMENSION_AXIS_ITEMS, MODULE_TYPE_ITEMS
 
 
 def _settings(context):
@@ -42,6 +42,21 @@ def _add_default_choice(module):
     module.choice_current = option.option_id
 
 
+def _add_dimension_part(module, axis, separator_after=""):
+    part = module.dimension_parts.add()
+    part.axis = axis
+    part.separator_after = separator_after
+    return part
+
+
+def _add_default_dimension_parts(module):
+    _add_dimension_part(module, "X", "x")
+    _add_dimension_part(module, "Y", "x")
+    _add_dimension_part(module, "Z", "")
+    module.dimension_part_index = 0
+    module.dimension_parts_migrated = True
+
+
 def _initialize_module(module, module_type):
     module.module_id = preset_utils.new_id()
     module.module_type = module_type
@@ -54,13 +69,21 @@ def _initialize_module(module, module_type):
     if module_type == "CHOICE":
         module.choice_label = "Choice"
         _add_default_choice(module)
+    elif module_type == "DIMENSIONS":
+        _add_default_dimension_parts(module)
 
 
 def _copy_module(source, target):
+    preset_utils.repair_dimension_module(source)
     raw = preset_utils.module_to_dict(source)
     option_id_map = {}
     for field, value in raw.items():
-        if field in {"module_id", "choice_options", "choice_current"}:
+        if field in {
+            "module_id",
+            "choice_options",
+            "choice_current",
+            "dimension_parts",
+        }:
             continue
         setattr(target, field, value)
     target.module_id = preset_utils.new_id()
@@ -75,6 +98,16 @@ def _copy_module(source, target):
         target.choice_current = current
     elif target.choice_options:
         target.choice_current = target.choice_options[0].option_id
+    for raw_part in raw["dimension_parts"]:
+        _add_dimension_part(
+            target,
+            raw_part["axis"],
+            raw_part["separator_after"],
+        )
+    target.dimension_part_index = min(
+        source.dimension_part_index,
+        max(0, len(target.dimension_parts) - 1),
+    )
 
 
 def _fill_preview(settings, records):
@@ -300,6 +333,80 @@ class MAR_OT_move_choice_option(Operator):
         option_ids = {option.option_id for option in module.choice_options}
         if current in option_ids:
             module.choice_current = current
+        return {"FINISHED"}
+
+
+class MAR_OT_add_dimension_part(Operator):
+    bl_idname = "mar.add_dimension_part"
+    bl_label = "Add Dimension Part"
+    bl_options = {"REGISTER", "UNDO"}
+
+    axis: EnumProperty(name="Dimension", items=DIMENSION_AXIS_ITEMS, default="X")
+
+    def execute(self, context):
+        settings = _settings(context)
+        module = _active_module(settings)
+        if module is None or module.module_type != "DIMENSIONS":
+            return {"CANCELLED"}
+        _add_dimension_part(module, self.axis)
+        module.dimension_part_index = len(module.dimension_parts) - 1
+        module.dimension_parts_migrated = True
+        settings.preview_items.clear()
+        return {"FINISHED"}
+
+
+class MAR_OT_remove_dimension_part(Operator):
+    bl_idname = "mar.remove_dimension_part"
+    bl_label = "Remove Dimension Part"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        settings = _settings(context)
+        module = _active_module(settings)
+        if (
+            module is None
+            or module.module_type != "DIMENSIONS"
+            or not module.dimension_parts
+        ):
+            return {"CANCELLED"}
+        index = min(
+            module.dimension_part_index,
+            len(module.dimension_parts) - 1,
+        )
+        module.dimension_parts.remove(index)
+        module.dimension_part_index = min(
+            index,
+            max(0, len(module.dimension_parts) - 1),
+        )
+        module.dimension_parts_migrated = True
+        settings.preview_items.clear()
+        return {"FINISHED"}
+
+
+class MAR_OT_move_dimension_part(Operator):
+    bl_idname = "mar.move_dimension_part"
+    bl_label = "Move Dimension Part"
+    bl_options = {"REGISTER", "UNDO"}
+
+    direction: EnumProperty(
+        items=(("UP", "Up", "Move up"), ("DOWN", "Down", "Move down"))
+    )
+
+    def execute(self, context):
+        settings = _settings(context)
+        module = _active_module(settings)
+        if module is None or module.module_type != "DIMENSIONS":
+            return {"CANCELLED"}
+        index = module.dimension_part_index
+        target = index - 1 if self.direction == "UP" else index + 1
+        if not (
+            0 <= index < len(module.dimension_parts)
+            and 0 <= target < len(module.dimension_parts)
+        ):
+            return {"CANCELLED"}
+        module.dimension_parts.move(index, target)
+        module.dimension_part_index = target
+        settings.preview_items.clear()
         return {"FINISHED"}
 
 

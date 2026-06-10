@@ -24,6 +24,17 @@ AXIS_ORDER_ITEMS = tuple(
     for value in ("XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX")
 )
 
+DIMENSION_AXIS_ITEMS = (
+    ("X", "X", "Output the X dimension"),
+    ("Y", "Y", "Output the Y dimension"),
+    ("Z", "Z", "Output the Z dimension"),
+    (
+        "LARGEST",
+        "Largest",
+        "Output the largest dimension; ties prefer X, then Y, then Z",
+    ),
+)
+
 UNIT_ITEMS = (
     ("M", "m", "Meters"),
     ("CM", "cm", "Centimeters"),
@@ -31,9 +42,9 @@ UNIT_ITEMS = (
 )
 
 ROUND_MODE_ITEMS = (
-    ("ROUND", "Round", "Round to the nearest value"),
-    ("FLOOR", "Floor", "Round down"),
-    ("CEIL", "Ceil", "Round up"),
+    ("ROUND", "Round", "Round half up at the selected decimal place"),
+    ("FLOOR", "Floor", "Round down at the selected decimal place"),
+    ("CEIL", "Ceil", "Round up at the selected decimal place"),
 )
 
 SORT_MODE_ITEMS = (
@@ -113,6 +124,15 @@ class MAR_ChoiceOption(PropertyGroup):
     value: StringProperty(name="Value", default="")
 
 
+class MAR_DimensionPart(PropertyGroup):
+    axis: EnumProperty(
+        name="Dimension",
+        items=DIMENSION_AXIS_ITEMS,
+        default="X",
+    )
+    separator_after: StringProperty(name="Separator After", default="")
+
+
 class MAR_Module(PropertyGroup):
     module_id: StringProperty(name="Module ID", default="")
     module_type: EnumProperty(name="Type", items=MODULE_TYPE_ITEMS, default="TEXT")
@@ -130,6 +150,13 @@ class MAR_Module(PropertyGroup):
     axis_order: EnumProperty(name="Axis Order", items=AXIS_ORDER_ITEMS, default="XYZ")
     dimension_unit: EnumProperty(name="Unit", items=UNIT_ITEMS, default="CM")
     axis_separator: StringProperty(name="Axis Separator", default="x")
+    dimension_parts: CollectionProperty(type=MAR_DimensionPart)
+    dimension_part_index: IntProperty(name="Dimension Part Index", default=0, min=0)
+    dimension_parts_migrated: BoolProperty(
+        name="Dimension Parts Migrated",
+        default=False,
+        options={"HIDDEN"},
+    )
     decimal_places: IntProperty(name="Decimal Places", default=0, min=0, max=4)
     round_mode: EnumProperty(name="Round Mode", items=ROUND_MODE_ITEMS, default="ROUND")
     add_unit_suffix: BoolProperty(name="Add Unit Suffix", default=True)

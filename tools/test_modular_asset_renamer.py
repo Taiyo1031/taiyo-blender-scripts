@@ -163,6 +163,131 @@ def test_module_editing():
     assert only_choice.choice_current == "option_123legacy"
 
 
+def test_dimension_parts(obj):
+    settings = bpy.context.scene.mar_settings
+    settings.modules.clear()
+    settings.rename_object = True
+    settings.rename_mesh_data = False
+    settings.rename_only_mesh_objects = False
+
+    dimensions = add_module("DIMENSIONS")
+    assert [part.axis for part in dimensions.dimension_parts] == ["X", "Y", "Z"]
+    assert [part.separator_after for part in dimensions.dimension_parts] == [
+        "x",
+        "x",
+        "",
+    ]
+    assert dimensions.dimension_parts_migrated is True
+    dimensions.dimension_part_index = 1
+    assert_finished(bpy.ops.mar.remove_dimension_part())
+    assert [part.axis for part in dimensions.dimension_parts] == ["X", "Z"]
+
+    dimensions.dimension_parts.clear()
+    assert_finished(bpy.ops.mar.add_dimension_part(axis="Z"))
+    dimensions.dimension_parts[0].separator_after = ":"
+    assert_finished(bpy.ops.mar.add_dimension_part(axis="LARGEST"))
+    dimensions.dimension_unit = "CM"
+    dimensions.decimal_places = 0
+    dimensions.add_unit_suffix = True
+    dimensions.add_axis_labels = False
+    obj.dimensions = (1.8, 2.4, 0.3)
+    bpy.context.view_layer.update()
+    assert naming.evaluate_module(
+        bpy.context,
+        settings,
+        dimensions,
+        obj,
+        0,
+    ) == "30:240cm"
+    dimensions.dimension_unit = "MM"
+    assert naming.evaluate_module(
+        bpy.context,
+        settings,
+        dimensions,
+        obj,
+        0,
+    ) == "300:2400mm"
+    dimensions.dimension_unit = "CM"
+
+    dimensions.dimension_part_index = 1
+    assert_finished(bpy.ops.mar.move_dimension_part(direction="UP"))
+    assert [part.axis for part in dimensions.dimension_parts] == ["LARGEST", "Z"]
+    dimensions.dimension_parts[0].separator_after = "_"
+    dimensions.dimension_parts[1].separator_after = ""
+    dimensions.add_axis_labels = True
+    assert naming.evaluate_module(
+        bpy.context,
+        settings,
+        dimensions,
+        obj,
+        0,
+    ) == "Y240_Z30cm"
+
+    obj.dimensions = (2.5, 2.5, 1.0)
+    bpy.context.view_layer.update()
+    dimensions.dimension_parts.clear()
+    assert_finished(bpy.ops.mar.add_dimension_part(axis="LARGEST"))
+    dimensions.add_unit_suffix = False
+    assert naming.evaluate_module(
+        bpy.context,
+        settings,
+        dimensions,
+        obj,
+        0,
+    ) == "X250"
+
+    assert naming._format_number(2.5, 0, "ROUND", False) == "3"
+    assert naming._format_number(1.225, 2, "ROUND", False) == "1.23"
+    assert naming._format_number(1.231, 2, "CEIL", False) == "1.24"
+    assert naming._format_number(1.239, 2, "FLOOR", False) == "1.23"
+    assert naming._format_number(1.2, 2, "ROUND", True) == "1.2"
+
+    dimensions.dimension_parts[0].separator_after = "-"
+    assert_finished(bpy.ops.mar.duplicate_module())
+    duplicate = settings.modules[1]
+    assert duplicate.module_type == "DIMENSIONS"
+    assert len(duplicate.dimension_parts) == 1
+    assert duplicate.dimension_parts[0].axis == "LARGEST"
+    assert duplicate.dimension_parts[0].separator_after == "-"
+    duplicate.dimension_parts[0].axis = "Z"
+    assert dimensions.dimension_parts[0].axis == "LARGEST"
+
+    settings.module_index = 0
+    dimensions.dimension_parts.clear()
+    select_only(obj)
+    records, _warning = naming.build_rename_plan(bpy.context, settings)
+    assert records[0].status == naming.STATUS_EMPTY
+    assert "has no parts" in records[0].message
+    empty_preset = preset_utils.settings_to_preset(settings, "Empty Dimensions")
+    try:
+        preset_utils.upsert_preset([], empty_preset)
+    except ValueError as exc:
+        assert "must contain at least one part" in str(exc)
+    else:
+        raise AssertionError("Empty Dimensions preset should be rejected")
+
+    settings.modules.clear()
+    legacy_scene_module = settings.modules.add()
+    legacy_scene_module.module_id = preset_utils.new_id()
+    legacy_scene_module.module_type = "DIMENSIONS"
+    legacy_scene_module.display_name = "Legacy Dimensions"
+    legacy_scene_module.axis_order = "ZYX"
+    legacy_scene_module.axis_separator = "-"
+    assert legacy_scene_module.dimension_parts_migrated is False
+    assert preset_utils.repair_settings(settings) is True
+    assert [part.axis for part in legacy_scene_module.dimension_parts] == [
+        "Z",
+        "Y",
+        "X",
+    ]
+    assert [
+        part.separator_after for part in legacy_scene_module.dimension_parts
+    ] == ["-", "-", ""]
+    legacy_scene_module.dimension_parts.clear()
+    assert preset_utils.repair_settings(settings) is False
+    assert len(legacy_scene_module.dimension_parts) == 0
+
+
 def test_module_outputs(parent, child, obj):
     settings = bpy.context.scene.mar_settings
     settings.modules.clear()
@@ -188,9 +313,7 @@ def test_module_outputs(parent, child, obj):
     ) == "Plaster"
 
     dimensions = add_module("DIMENSIONS")
-    dimensions.axis_order = "XYZ"
     dimensions.dimension_unit = "CM"
-    dimensions.axis_separator = "x"
     dimensions.decimal_places = 0
     dimensions.round_mode = "ROUND"
     dimensions.add_unit_suffix = True
@@ -205,12 +328,15 @@ def test_module_outputs(parent, child, obj):
         0,
     ) == "180x240x30cm"
 
-    dimensions.axis_order = "ZYX"
+    for part, axis in zip(dimensions.dimension_parts, "ZYX"):
+        part.axis = axis
+    dimensions.dimension_parts[0].separator_after = "_"
+    dimensions.dimension_parts[1].separator_after = "_"
+    dimensions.dimension_parts[2].separator_after = ""
     dimensions.dimension_unit = "M"
     dimensions.decimal_places = 2
     dimensions.round_mode = "FLOOR"
     dimensions.add_axis_labels = True
-    dimensions.axis_separator = "_"
     dimensions.remove_trailing_zeros = True
     dimensions.add_unit_suffix = False
     dimension_label_output = naming.evaluate_module(
@@ -484,6 +610,11 @@ def test_presets(temp_dir):
     assert_finished(bpy.ops.mar.add_choice_option())
     choice.choice_options[1].value = "Metal"
     choice.choice_current = choice.choice_options[0].option_id
+    dimensions = add_module("DIMENSIONS")
+    dimensions.dimension_parts.clear()
+    assert_finished(bpy.ops.mar.add_dimension_part(axis="Z"))
+    dimensions.dimension_parts[0].separator_after = "-"
+    assert_finished(bpy.ops.mar.add_dimension_part(axis="LARGEST"))
 
     first_items = props.choice_enum_items(choice, bpy.context)
     second_items = props.choice_enum_items(choice, bpy.context)
@@ -500,7 +631,11 @@ def test_presets(temp_dir):
         "Integration Test",
     )
     assert saved is not None
-    assert len(saved["modules"]) == 2
+    assert len(saved["modules"]) == 3
+    assert saved["modules"][2]["dimension_parts"] == [
+        {"axis": "Z", "separator_after": "-"},
+        {"axis": "LARGEST", "separator_after": ""},
+    ]
     assert saved["options"]["error_if_name_exists"] is True
     choice.choice_current = choice.choice_options[1].option_id
     assert choice.choice_current == choice.choice_options[1].option_id
@@ -527,6 +662,39 @@ def test_presets(temp_dir):
         bpy.context.active_object,
         0,
     ) == "Metal"
+    loaded_dimensions = settings.modules[2]
+    assert [part.axis for part in loaded_dimensions.dimension_parts] == [
+        "Z",
+        "LARGEST",
+    ]
+    assert [
+        part.separator_after for part in loaded_dimensions.dimension_parts
+    ] == ["-", ""]
+
+    legacy_preset = preset_utils.settings_to_preset(settings, "Legacy Dimensions")
+    legacy_dimension = legacy_preset["modules"][2]
+    legacy_dimension.pop("dimension_parts")
+    legacy_dimension.pop("dimension_parts_migrated")
+    legacy_dimension["axis_order"] = "XZY"
+    legacy_dimension["axis_separator"] = "/"
+    normalized_legacy = preset_utils.upsert_preset([], legacy_preset)[0]
+    assert normalized_legacy["modules"][2]["dimension_parts"] == [
+        {"axis": "X", "separator_after": "/"},
+        {"axis": "Z", "separator_after": "/"},
+        {"axis": "Y", "separator_after": ""},
+    ]
+
+    invalid_dimension_preset = preset_utils.settings_to_preset(
+        settings,
+        "Invalid Dimensions",
+    )
+    invalid_dimension_preset["modules"][2]["dimension_parts"][0]["axis"] = "W"
+    try:
+        preset_utils.upsert_preset([], invalid_dimension_preset)
+    except ValueError as exc:
+        assert "Invalid dimension part" in str(exc)
+    else:
+        raise AssertionError("Invalid dimension part should be rejected")
 
     export_path = temp_dir / "export.json"
     assert_finished(
@@ -585,6 +753,7 @@ def main():
         select_only(sample)
 
         test_module_editing()
+        test_dimension_parts(sample)
         test_module_outputs(parent, child, sample)
         test_sort_preview_apply_revert(child)
         test_duplicate_invalid_and_filter(child)

@@ -1,6 +1,6 @@
-import math
 import re
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP
 
 import bpy
 
@@ -40,15 +40,26 @@ def sanitize_name(value, settings):
 
 
 def _format_number(value, decimal_places, round_mode, remove_trailing_zeros):
-    factor = 10 ** decimal_places
-    scaled = value * factor
-    epsilon = 1.0e-7 * max(1.0, abs(scaled))
+    decimal_value = Decimal(str(value))
+    quantum = Decimal(1).scaleb(-decimal_places)
+    scaled = decimal_value / quantum
+    epsilon = (
+        Decimal("1e-7")
+        * max(Decimal(1), abs(scaled))
+        * quantum
+    )
     if round_mode == "FLOOR":
-        rounded = math.floor(scaled + epsilon) / factor
+        rounded = (decimal_value + epsilon).quantize(
+            quantum,
+            rounding=ROUND_FLOOR,
+        )
     elif round_mode == "CEIL":
-        rounded = math.ceil(scaled - epsilon) / factor
+        rounded = (decimal_value - epsilon).quantize(
+            quantum,
+            rounding=ROUND_CEILING,
+        )
     else:
-        rounded = round(value, decimal_places)
+        rounded = decimal_value.quantize(quantum, rounding=ROUND_HALF_UP)
 
     text = f"{rounded:.{decimal_places}f}"
     if remove_trailing_zeros and "." in text:
@@ -114,9 +125,19 @@ def _choice_module_error(module):
     return f"Choice module '{label}' has no selected option."
 
 
+def _dimension_module_error(module):
+    if (
+        module.module_type == "DIMENSIONS"
+        and module.enabled
+        and not module.dimension_parts
+    ):
+        return f"Dimensions module '{module.display_name or 'Dimensions'}' has no parts."
+    return ""
+
+
 def _module_configuration_error(settings):
     for module in settings.modules:
-        error = _choice_module_error(module)
+        error = _choice_module_error(module) or _dimension_module_error(module)
         if error:
             return error
     return ""
@@ -137,15 +158,21 @@ def evaluate_module(context, settings, module, obj, index_value):
         multiplier = {"M": 1.0, "CM": 100.0, "MM": 1000.0}[module.dimension_unit]
         unit_suffix = {"M": "m", "CM": "cm", "MM": "mm"}[module.dimension_unit]
         values = []
-        for axis in module.axis_order:
+        for part in module.dimension_parts:
+            axis = part.axis
+            if axis == "LARGEST":
+                axis = max(("X", "Y", "Z"), key=lambda item: axis_values[item])
             text = _format_number(
                 axis_values[axis] * multiplier,
                 module.decimal_places,
                 module.round_mode,
                 module.remove_trailing_zeros,
             )
-            values.append(f"{axis}{text}" if module.add_axis_labels else text)
-        result = module.axis_separator.join(values)
+            values.append(
+                f"{axis}{text}" if module.add_axis_labels else text
+            )
+            values.append(part.separator_after)
+        result = "".join(values)
         if module.add_unit_suffix:
             result += unit_suffix
         return result
@@ -180,8 +207,12 @@ def module_summary(module):
         return f"{module.choice_label}: {_choice_value(module) or '(empty)'}"
     if module.module_type == "DIMENSIONS":
         unit = {"M": "m", "CM": "cm", "MM": "mm"}[module.dimension_unit]
+        axes = "".join(
+            "Max" if part.axis == "LARGEST" else part.axis
+            for part in module.dimension_parts
+        )
         return (
-            f"{module.axis_order} / {unit} / {module.axis_separator or 'none'} / "
+            f"{axes or '(empty)'} / {unit} / "
             f"{module.decimal_places} decimals"
         )
     if module.module_type == "INDEX":

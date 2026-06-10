@@ -79,6 +79,24 @@ class MAR_UL_choice_options(UIList):
         layout.prop(item, "value", text="", emboss=False, icon="DOT")
 
 
+class MAR_UL_dimension_parts(UIList):
+    def draw_item(
+        self,
+        _context,
+        layout,
+        _data,
+        item,
+        _icon,
+        _active_data,
+        _active_propname,
+        index,
+    ):
+        row = layout.row(align=True)
+        row.label(text=f"{index + 1:02d}")
+        row.prop(item, "axis", text="")
+        row.prop(item, "separator_after", text="After")
+
+
 class MAR_UL_preview(UIList):
     def draw_item(
         self,
@@ -229,9 +247,42 @@ class MAR_PT_main(Panel):
                 if module.choice_options:
                     _draw_choice_current(box, module)
             elif module.module_type == "DIMENSIONS":
-                box.prop(module, "axis_order")
+                if not module.dimension_parts:
+                    box.label(text="Dimensions has no parts.", icon="ERROR")
+                box.template_list(
+                    "MAR_UL_dimension_parts",
+                    "",
+                    module,
+                    "dimension_parts",
+                    module,
+                    "dimension_part_index",
+                    rows=4,
+                )
+                row = box.row(align=True)
+                row.operator_menu_enum(
+                    "mar.add_dimension_part",
+                    "axis",
+                    text="Add Part",
+                    icon="ADD",
+                )
+                row.operator(
+                    "mar.remove_dimension_part",
+                    text="Remove",
+                    icon="REMOVE",
+                )
+                up = row.operator(
+                    "mar.move_dimension_part",
+                    text="",
+                    icon="TRIA_UP",
+                )
+                up.direction = "UP"
+                down = row.operator(
+                    "mar.move_dimension_part",
+                    text="",
+                    icon="TRIA_DOWN",
+                )
+                down.direction = "DOWN"
                 box.prop(module, "dimension_unit")
-                box.prop(module, "axis_separator")
                 box.prop(module, "decimal_places")
                 box.prop(module, "round_mode")
                 box.prop(module, "add_unit_suffix")

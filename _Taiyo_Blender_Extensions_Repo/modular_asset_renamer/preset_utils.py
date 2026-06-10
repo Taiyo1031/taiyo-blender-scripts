@@ -17,6 +17,7 @@ MODULE_TYPES = {
     "COLLECTION_NAME",
 }
 AXIS_ORDERS = {"XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"}
+DIMENSION_AXES = {"X", "Y", "Z", "LARGEST"}
 DIMENSION_UNITS = {"M", "CM", "MM"}
 ROUND_MODES = {"ROUND", "FLOOR", "CEIL"}
 SORT_MODES = {
@@ -132,10 +133,37 @@ def repair_choice_module(module):
     return changed
 
 
+def legacy_dimension_parts(axis_order, separator):
+    return [
+        {
+            "axis": axis,
+            "separator_after": separator if index < len(axis_order) - 1 else "",
+        }
+        for index, axis in enumerate(axis_order)
+    ]
+
+
+def repair_dimension_module(module):
+    if module.module_type != "DIMENSIONS" or module.dimension_parts_migrated:
+        return False
+
+    if not module.dimension_parts:
+        for raw_part in legacy_dimension_parts(
+            module.axis_order,
+            module.axis_separator,
+        ):
+            part = module.dimension_parts.add()
+            part.axis = raw_part["axis"]
+            part.separator_after = raw_part["separator_after"]
+    module.dimension_parts_migrated = True
+    return True
+
+
 def repair_settings(settings):
     changed = False
     for module in settings.modules:
         changed = repair_choice_module(module) or changed
+        changed = repair_dimension_module(module) or changed
     return changed
 
 
@@ -199,6 +227,30 @@ def _normalize_module(raw_module):
         raise ValueError("Choice option values must be unique within a module.")
 
     raw_choice_current = str(raw_module.get("choice_current", "")).strip()
+    axis_order = str(raw_module.get("axis_order", "XYZ"))
+    axis_separator = str(raw_module.get("axis_separator", "x"))
+    if "dimension_parts" in raw_module:
+        raw_dimension_parts = raw_module["dimension_parts"]
+        _require_type(raw_dimension_parts, list, "Dimension parts")
+        dimension_parts = []
+        for raw_part in raw_dimension_parts:
+            _require_type(raw_part, dict, "Dimension part")
+            axis = str(raw_part.get("axis", ""))
+            if axis not in DIMENSION_AXES:
+                raise ValueError(f"Invalid dimension part: {axis}")
+            dimension_parts.append(
+                {
+                    "axis": axis,
+                    "separator_after": str(
+                        raw_part.get("separator_after", "")
+                    ),
+                }
+            )
+    elif module_type == "DIMENSIONS":
+        dimension_parts = legacy_dimension_parts(axis_order, axis_separator)
+    else:
+        dimension_parts = []
+
     normalized = {
         "module_id": module_id,
         "module_type": module_type,
@@ -209,9 +261,11 @@ def _normalize_module(raw_module):
         "choice_label": str(raw_module.get("choice_label", "Choice")),
         "choice_options": choice_options,
         "choice_current": option_id_map.get(raw_choice_current, raw_choice_current),
-        "axis_order": str(raw_module.get("axis_order", "XYZ")),
+        "axis_order": axis_order,
         "dimension_unit": str(raw_module.get("dimension_unit", "CM")),
-        "axis_separator": str(raw_module.get("axis_separator", "x")),
+        "axis_separator": axis_separator,
+        "dimension_parts": dimension_parts,
+        "dimension_parts_migrated": True,
         "decimal_places": int(raw_module.get("decimal_places", 0)),
         "round_mode": str(raw_module.get("round_mode", "ROUND")),
         "add_unit_suffix": bool(raw_module.get("add_unit_suffix", True)),
@@ -255,6 +309,8 @@ def _normalize_module(raw_module):
             raise ValueError("Choice module must contain at least one option.")
         if normalized["choice_current"] in {"", "__NONE__"}:
             raise ValueError("Current choice option is empty.")
+    if module_type == "DIMENSIONS" and not dimension_parts:
+        raise ValueError("Dimensions module must contain at least one part.")
     if (
         normalized["choice_current"]
         and normalized["choice_current"] != "__NONE__"
@@ -388,6 +444,14 @@ def module_to_dict(module):
         "axis_order": module.axis_order,
         "dimension_unit": module.dimension_unit,
         "axis_separator": module.axis_separator,
+        "dimension_parts": [
+            {
+                "axis": part.axis,
+                "separator_after": part.separator_after,
+            }
+            for part in module.dimension_parts
+        ],
+        "dimension_parts_migrated": module.dimension_parts_migrated,
         "decimal_places": module.decimal_places,
         "round_mode": module.round_mode,
         "add_unit_suffix": module.add_unit_suffix,
@@ -419,7 +483,11 @@ def load_preset_into_settings(settings, preset):
     for raw_module in normalized["modules"]:
         module = settings.modules.add()
         for field, value in raw_module.items():
-            if field in {"choice_options", "choice_current"}:
+            if field in {
+                "choice_options",
+                "choice_current",
+                "dimension_parts",
+            }:
                 continue
             setattr(module, field, value)
         for raw_option in raw_module["choice_options"]:
@@ -433,6 +501,10 @@ def load_preset_into_settings(settings, preset):
             module.choice_current = current
         elif module.choice_options:
             module.choice_current = module.choice_options[0].option_id
+        for raw_part in raw_module["dimension_parts"]:
+            part = module.dimension_parts.add()
+            part.axis = raw_part["axis"]
+            part.separator_after = raw_part["separator_after"]
     for field, value in normalized["options"].items():
         setattr(settings, field, value)
     settings.module_index = min(
