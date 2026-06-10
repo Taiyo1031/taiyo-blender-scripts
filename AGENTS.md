@@ -47,7 +47,7 @@ repo/
 
 このスクリプトは以下を行います。
 
-- 21個の Extensions パッケージを `blender --command extension validate` で検証
+- 22個の Extensions パッケージを `blender --command extension validate` で検証
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `blender --command extension server-generate --repo-dir docs/extensions --html` で `index.json` と `index.html` を生成
 
@@ -64,7 +64,7 @@ repo/
 ## 配布前チェック
 
 - `find . -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store'` で不要物を確認します。
-- `docs/extensions/index.json` の配布パッケージが21個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は21個より多くても問題ありません。
+- `docs/extensions/index.json` の配布パッケージが22個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は22個より多くても問題ありません。
 - `docs/extensions/index.json` と `docs/extensions/index.html` が生成されていることを確認します。
 - 可能ならBlenderのPreferencesからRemote Repositoryに `index.json` URLを追加して確認します。
 
@@ -82,4 +82,5 @@ repo/
 - Collection Linked Mesh Replacerの統合テストは `blender --background --python tools/test_collection_linked_mesh_replacer.py` で実行します。
 - Modular Asset Renamerの統合テストは `blender --background --python tools/test_modular_asset_renamer.py` で実行します。
 - Taiyo Extension Managerのフィルター・並び替え統合テストは `blender --background --python tools/test_taiyo_extension_manager.py` で実行します。
+- Laid Collection Instance Linkerの統合テストは `blender --background --python tools/test_laid_collection_instance_linker.py` で実行します。
 - `tools/build_extensions.sh` はRepository index生成後に `tools/add_extension_update_metadata.py` を実行し、各packageの最終Git更新時刻を `taiyo_updated_at` として `docs/extensions/index.json` に追記します。マネージャーの `Recently Updated` はこの値を使います。

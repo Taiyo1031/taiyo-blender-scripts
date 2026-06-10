@@ -110,7 +110,7 @@ def test_distributed_index_metadata(manager):
 
     errors = []
     items = index_data["data"]
-    assert len(items) == 21
+    assert len(items) == 22
     assert all(item.get(manager.RELEASE_TIMESTAMP_KEY, 0) > 0 for item in items)
     for item in items:
         normalized = PkgManifest_Normalized.from_dict_with_error_fn(

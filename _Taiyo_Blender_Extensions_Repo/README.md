@@ -7,13 +7,16 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 ## パッケージ一覧
 - `attribute_csv_exporter`: Attribute CSV Exporter
 - `blend_reference_graph`: Blend Reference Graph
+- `collection_linked_mesh_replacer`: Collection Linked Mesh Replacer
 - `collection_number_to_mesh_name`: Collection Number To Mesh Name
 - `collection_mesh_merge_fbx_exporter`: Collection Mesh Merge FBX Exporter
 - `custom_properties_batch_editor`: Custom Properties Batch Editor
 - `gn_parameter_csv_exporter`: GN Parameter CSV Exporter
 - `export_selected_names_csv`: Export Selected Object Names to CSV
 - `instance_name_fixer`: Instance Name Fixer
+- `laid_collection_instance_linker`: Laid Collection Instance Linker
 - `map_link_tools`: Map Link Tools
+- `modular_asset_renamer`: Modular Asset Renamer
 - `move_selected_to_own_collections`: Move Objects to Own Collections
 - `overlap_selector`: Overlap Object Selector
 - `proportional_dimensions`: Proportional Dimensions

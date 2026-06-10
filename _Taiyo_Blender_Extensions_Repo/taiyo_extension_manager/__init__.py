@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 9),
+    "version": (1, 0, 10),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -71,6 +71,12 @@ TAG_ALIASES = {
     "instance_name_fixer": (
         "collection", "fix", "instance", "name", "rename", "sync", "cleanup",
         "インスタンス", "コレクション", "名前", "名前整理", "修正",
+    ),
+    "laid_collection_instance_linker": (
+        "collection", "custom-property", "instance", "laid", "link", "map",
+        "match", "pipeline", "realize", "simulation",
+        "コレクション", "インスタンス", "マップ", "リンク", "照合", "再構築",
+        "シミュレーション", "カスタムプロパティ",
     ),
     "map_link_tools": (
         "batch", "cleanup", "collection", "duplicate", "instance", "link", "map",
@@ -160,6 +166,10 @@ DESCRIPTION_ALIASES = {
     "instance_name_fixer": {
         "ja": "コレクションインスタンス名をインスタンス元に揃えます。",
         "en": "Match collection instance names to their source collections.",
+    },
+    "laid_collection_instance_linker": {
+        "ja": "Laid_MAPの配置を分割済みCollection Instanceで再構築します。",
+        "en": "Rebuild Laid_MAP placements with matched split-part collection instances.",
     },
     "map_link_tools": {
         "ja": "マップ制作向けにリンク配置、共有Mesh、Collection Instance、名前整理をまとめて扱います。",

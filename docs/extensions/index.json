@@ -64,7 +64,7 @@
       "archive_url": "./collection_linked_mesh_replacer-1.0.9.zip",
       "archive_size": 16292,
       "archive_hash": "sha256:101a1b9e3d0f61bd5040e3cc7d73a2f0c6aba95d232f5a116a4401c498dd3697",
-      "taiyo_updated_at": 1781047185
+      "taiyo_updated_at": 1781047252
     },
     {
       "schema_version": "1.0.0",
@@ -181,6 +181,29 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "laid_collection_instance_linker",
+      "name": "Laid Collection Instance Linker",
+      "tagline": "Rebuild laid maps with matched collection instances",
+      "version": "1.0.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/laid_collection_instance_linker/README.md",
+      "tags": [
+        "Object",
+        "Scene",
+        "Pipeline"
+      ],
+      "archive_url": "./laid_collection_instance_linker-1.0.0.zip",
+      "archive_size": 10843,
+      "archive_hash": "sha256:2860591619c9f7ebe1c6039dbd105fee0dd4191a229015302a3258be2b219ac8",
+      "taiyo_updated_at": 1781104530
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "map_link_tools",
       "name": "Map Link Tools",
       "tagline": "Minimal rename, check, and replace tools for map layouts",
@@ -223,7 +246,7 @@
       "archive_url": "./modular_asset_renamer-1.0.8.zip",
       "archive_size": 24390,
       "archive_hash": "sha256:43be8cabd1fc640bb5bc79699401fd32c680a08484a2776fc48fb44f156f00ca",
-      "taiyo_updated_at": 1781091245
+      "taiyo_updated_at": 1781091360
     },
     {
       "schema_version": "1.0.0",
@@ -320,7 +343,7 @@
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
       "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.9",
+      "version": "1.0.10",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -328,10 +351,10 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.9.zip",
-      "archive_size": 12667,
-      "archive_hash": "sha256:1febf4cc7f3292bc8b13eef127b671b8d7bc05bbe6353bcc2d36b71ea6a9ed1d",
-      "taiyo_updated_at": 1781031334
+      "archive_url": "./taiyo_extension_manager-1.0.10.zip",
+      "archive_size": 12805,
+      "archive_hash": "sha256:dbf4cee074695312e629422850b2c2b62e56845d0d091a708ec51a08cbd5f368",
+      "taiyo_updated_at": 1781104531
     },
     {
       "schema_version": "1.0.0",
