@@ -20,8 +20,9 @@ Edit Mode で選択している面、または Object Mode で選択している
 - Edit Mode ではアクティブな Mesh の選択面だけを塗ります。
 - Edit Mode では、カラー行ごとの選択ボタンで同じ色の面を再選択できます。
 - Object Mode では選択中の Mesh オブジェクトそれぞれの全フェイスを塗ります。
-- Copy Helperで、Paint Attribute全体を別のColor Attributeへコピーできます。
-- Copy Helperは `BYTE_COLOR` と `FLOAT_COLOR` の相互コピーに対応します。
+- Attribute HelperのCopyで、Paint Attribute全体を別のColor Attributeへコピーできます。
+- Attribute HelperのCopyは `BYTE_COLOR` と `FLOAT_COLOR` の相互コピーに対応します。
+- Attribute HelperのRemoveで、指定したMeshオブジェクトから指定Attribute全体を削除できます。
 
 ## Edit Mode で面だけ塗る
 
@@ -49,16 +50,26 @@ Edit Mode で選択している面、または Object Mode で選択している
 ## 他のColor Attributeへコピーする
 
 1. コピー元にしたい Paint Attribute 名を確認します。
-2. `Copy Helper` の Destination にコピー先Attribute名を入力します。
+2. `Attribute Helper > Copy` の Destination にコピー先Attribute名を入力します。
 3. コピー先を新規作成する場合の New Type を選びます。
 4. `Copy Attribute` を押します。
 
 Edit ModeではアクティブMeshのAttribute全体をコピーします。Object Modeでは選択中Meshオブジェクトすべてに対して、Attribute全体をコピーします。
+
+## 指定オブジェクトのAttributeを削除する
+
+1. `Attribute Helper > Remove` の Object で対象Meshオブジェクトを指定します。
+2. Attributeから削除する属性を選びます。
+3. `Remove Attribute` を押します。
+4. 対象オブジェクト名とAttribute名を確認して、削除を確定します。
+
+対象オブジェクトが共有Meshデータを使用している場合、同じMeshを使うすべてのオブジェクトからAttributeが削除されます。パネルと確認画面に共有Meshの警告が表示されます。
 
 ## 注意
 
 - Object Mode では面選択状態は使わず、選択中 Mesh オブジェクトの全フェイスに塗ります。
 - Vertex / Edge Select でも、Blender 側で `face.select` が立っている面だけを塗ります。
 - 色で選択するときは、指定色と面の全ループカラーが一致する面だけを選択します。
-- Copy Helperは面選択範囲ではなく、Attribute全体をコピーします。
+- Attribute HelperのCopyは面選択範囲ではなく、Attribute全体をコピーします。
+- Attribute HelperのRemoveはColor Attribute以外を含むMesh Attribute全体を削除します。
 - 同名の Color Attribute が `BYTE_COLOR` / `CORNER` または `FLOAT_COLOR` / `CORNER` 以外で存在する場合は、上書きせずエラーにします。

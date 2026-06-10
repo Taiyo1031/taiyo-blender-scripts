@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Material Painter",
     "author": "Taiyo",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > VC Painter",
     "description": "Paint selected edit-mode faces with scene-saved material ID colors",
@@ -10,7 +10,14 @@ bl_info = {
 
 import bmesh
 import bpy
-from bpy.props import CollectionProperty, EnumProperty, FloatVectorProperty, IntProperty, StringProperty
+from bpy.props import (
+    CollectionProperty,
+    EnumProperty,
+    FloatVectorProperty,
+    IntProperty,
+    PointerProperty,
+    StringProperty,
+)
 from bpy.types import Operator, Panel, PropertyGroup, UIList
 
 
@@ -46,6 +53,10 @@ def _clean_attribute_name(name):
 
 def _clean_copy_target_name(name):
     return name.strip() or DEFAULT_COPY_TARGET_NAME
+
+
+def _mesh_object_poll(_self, obj):
+    return obj is not None and obj.type == 'MESH' and obj.data is not None
 
 
 def _clean_attribute_type(attribute_type):
@@ -338,6 +349,26 @@ def _copy_object_mode_meshes(objects, source_name, target_name, target_type):
             created_count += 1
 
     return object_count, face_count, created_count
+
+
+def _remove_mesh_attribute(obj, attribute_name):
+    mesh = obj.data
+    attribute = mesh.attributes.get(attribute_name)
+
+    if attribute is None:
+        raise ValueError(f"Attribute がありません: {attribute_name}")
+
+    if not getattr(mesh, "is_editable", True):
+        raise ValueError(f"Meshデータを編集できません: {mesh.name}")
+
+    try:
+        mesh.attributes.remove(attribute)
+    except RuntimeError as error:
+        raise ValueError(f"Attributeを削除できません: {attribute_name}") from error
+
+    mesh.update()
+
+    return sum(1 for candidate in bpy.data.objects if candidate.data == mesh)
 
 
 class VCMP_ColorItem(PropertyGroup):
@@ -667,6 +698,85 @@ class VCMP_OT_copy_attribute(Operator):
         return {'FINISHED'}
 
 
+class VCMP_OT_remove_attribute(Operator):
+    bl_idname = "vcmp.remove_attribute"
+    bl_label = "Remove Attribute"
+    bl_description = "指定したMeshオブジェクトから指定Attribute全体を削除します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @staticmethod
+    def _target_and_attribute(context):
+        scene = context.scene
+        obj = scene.vcmp_remove_target_object
+        attribute_name = scene.vcmp_remove_attribute_name.strip()
+
+        if obj is None or obj.type != 'MESH' or obj.data is None:
+            return None, "", "削除対象のMeshオブジェクトを指定してください。"
+
+        if not attribute_name:
+            return None, "", "削除するAttributeを指定してください。"
+
+        if obj.data.attributes.get(attribute_name) is None:
+            return None, "", f"{obj.name} に Attribute がありません: {attribute_name}"
+
+        return obj, attribute_name, None
+
+    def invoke(self, context, event):
+        _obj, _attribute_name, error = self._target_and_attribute(context)
+
+        if error:
+            self.report({'ERROR'}, error)
+            return {'CANCELLED'}
+
+        return context.window_manager.invoke_props_dialog(self, width=420)
+
+    def draw(self, context):
+        layout = self.layout
+        obj, attribute_name, _error = self._target_and_attribute(context)
+
+        if obj is None:
+            return
+
+        layout.label(text="このAttributeを削除します。", icon='ERROR')
+        layout.label(text=f"Object: {obj.name}", icon='OBJECT_DATA')
+        layout.label(text=f"Attribute: {attribute_name}", icon='GROUP_VCOL')
+
+        object_user_count = sum(
+            1 for candidate in bpy.data.objects
+            if candidate.data == obj.data
+        )
+        if object_user_count > 1:
+            layout.label(
+                text=f"共有Meshのため {object_user_count}個のオブジェクトへ影響します。",
+                icon='LINKED',
+            )
+
+    def execute(self, context):
+        obj, attribute_name, error = self._target_and_attribute(context)
+
+        if error:
+            self.report({'ERROR'}, error)
+            return {'CANCELLED'}
+
+        try:
+            object_user_count = _remove_mesh_attribute(obj, attribute_name)
+        except ValueError as error:
+            self.report({'ERROR'}, str(error))
+            return {'CANCELLED'}
+
+        suffix = (
+            f" 共有Meshを使用する{object_user_count}個のオブジェクトへ反映されます。"
+            if object_user_count > 1
+            else ""
+        )
+        self.report(
+            {'INFO'},
+            f"{obj.name} から Attribute '{attribute_name}' を削除しました。{suffix}",
+        )
+
+        return {'FINISHED'}
+
+
 class VCMP_OT_ensure_attribute(Operator):
     bl_idname = "vcmp.ensure_attribute"
     bl_label = "Ensure Color Attribute"
@@ -752,11 +862,47 @@ class VCMP_PT_panel(Panel):
         box.operator(VCMP_OT_add_color.bl_idname, icon='ADD')
 
         box = layout.box()
-        box.label(text="Copy Helper", icon='DUPLICATE')
+        box.label(text="Attribute Helper", icon='MODIFIER')
+        box.label(text="Copy", icon='DUPLICATE')
         box.label(text=f"Source: { _clean_attribute_name(scene.vcmp_attribute_name) }", icon='GROUP_VCOL')
         box.prop(scene, "vcmp_copy_target_name", text="Destination")
         box.prop(scene, "vcmp_copy_target_type", text="New Type")
         box.operator(VCMP_OT_copy_attribute.bl_idname, icon='DUPLICATE')
+
+        box.separator()
+        box.label(text="Remove", icon='TRASH')
+        box.prop(scene, "vcmp_remove_target_object", text="Object")
+
+        remove_target = scene.vcmp_remove_target_object
+        if remove_target is not None and remove_target.type == 'MESH' and remove_target.data is not None:
+            box.prop_search(
+                scene,
+                "vcmp_remove_attribute_name",
+                remove_target.data,
+                "attributes",
+                text="Attribute",
+            )
+        else:
+            row = box.row()
+            row.enabled = False
+            row.prop(scene, "vcmp_remove_attribute_name", text="Attribute")
+
+        remove_row = box.row()
+        remove_row.enabled = bool(
+            remove_target is not None
+            and remove_target.type == 'MESH'
+            and remove_target.data is not None
+            and remove_target.data.attributes.get(scene.vcmp_remove_attribute_name.strip()) is not None
+        )
+        remove_row.operator(VCMP_OT_remove_attribute.bl_idname, icon='TRASH')
+
+        if (
+            remove_target is not None
+            and remove_target.type == 'MESH'
+            and remove_target.data is not None
+            and sum(1 for candidate in bpy.data.objects if candidate.data == remove_target.data) > 1
+        ):
+            box.label(text="共有Meshを使う全オブジェクトへ影響します。", icon='LINKED')
 
         layout.separator()
 
@@ -778,6 +924,7 @@ classes = (
     VCMP_OT_apply_color,
     VCMP_OT_select_by_color,
     VCMP_OT_copy_attribute,
+    VCMP_OT_remove_attribute,
     VCMP_OT_ensure_attribute,
     VCMP_PT_panel,
 )
@@ -823,10 +970,23 @@ def register():
         items=COLOR_TYPE_ITEMS,
         default=DEFAULT_ATTRIBUTE_TYPE,
     )
+    bpy.types.Scene.vcmp_remove_target_object = PointerProperty(
+        name="Remove Target Object",
+        description="Attributeを削除するMeshオブジェクト",
+        type=bpy.types.Object,
+        poll=_mesh_object_poll,
+    )
+    bpy.types.Scene.vcmp_remove_attribute_name = StringProperty(
+        name="Remove Attribute",
+        description="指定Meshオブジェクトから削除するAttribute名",
+        default=DEFAULT_ATTRIBUTE_NAME,
+    )
 
 
 def unregister():
     for prop_name in (
+        "vcmp_remove_attribute_name",
+        "vcmp_remove_target_object",
         "vcmp_copy_target_type",
         "vcmp_copy_target_name",
         "vcmp_new_color",
