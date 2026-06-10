@@ -167,10 +167,14 @@ def test_edit_mode_color_copy_consistency(addon):
     assert_color_close(target_color, color)
 
 
-def test_legacy_color_repair(addon):
+def test_automatic_legacy_color_repair(addon):
     reset_scene()
     scene = bpy.context.scene
+    scene.vcmp_color_items.clear()
     desired_color = (0.45, 0.24, 0.09, 1.0)
+    correct_color = (0.08, 0.32, 0.7, 1.0)
+    ambiguous_color = (0.0, 0.0, 0.0, 1.0)
+    unknown_color = (0.28, 0.3, 0.33, 1.0)
     wrong_rgb = Color(desired_color[:3]).from_srgb_to_scene_linear()
     wrong_color = (*wrong_rgb, desired_color[3])
 
@@ -182,19 +186,57 @@ def test_legacy_color_repair(addon):
         type='BYTE_COLOR',
         domain='CORNER',
     )
-    for data in attribute.data:
-        data.color = wrong_color
+    attribute.data[0].color = wrong_color
+    attribute.data[1].color = correct_color
+    attribute.data[2].color = ambiguous_color
 
-    select_only(selected_a, selected_b, active=selected_a)
+    unknown_obj = new_mesh_object("LegacyUnknown")
+    unknown_attribute = unknown_obj.data.color_attributes.new(
+        name="mat_color",
+        type='BYTE_COLOR',
+        domain='CORNER',
+    )
+    for data in unknown_attribute.data:
+        data.color = unknown_color
+
+    select_only(selected_a, selected_b, unknown_obj, active=selected_a)
     scene.vcmp_attribute_name = "mat_color"
-    preview = addon._legacy_color_repair_preview(bpy.context, "mat_color")
-    assert preview["object_count"] == 2, preview
-    assert preview["unique_mesh_count"] == 1, preview
-    assert preview["matching_mesh_count"] == 1, preview
+    empty_preview = addon._auto_color_repair_preview(
+        bpy.context,
+        "mat_color",
+        analyze_colors=True,
+    )
+    assert empty_preview["reference_color_count"] == 0, empty_preview
+
+    for name, color in (
+        ("Brown", desired_color),
+        ("Blue", correct_color),
+        ("Black", ambiguous_color),
+    ):
+        item = scene.vcmp_color_items.add()
+        item.name = name
+        item.color = color
+
+    preview = addon._auto_color_repair_preview(
+        bpy.context,
+        "mat_color",
+        analyze_colors=True,
+    )
+    assert preview["object_count"] == 3, preview
+    assert preview["unique_mesh_count"] == 2, preview
+    assert preview["matching_mesh_count"] == 2, preview
+    assert preview["reference_color_count"] == 3, preview
+    assert preview["repair_color_count"] == 1, preview
+    assert preview["correct_color_count"] == 1, preview
+    assert preview["ambiguous_color_count"] == 1, preview
+    assert preview["unknown_color_count"] == 3, preview
 
     assert_finished(bpy.ops.vcmp.repair_legacy_edit_colors('EXEC_DEFAULT'))
-    for data in attribute.data:
-        assert_color_close(data.color, desired_color)
+    assert_color_close(attribute.data[0].color, desired_color)
+    assert_color_close(attribute.data[1].color, correct_color)
+    assert_color_close(attribute.data[2].color, ambiguous_color)
+    for data in unknown_attribute.data:
+        assert_color_close(data.color, unknown_color)
 
 
 def test_same_name(addon):
@@ -446,7 +488,7 @@ def main():
     try:
         test_paint_color_consistency(addon)
         test_edit_mode_color_copy_consistency(addon)
-        test_legacy_color_repair(addon)
+        test_automatic_legacy_color_repair(addon)
         test_same_name(addon)
         test_data_type_direct_and_reference(addon)
         test_domain_and_type_domain(addon)

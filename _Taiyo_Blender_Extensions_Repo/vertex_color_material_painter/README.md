@@ -26,7 +26,7 @@ Edit Mode で選択している面、または Object Mode で選択している
 - 削除条件は `Same Name`、`Data Type`、`Domain`、`Type + Domain`、`All Removable` の5種類です。
 - 内部Attributeと必須Attributeは削除対象から常に除外されます。
 - Edit ModeとObject Modeで同じ線形RGBA値を書き込み、`BYTE_COLOR`でも同じ色になります。
-- `Fix Selected Legacy Edit Colors`で、旧Edit Modeペイントにより暗くなった選択中MeshのPaint AttributeをObject Mode基準へ一括補正できます。
+- `Auto Fix Selected Colors`で、Color Listを基準に旧Edit Modeペイントの暗い色だけを自動判定し、選択中Meshを一括補正できます。
 
 ## Edit Mode で面だけ塗る
 
@@ -80,14 +80,17 @@ Edit ModeではアクティブMeshのAttribute全体をコピーします。Obje
 
 同じMeshデータを共有する選択Objectは固有Mesh単位で1回だけ処理します。未選択Objectも同じMeshを共有している場合は、そのObjectにも削除結果が反映されるため、パネルと確認画面に警告が表示されます。
 
-## 旧Edit Modeで暗くなった色を修復する
+## 色の状態を自動判定して修復する
 
-1. 修復対象のMeshオブジェクトを選択します。
+1. Object Modeで修復対象のMeshオブジェクトを選択します。
 2. `Paint Attribute > Name` に修復するAttribute名を指定します。
-3. `Attribute Helper > Legacy Color Fix > Fix Selected Legacy Edit Colors` を押します。
-4. 対象Mesh数を確認して実行します。
+3. 修復の基準にする色を `Color List` に登録します。
+4. `Attribute Helper > Automatic Color Fix > Auto Fix Selected Colors` を押します。
+5. 自動判定結果を確認して実行します。
 
-このボタンはバージョン1.0.2以前のEdit Modeで暗く書き込まれた `BYTE_COLOR` / `CORNER` 専用です。既に正しい色へ実行すると明るくなるため使用しないでください。
+各ColorをColor Listと比較し、そのままの値が登録色に近い場合は変更しません。旧Edit Mode変換を戻した値だけが登録色に近い場合のみ補正します。両方が近い曖昧な色と、どちらも登録色に近くない未知の色は安全のため変更しません。
+
+この修復ボタンはBlenderのBMesh安定性を考慮してObject Mode専用です。Edit Modeペイントは1.0.3以降でObject Modeと同じ色になるよう修正されています。
 
 ## 注意
 

@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Material Painter",
     "author": "Taiyo",
-    "version": (1, 0, 3),
+    "version": (1, 0, 4),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > VC Painter",
     "description": "Paint selected edit-mode faces with scene-saved material ID colors",
@@ -28,6 +28,7 @@ DEFAULT_NEW_COLOR_NAME = "Wood"
 DEFAULT_NEW_COLOR = (0.45, 0.24, 0.09, 1.0)
 FLOAT_COLOR_MATCH_TOLERANCE = 0.0001
 BYTE_COLOR_MATCH_TOLERANCE = (1.0 / 255.0) + 0.0001
+AUTO_REPAIR_MATCH_TOLERANCE = 0.01
 SUPPORTED_COLOR_TYPES = {'BYTE_COLOR', 'FLOAT_COLOR'}
 COLOR_TYPE_ITEMS = (
     ('BYTE_COLOR', "Byte Color", "軽量な8bit Color Attributeを作成します"),
@@ -408,18 +409,52 @@ def _copy_object_mode_meshes(objects, source_name, target_name, target_type):
 
 
 def _repair_target_objects(context):
-    if context.mode == 'EDIT_MESH':
-        candidates = getattr(context, "objects_in_mode", ())
-    else:
-        candidates = context.selected_objects
+    if context.mode != 'OBJECT':
+        return []
 
     return [
-        obj for obj in candidates
+        obj for obj in context.selected_objects
         if obj is not None and obj.type == 'MESH' and obj.data is not None
     ]
 
 
-def _legacy_color_repair_preview(context, attribute_name):
+def _color_distance(color_a, color_b):
+    return max(
+        abs(float(color_a[index]) - float(color_b[index]))
+        for index in range(4)
+    )
+
+
+def _classify_color_for_auto_repair(color, reference_colors):
+    repaired_rgb = Color(color[:3]).from_scene_linear_to_srgb()
+    repaired_color = (*repaired_rgb, color[3])
+    direct_distance = min(
+        _color_distance(color, reference_color)
+        for reference_color in reference_colors
+    )
+    repaired_distance = min(
+        _color_distance(repaired_color, reference_color)
+        for reference_color in reference_colors
+    )
+    direct_matches = direct_distance <= AUTO_REPAIR_MATCH_TOLERANCE
+    repaired_matches = repaired_distance <= AUTO_REPAIR_MATCH_TOLERANCE
+
+    if repaired_matches and not direct_matches:
+        return 'REPAIR', repaired_color
+    if direct_matches and not repaired_matches:
+        return 'CORRECT', color
+    if direct_matches and repaired_matches:
+        return 'AMBIGUOUS', color
+
+    return 'UNKNOWN', color
+
+
+def _mesh_attribute_scene_linear_colors(mesh, attribute_name):
+    attribute = mesh.color_attributes[attribute_name]
+    return [tuple(data.color) for data in attribute.data]
+
+
+def _auto_color_repair_preview(context, attribute_name, analyze_colors=False):
     objects = _repair_target_objects(context)
     meshes = _unique_meshes(objects)
     matching_meshes = [
@@ -431,17 +466,48 @@ def _legacy_color_repair_preview(context, attribute_name):
             and attribute.domain == 'CORNER'
         )
     ]
-
-    return {
+    reference_colors = [
+        tuple(item.color)
+        for item in context.scene.vcmp_color_items
+    ]
+    result = {
         "object_count": len(objects),
         "unique_mesh_count": len(meshes),
         "matching_mesh_count": len(matching_meshes),
         "matching_meshes": matching_meshes,
+        "reference_color_count": len(reference_colors),
+        "repair_color_count": 0,
+        "correct_color_count": 0,
+        "ambiguous_color_count": 0,
+        "unknown_color_count": 0,
     }
 
+    if not analyze_colors or not reference_colors:
+        return result
 
-def _repair_legacy_edit_mode_colors(context, attribute_name):
-    preview = _legacy_color_repair_preview(context, attribute_name)
+    status_keys = {
+        'REPAIR': "repair_color_count",
+        'CORRECT': "correct_color_count",
+        'AMBIGUOUS': "ambiguous_color_count",
+        'UNKNOWN': "unknown_color_count",
+    }
+    for mesh in matching_meshes:
+        for color in _mesh_attribute_scene_linear_colors(mesh, attribute_name):
+            status, _color = _classify_color_for_auto_repair(
+                color,
+                reference_colors,
+            )
+            result[status_keys[status]] += 1
+
+    return result
+
+
+def _auto_repair_legacy_edit_mode_colors(context, attribute_name):
+    preview = _auto_color_repair_preview(
+        context,
+        attribute_name,
+        analyze_colors=False,
+    )
 
     if not preview["object_count"]:
         raise ValueError("選択中またはEdit Mode中のMeshオブジェクトがありません。")
@@ -449,20 +515,36 @@ def _repair_legacy_edit_mode_colors(context, attribute_name):
     if not preview["matching_mesh_count"]:
         raise ValueError(f"修復対象のBYTE_COLOR / CORNER Attributeがありません: {attribute_name}")
 
+    if not preview["reference_color_count"]:
+        raise ValueError("Color Listが空です。自動判定に使う色を登録してください。")
+
     color_count = 0
+    reference_colors = [
+        tuple(item.color)
+        for item in context.scene.vcmp_color_items
+    ]
 
     for mesh in preview["matching_meshes"]:
         attribute = mesh.color_attributes[attribute_name]
+        mesh_color_count = 0
 
         for data in attribute.data:
             color = tuple(data.color)
-            rgb = Color(color[:3]).from_scene_linear_to_srgb()
-            data.color = (*rgb, color[3])
+            status, repaired_color = _classify_color_for_auto_repair(
+                color,
+                reference_colors,
+            )
+            if status != 'REPAIR':
+                continue
+
+            data.color = repaired_color
             color_count += 1
+            mesh_color_count += 1
 
-        mesh.update()
+        if mesh_color_count:
+            mesh.update()
 
-    return preview["matching_mesh_count"], color_count
+    return preview, color_count
 
 
 def _remove_target_objects(context):
@@ -1101,13 +1183,21 @@ class VCMP_OT_remove_attribute(Operator):
 
 class VCMP_OT_repair_legacy_edit_colors(Operator):
     bl_idname = "vcmp.repair_legacy_edit_colors"
-    bl_label = "Fix Selected Legacy Edit Colors"
-    bl_description = "旧バージョンのEdit Modeで暗く書かれたBYTE_COLORをObject Modeの色基準へ補正します"
+    bl_label = "Auto Fix Selected Colors"
+    bl_description = "Color Listを基準に旧Edit Modeの暗いBYTE_COLORだけを自動判定して補正します"
     bl_options = {'REGISTER', 'UNDO'}
 
     def invoke(self, context, event):
         attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
-        preview = _legacy_color_repair_preview(context, attribute_name)
+        preview = _auto_color_repair_preview(
+            context,
+            attribute_name,
+            analyze_colors=True,
+        )
+
+        if context.mode != 'OBJECT':
+            self.report({'ERROR'}, "Object Modeで実行してください。")
+            return {'CANCELLED'}
 
         if not preview["object_count"]:
             self.report({'ERROR'}, "選択中またはEdit Mode中のMeshオブジェクトがありません。")
@@ -1120,29 +1210,48 @@ class VCMP_OT_repair_legacy_edit_colors(Operator):
             )
             return {'CANCELLED'}
 
+        if not preview["reference_color_count"]:
+            self.report({'ERROR'}, "Color Listが空です。自動判定に使う色を登録してください。")
+            return {'CANCELLED'}
+
         return context.window_manager.invoke_props_dialog(self, width=430)
 
     def draw(self, context):
         layout = self.layout
         attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
-        preview = _legacy_color_repair_preview(context, attribute_name)
+        preview = _auto_color_repair_preview(
+            context,
+            attribute_name,
+            analyze_colors=True,
+        )
 
-        layout.label(text="旧Edit Modeで暗くなった色だけに使用してください。", icon='ERROR')
+        layout.label(text="Color Listを基準に色を自動判定します。", icon='COLOR')
+        layout.label(text="Object Mode専用", icon='OBJECT_DATA')
         layout.label(text=f"Attribute: {attribute_name}", icon='GROUP_VCOL')
         layout.label(
             text=(
                 f"Selected Meshes: {preview['object_count']} / "
-                f"Repair Meshes: {preview['matching_mesh_count']}"
+                f"Target Meshes: {preview['matching_mesh_count']}"
             ),
             icon='MESH_DATA',
         )
-        layout.label(text="既に正しい色へ使うと明るくなります。", icon='INFO')
+        layout.label(
+            text=f"Repair: {preview['repair_color_count']} / Correct: {preview['correct_color_count']}",
+            icon='FILE_REFRESH',
+        )
+        layout.label(
+            text=(
+                f"Skipped Ambiguous: {preview['ambiguous_color_count']} / "
+                f"Unknown: {preview['unknown_color_count']}"
+            ),
+            icon='INFO',
+        )
 
     def execute(self, context):
         attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
 
         try:
-            mesh_count, color_count = _repair_legacy_edit_mode_colors(
+            preview, color_count = _auto_repair_legacy_edit_mode_colors(
                 context,
                 attribute_name,
             )
@@ -1152,7 +1261,10 @@ class VCMP_OT_repair_legacy_edit_colors(Operator):
 
         self.report(
             {'INFO'},
-            f"{mesh_count} Mesh / {color_count} ColorをObject Mode基準へ補正しました。",
+            (
+                f"{preview['matching_mesh_count']} Meshを判定し、"
+                f"{color_count} ColorをObject Mode基準へ補正しました。"
+            ),
         )
         return {'FINISHED'}
 
@@ -1250,13 +1362,18 @@ class VCMP_PT_panel(Panel):
         box.operator(VCMP_OT_copy_attribute.bl_idname, icon='DUPLICATE')
 
         box.separator()
-        box.label(text="Legacy Color Fix", icon='COLOR')
-        repair_preview = _legacy_color_repair_preview(
+        box.label(text="Automatic Color Fix", icon='COLOR')
+        repair_preview = _auto_color_repair_preview(
             context,
             _clean_attribute_name(scene.vcmp_attribute_name),
         )
         repair_row = box.row()
-        repair_row.enabled = repair_preview["matching_mesh_count"] > 0
+        repair_row.enabled = (
+            context.mode == 'OBJECT'
+            and
+            repair_preview["matching_mesh_count"] > 0
+            and repair_preview["reference_color_count"] > 0
+        )
         repair_row.operator(VCMP_OT_repair_legacy_edit_colors.bl_idname, icon='FILE_REFRESH')
 
         box.separator()
