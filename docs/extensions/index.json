@@ -182,9 +182,9 @@
     {
       "schema_version": "1.0.0",
       "id": "laid_collection_instance_linker",
-      "name": "Laid Collection Instance Linker",
+      "name": "CW_Laid Collection Instance Linker",
       "tagline": "Rebuild laid maps with matched collection instances",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -197,10 +197,10 @@
         "Scene",
         "Pipeline"
       ],
-      "archive_url": "./laid_collection_instance_linker-1.0.0.zip",
-      "archive_size": 10843,
-      "archive_hash": "sha256:2860591619c9f7ebe1c6039dbd105fee0dd4191a229015302a3258be2b219ac8",
-      "taiyo_updated_at": 1781104530
+      "archive_url": "./laid_collection_instance_linker-1.0.1.zip",
+      "archive_size": 10861,
+      "archive_hash": "sha256:951c9667fb780ae7543ee64d19c850cbb0507c81a77f72c8f36530aaff51909d",
+      "taiyo_updated_at": 1781105064
     },
     {
       "schema_version": "1.0.0",
@@ -354,7 +354,7 @@
       "archive_url": "./taiyo_extension_manager-1.0.10.zip",
       "archive_size": 12805,
       "archive_hash": "sha256:dbf4cee074695312e629422850b2c2b62e56845d0d091a708ec51a08cbd5f368",
-      "taiyo_updated_at": 1781104531
+      "taiyo_updated_at": 1781104735
     },
     {
       "schema_version": "1.0.0",

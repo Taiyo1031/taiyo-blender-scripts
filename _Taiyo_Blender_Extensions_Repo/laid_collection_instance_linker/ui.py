@@ -60,7 +60,7 @@ class LCIL_UL_preview_results(bpy.types.UIList):
 
 
 class LCIL_PT_main(bpy.types.Panel):
-    bl_label = "Laid Collection Instance Linker"
+    bl_label = "CW_Laid Collection Instance Linker"
     bl_idname = "LCIL_PT_main"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"

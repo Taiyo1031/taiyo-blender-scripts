@@ -1,4 +1,4 @@
-# Laid Collection Instance Linker
+# CW_Laid Collection Instance Linker
 
 `Laid_MAP`の配置Transformと、`Laid_Individual`配下の分割済みパーツCollectionを名前で結び、Collection Instance版のマップを生成するBlender Extensionです。
 
@@ -7,7 +7,7 @@
 ## 基本情報
 
 - Extension ID: `laid_collection_instance_linker`
-- バージョン: `1.0.0`
+- バージョン: `1.0.1`
 - 配布対象Blender: `4.2.0`以降
 - アドオンコードのAPI基準: Blender `4.0.0`以降
 - 表示場所: `3D Viewport > Sidebar (N) > Laid Linker`

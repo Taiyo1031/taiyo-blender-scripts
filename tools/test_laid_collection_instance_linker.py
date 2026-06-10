@@ -256,7 +256,7 @@ def main():
         assert wall_source.name in bpy.data.objects
         assert wall_target.name in bpy.data.collections
 
-        print("Laid Collection Instance Linker integration test passed")
+        print("CW_Laid Collection Instance Linker integration test passed")
     finally:
         addon.unregister()
 

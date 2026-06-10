@@ -14,7 +14,7 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 - `gn_parameter_csv_exporter`: GN Parameter CSV Exporter
 - `export_selected_names_csv`: Export Selected Object Names to CSV
 - `instance_name_fixer`: Instance Name Fixer
-- `laid_collection_instance_linker`: Laid Collection Instance Linker
+- `laid_collection_instance_linker`: CW_Laid Collection Instance Linker
 - `map_link_tools`: Map Link Tools
 - `modular_asset_renamer`: Modular Asset Renamer
 - `move_selected_to_own_collections`: Move Objects to Own Collections
