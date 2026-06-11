@@ -345,11 +345,16 @@ def test_output_folders():
     assert 'class: "edge-label"' in viewer_js
     assert 'class: "node-selected-badge"' in viewer_js
     assert "githubUrl" in viewer_js
-    assert "focusNodes(matches)" in viewer_js
+    assert "focusNodes([matches[state.searchIndex]])" in viewer_js
     assert "exportJson" in viewer_js
     assert "togglePanelSwap" in viewer_js
+    assert "zoomAtClientPoint" in viewer_js
+    assert "focusSearchMatch" in viewer_js
+    assert 'id="zoom-in"' in viewer_html
+    assert 'id="search-next"' in viewer_html
     assert ".node.selected .node-selection-halo" in viewer_css
     assert ".node.search-hit .node-body" in viewer_css
+    assert ".node.search-current .node-body" in viewer_css
     assert "panels-swapped" in viewer_css
     assert 'id="github"' in viewer_html
     assert 'id="export-json"' in viewer_html

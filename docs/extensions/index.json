@@ -25,7 +25,7 @@
       "id": "blend_reference_graph",
       "name": "Blend Reference Graph",
       "tagline": "View Blender reference graphs in HTML",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -38,10 +38,10 @@
         "Scene",
         "Pipeline"
       ],
-      "archive_url": "./blend_reference_graph-0.1.4.zip",
-      "archive_size": 25845,
-      "archive_hash": "sha256:eaf2380eea14894083dd2e5eaa15e81823bc21dcad230f152dd5e78bab3d6433",
-      "taiyo_updated_at": 1780991254
+      "archive_url": "./blend_reference_graph-0.1.5.zip",
+      "archive_size": 26869,
+      "archive_hash": "sha256:de0d6d87faa61769463a3cce2d222d82e0e6fad721deab258ef9c1f5289b229e",
+      "taiyo_updated_at": 1781165046
     },
     {
       "schema_version": "1.0.0",
@@ -200,7 +200,7 @@
       "archive_url": "./laid_collection_instance_linker-1.0.2.zip",
       "archive_size": 13154,
       "archive_hash": "sha256:3798d6b39d1604c445dd0a9a221ea21ae5561f7a838e9579c861c0ab9cf0fc7a",
-      "taiyo_updated_at": 1781106063
+      "taiyo_updated_at": 1781106179
     },
     {
       "schema_version": "1.0.0",
@@ -408,7 +408,7 @@
       "archive_url": "./vertex_color_material_painter-1.0.4.zip",
       "archive_size": 13312,
       "archive_hash": "sha256:3d86ddb5c1c6249a8a9bdb57184419d720ef1fc06d99f6071aba8c69c343ed24",
-      "taiyo_updated_at": 1781118260
+      "taiyo_updated_at": 1781119496
     },
     {
       "schema_version": "1.0.0",

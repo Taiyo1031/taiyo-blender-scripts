@@ -72,7 +72,7 @@ class BRG_OT_update_graph_data(Operator):
             generated_at = time.strftime("%Y-%m-%d %H:%M:%S")
             meta = {
                 "addon_name": "Blend Reference Graph",
-                "version": "0.1.4",
+                "version": "0.1.5",
                 "generated_at": generated_at,
                 "blend_file": bpy.path.basename(bpy.data.filepath) if bpy.data.filepath else "Unsaved",
                 "target_id": settings.target_id,

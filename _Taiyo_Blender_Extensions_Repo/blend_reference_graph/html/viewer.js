@@ -7,6 +7,7 @@
   const details = document.getElementById("details");
   const legend = document.getElementById("legend");
   const search = document.getElementById("search");
+  const searchStatus = document.getElementById("search-status");
   const githubUrl = "https://github.com/Taiyo1031/taiyo-blender-scripts/tree/main/_Taiyo_Blender_Extensions_Repo/blend_reference_graph";
   const panelSwapKey = "brg.panels.swapped";
 
@@ -53,6 +54,8 @@
     tx: 0,
     ty: 0,
     query: "",
+    searchMatches: [],
+    searchIndex: -1,
     spaceDown: false,
     boxMode: false,
   };
@@ -123,7 +126,7 @@
       let level = levels.get(node.id);
       if (level === undefined) level = 2;
       if (node.type === "COLLECTION") level = Math.min(level, -1);
-    if (["MESH", "MODIFIER", "GEONODES", "NODEGROUP", "MATERIAL", "IMAGE"].includes(node.type)) {
+      if (["MESH", "MODIFIER", "GEONODES", "NODEGROUP", "MATERIAL", "IMAGE"].includes(node.type)) {
         level = Math.max(level, 1);
       }
       if (["ACTION", "DRIVER", "LIBRARY"].includes(node.type)) {
@@ -399,30 +402,72 @@
     svg.onpointercancel = () => cancelInteraction();
     svg.onwheel = (event) => {
       event.preventDefault();
-      const rect = svg.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      const mouseY = event.clientY - rect.top;
-      const graphX = (mouseX - state.tx) / state.scale;
-      const graphY = (mouseY - state.ty) / state.scale;
-      const factor = event.deltaY > 0 ? 0.9 : 1.1;
-      const nextScale = Math.max(0.2, Math.min(2.5, state.scale * factor));
-      state.tx = mouseX - graphX * nextScale;
-      state.ty = mouseY - graphY * nextScale;
-      state.scale = nextScale;
-      applyTransform();
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        zoomAtClientPoint(event.clientX, event.clientY, Math.exp(-event.deltaY * 0.002));
+      } else {
+        panBy(-event.deltaX, -event.deltaY);
+      }
     };
 
     window.addEventListener("keydown", (event) => {
+      const key = event.key.toLowerCase();
+      if (document.activeElement === search) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          focusSearchMatch(event.shiftKey ? -1 : 1);
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          if (search.value) {
+            search.value = "";
+            state.query = "";
+            applySearch();
+          } else {
+            search.blur();
+          }
+        }
+        return;
+      }
+
       if (event.code === "Space") {
         state.spaceDown = true;
         if (document.activeElement !== search) event.preventDefault();
-      } else if (event.key.toLowerCase() === "b" && document.activeElement !== search) {
+      } else if (key === "/" || (event.metaKey && key === "f")) {
+        event.preventDefault();
+        focusSearchInput();
+      } else if (key === "b" && document.activeElement !== search) {
         state.boxMode = true;
         svg.classList.add("box-selecting");
       } else if (event.key === "Escape") {
         cancelInteraction();
         state.boxMode = false;
         svg.classList.remove("box-selecting");
+      } else if (event.key === "ArrowUp" || key === "k") {
+        event.preventDefault();
+        panBy(0, event.shiftKey ? 180 : 70);
+      } else if (event.key === "ArrowDown" || key === "j") {
+        event.preventDefault();
+        panBy(0, event.shiftKey ? -180 : -70);
+      } else if (event.key === "ArrowLeft" || key === "h") {
+        event.preventDefault();
+        panBy(event.shiftKey ? 180 : 70, 0);
+      } else if (event.key === "ArrowRight" || key === "l") {
+        event.preventDefault();
+        panBy(event.shiftKey ? -180 : -70, 0);
+      } else if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        zoomAtCenter(1.16);
+      } else if (event.key === "-" || event.key === "_") {
+        event.preventDefault();
+        zoomAtCenter(1 / 1.16);
+      } else if (event.key === "0" || key === "f") {
+        event.preventDefault();
+        fitView();
+      } else if (key === "n") {
+        event.preventDefault();
+        focusSearchMatch(1);
+      } else if (key === "p") {
+        event.preventDefault();
+        focusSearchMatch(-1);
       }
     });
     window.addEventListener("keyup", (event) => {
@@ -535,6 +580,9 @@
   function applySearch() {
     const query = state.query.toLowerCase();
     const matches = [];
+    const previousId = state.searchMatches[state.searchIndex]
+      ? state.searchMatches[state.searchIndex].id
+      : "";
     document.querySelectorAll(".node").forEach((el) => {
       const node = nodeById.get(el.dataset.id);
       const text = JSON.stringify(node || {}).toLowerCase();
@@ -551,7 +599,20 @@
         || JSON.stringify(to || {}).toLowerCase().includes(query);
       el.classList.toggle("dim", !visible);
     });
-    if (query && matches.length) focusNodes(matches);
+    state.searchMatches = matches;
+    if (query && matches.length) {
+      state.searchIndex = matches.findIndex((node) => node.id === previousId);
+      if (state.searchIndex < 0) state.searchIndex = 0;
+      selectedIds.clear();
+      selectedIds.add(matches[state.searchIndex].id);
+      focusNodes([matches[state.searchIndex]]);
+      refreshSelection();
+    } else {
+      state.searchIndex = -1;
+      updateDetails();
+    }
+    refreshSearchClasses();
+    updateSearchStatus();
   }
 
   function fitView() {
@@ -588,6 +649,31 @@
     applyTransform();
   }
 
+  function zoomAtClientPoint(clientX, clientY, factor) {
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const mouseX = clientX - rect.left;
+    const mouseY = clientY - rect.top;
+    const graphX = (mouseX - state.tx) / state.scale;
+    const graphY = (mouseY - state.ty) / state.scale;
+    const nextScale = Math.max(0.2, Math.min(2.8, state.scale * factor));
+    state.tx = mouseX - graphX * nextScale;
+    state.ty = mouseY - graphY * nextScale;
+    state.scale = nextScale;
+    applyTransform();
+  }
+
+  function zoomAtCenter(factor) {
+    const rect = svg.getBoundingClientRect();
+    zoomAtClientPoint(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
+  }
+
+  function panBy(dx, dy) {
+    state.tx += dx;
+    state.ty += dy;
+    applyTransform();
+  }
+
   function applyTransform() {
     if (root) root.setAttribute("transform", `translate(${state.tx},${state.ty}) scale(${state.scale})`);
   }
@@ -618,6 +704,40 @@
       '"': "&quot;",
       "'": "&#39;",
     }[char]));
+  }
+
+  function focusSearchInput() {
+    search.focus();
+    search.select();
+  }
+
+  function focusSearchMatch(direction) {
+    if (!state.searchMatches.length) return;
+    state.searchIndex = (state.searchIndex + direction + state.searchMatches.length) % state.searchMatches.length;
+    const node = state.searchMatches[state.searchIndex];
+    selectedIds.clear();
+    selectedIds.add(node.id);
+    focusNodes([node]);
+    refreshSelection();
+    refreshSearchClasses();
+    updateSearchStatus();
+  }
+
+  function refreshSearchClasses() {
+    const current = state.searchMatches[state.searchIndex];
+    document.querySelectorAll(".node").forEach((el) => {
+      el.classList.toggle("search-current", Boolean(current) && el.dataset.id === current.id);
+    });
+  }
+
+  function updateSearchStatus() {
+    if (!state.query) {
+      searchStatus.textContent = "";
+    } else if (!state.searchMatches.length) {
+      searchStatus.textContent = "No matches";
+    } else {
+      searchStatus.textContent = `${state.searchIndex + 1} / ${state.searchMatches.length} matches`;
+    }
   }
 
   function syncPanelSwap() {
@@ -651,8 +771,12 @@
 
   document.getElementById("reload").addEventListener("click", () => window.location.reload());
   document.getElementById("fit").addEventListener("click", fitView);
+  document.getElementById("zoom-in").addEventListener("click", () => zoomAtCenter(1.16));
+  document.getElementById("zoom-out").addEventListener("click", () => zoomAtCenter(1 / 1.16));
   document.getElementById("export-json").addEventListener("click", exportJson);
   document.getElementById("swap-panels").addEventListener("click", togglePanelSwap);
+  document.getElementById("search-next").addEventListener("click", () => focusSearchMatch(1));
+  document.getElementById("search-prev").addEventListener("click", () => focusSearchMatch(-1));
   document.getElementById("github").addEventListener("click", () => {
     window.open(githubUrl, "_blank", "noopener");
   });

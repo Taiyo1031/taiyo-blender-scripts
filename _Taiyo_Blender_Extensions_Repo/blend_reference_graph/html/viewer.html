@@ -13,12 +13,19 @@
     <button id="github" type="button">GitHub</button>
     <button id="export-json" type="button">Export JSON</button>
     <button id="swap-panels" type="button">Swap Bars</button>
+    <button id="zoom-out" type="button">Zoom Out</button>
+    <button id="zoom-in" type="button">Zoom In</button>
     <button id="reload">Reload Data</button>
     <button id="fit">Fit View</button>
   </header>
   <main>
     <aside id="left-panel">
-      <input id="search" type="search" placeholder="Search nodes">
+      <div class="search-row">
+        <input id="search" type="search" placeholder="Search nodes">
+        <button id="search-prev" type="button" aria-label="Previous search result">Prev</button>
+        <button id="search-next" type="button" aria-label="Next search result">Next</button>
+      </div>
+      <div id="search-status" class="search-status"></div>
       <section>
         <h2>Node Types</h2>
         <div id="legend"></div>
@@ -28,8 +35,8 @@
       <svg id="graph" aria-label="Reference graph"></svg>
       <div id="selection-box"></div>
       <div class="graph-bottom-help">
-        <span id="usage-hint">Search focuses matching nodes. Click a node for Details. Edge labels show relationship types.</span>
-        <span id="shortcuts">Shortcuts: drag empty space or B = box select / Shift = add-toggle / middle drag or Space+drag = pan / wheel = zoom / Esc = cancel</span>
+        <span id="usage-hint">Mac trackpad: two-finger scroll pans. Pinch or Cmd-scroll zooms. Search selects and focuses matches.</span>
+        <span id="shortcuts">Keys: / search / Enter next / Shift+Enter previous / arrows or HJKL pan / +/- zoom / 0 or F fit / B box select / Esc cancel</span>
       </div>
     </section>
     <aside id="details">
