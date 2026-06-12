@@ -24,6 +24,7 @@ Edit Mode で選択している面、または Object Mode で選択している
 - Attribute HelperのCopyで、Paint Attribute全体を別のColor Attributeへコピーできます。
 - Attribute HelperのCopyは `BYTE_COLOR` と `FLOAT_COLOR` の相互コピーに対応します。
 - Attribute HelperのRemoveで、選択中の複数Meshから条件に一致するAttributeを一括削除できます。
+- Attribute HelperのRemoveは `Use Remove Helper` をONにしたときだけ、選択Mesh数・一致Attribute数・共有Mesh警告をパネル上でライブ表示します。重いシーンではOFFのまま実行できます。
 - 削除条件は `Same Name`、`Data Type`、`Domain`、`Type + Domain`、`All Removable` の5種類です。
 - 内部Attributeと必須Attributeは削除対象から常に除外されます。
 - Edit ModeとObject Modeで同じ線形RGBA値を書き込み、`BYTE_COLOR`でも同じ色になります。
@@ -88,7 +89,8 @@ Edit ModeではアクティブMeshのAttribute全体をコピーします。Obje
 2. `Attribute Helper > Remove` の `Match Mode` を選びます。
 3. `Filter Source` を `Direct` または `Reference Attribute` にします。
 4. 削除条件を設定して `Remove Matching Attributes` を押します。
-5. 選択Object数、固有Mesh数、削除Attribute数、共有Meshへの影響を確認して削除を確定します。
+5. 必要な場合は `Use Remove Helper` をONにして、選択Object数、固有Mesh数、削除Attribute数、共有Meshへの影響をパネル上で確認します。
+6. `Remove Matching Attributes` の確認画面で内容を確認して削除を確定します。
 
 ### Match Mode
 

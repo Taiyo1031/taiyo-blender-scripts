@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Material Painter",
     "author": "Taiyo",
-    "version": (1, 0, 5),
+    "version": (1, 0, 6),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > VC Painter",
     "description": "Paint selected edit-mode faces with scene-saved material ID colors",
@@ -13,6 +13,7 @@ import json
 import bmesh
 import bpy
 from bpy.props import (
+    BoolProperty,
     CollectionProperty,
     EnumProperty,
     FloatVectorProperty,
@@ -1433,18 +1434,31 @@ class VCMP_PT_panel(Panel):
 
         box.separator()
         box.label(text="Remove", icon='TRASH')
-        remove_preview = _build_remove_preview(context)
-        box.label(
-            text=(
-                f"Selected Meshes: {remove_preview['selected_object_count']} / "
-                f"Unique Meshes: {remove_preview['unique_mesh_count']}"
-            ),
-            icon='MESH_DATA',
-        )
+        box.prop(scene, "vcmp_remove_helper_enabled", text="Use Remove Helper")
+        remove_helper_enabled = scene.vcmp_remove_helper_enabled
+        remove_preview = None
+        target_objects = _remove_target_objects(context)
+
+        if remove_helper_enabled:
+            remove_preview = _build_remove_preview(context)
+            target_objects = remove_preview["objects"]
+            box.label(
+                text=(
+                    f"Selected Meshes: {remove_preview['selected_object_count']} / "
+                    f"Unique Meshes: {remove_preview['unique_mesh_count']}"
+                ),
+                icon='MESH_DATA',
+            )
+        else:
+            box.label(
+                text="Preview is off. Enable helper to show counts and warnings.",
+                icon='INFO',
+            )
+
         box.prop(scene, "vcmp_remove_match_mode", text="Match Mode")
 
         match_mode = scene.vcmp_remove_match_mode
-        active_obj = _active_remove_reference_object(context, remove_preview["objects"])
+        active_obj = _active_remove_reference_object(context, target_objects)
 
         if match_mode != 'ALL_REMOVABLE':
             box.prop(scene, "vcmp_remove_filter_source", text="Filter Source")
@@ -1479,38 +1493,42 @@ class VCMP_PT_panel(Panel):
                 if match_mode in {'DOMAIN', 'TYPE_DOMAIN'}:
                     box.prop(scene, "vcmp_remove_domain", text="Domain")
 
-        if remove_preview["filter_spec"] is not None:
+        if remove_preview is not None and remove_preview["filter_spec"] is not None:
             box.label(
                 text=_remove_filter_description(remove_preview["filter_spec"]),
                 icon='FILTER',
             )
 
         remove_row = box.row()
-        remove_row.enabled = bool(
-            not remove_preview["error"] and remove_preview["attribute_count"] > 0
-        )
+        if remove_preview is None:
+            remove_row.enabled = bool(target_objects)
+        else:
+            remove_row.enabled = bool(
+                not remove_preview["error"] and remove_preview["attribute_count"] > 0
+            )
         remove_row.operator(VCMP_OT_remove_attribute.bl_idname, icon='TRASH')
 
-        if remove_preview["error"]:
-            box.label(text=remove_preview["error"], icon='INFO')
-        else:
-            box.label(
-                text=f"Matched Attributes: {remove_preview['attribute_count']}",
-                icon='GROUP_VCOL',
-            )
-        if remove_preview["non_editable_mesh_count"]:
-            box.label(
-                text=f"編集不可Mesh: {remove_preview['non_editable_mesh_count']}",
-                icon='LOCKED',
-            )
-        if remove_preview["unselected_shared_object_count"]:
-            box.label(
-                text=(
-                    "共有Meshを使う未選択Object "
-                    f"{remove_preview['unselected_shared_object_count']}個にも影響します。"
-                ),
-                icon='LINKED',
-            )
+        if remove_preview is not None:
+            if remove_preview["error"]:
+                box.label(text=remove_preview["error"], icon='INFO')
+            else:
+                box.label(
+                    text=f"Matched Attributes: {remove_preview['attribute_count']}",
+                    icon='GROUP_VCOL',
+                )
+            if remove_preview["non_editable_mesh_count"]:
+                box.label(
+                    text=f"編集不可Mesh: {remove_preview['non_editable_mesh_count']}",
+                    icon='LOCKED',
+                )
+            if remove_preview["unselected_shared_object_count"]:
+                box.label(
+                    text=(
+                        "共有Meshを使う未選択Object "
+                        f"{remove_preview['unselected_shared_object_count']}個にも影響します。"
+                    ),
+                    icon='LINKED',
+                )
 
         layout.separator()
 
@@ -1580,6 +1598,11 @@ def register():
         items=COLOR_TYPE_ITEMS,
         default=DEFAULT_ATTRIBUTE_TYPE,
     )
+    bpy.types.Scene.vcmp_remove_helper_enabled = BoolProperty(
+        name="Use Remove Helper",
+        description="Show live remove counts and shared-mesh warnings in the panel. Disable this for heavy scenes",
+        default=False,
+    )
     bpy.types.Scene.vcmp_remove_match_mode = EnumProperty(
         name="Remove Match Mode",
         description="削除するAttributeの一致条件",
@@ -1623,6 +1646,7 @@ def unregister():
         "vcmp_remove_reference_attribute_name",
         "vcmp_remove_attribute_name",
         "vcmp_remove_filter_source",
+        "vcmp_remove_helper_enabled",
         "vcmp_remove_match_mode",
         "vcmp_remove_target_object",
         "vcmp_copy_target_type",

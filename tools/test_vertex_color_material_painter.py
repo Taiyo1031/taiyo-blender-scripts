@@ -152,6 +152,11 @@ def test_color_list_json_export(addon):
             raise AssertionError("Invalid export path should report an error.")
 
 
+def test_remove_helper_default_disabled(addon):
+    reset_scene()
+    assert bpy.context.scene.vcmp_remove_helper_enabled is False
+
+
 def test_paint_color_consistency(addon):
     for attribute_type in ('BYTE_COLOR', 'FLOAT_COLOR'):
         reset_scene()
@@ -544,6 +549,7 @@ def main():
 
     try:
         test_color_list_json_export(addon)
+        test_remove_helper_default_disabled(addon)
         test_paint_color_consistency(addon)
         test_edit_mode_color_copy_consistency(addon)
         test_automatic_legacy_color_repair(addon)
