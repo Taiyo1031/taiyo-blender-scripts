@@ -99,6 +99,7 @@ def assert_color_close(actual, expected, tolerance=0.005):
 def test_color_list_json_export(addon):
     reset_scene()
     scene = bpy.context.scene
+    assert scene.vcmp_export_json_srgb is False
     first = scene.vcmp_color_items.add()
     first.name = "木材"
     first.color = (0.45, 0.24, 0.09, 0.25)
@@ -136,7 +137,35 @@ def test_color_list_json_export(addon):
         ]
         assert all(len(item["Color"]) == 3 for item in payload)
 
+        scene.vcmp_export_json_srgb = True
+        srgb_filepath = Path(temp_dir) / "colors_srgb.json"
+        assert_finished(
+            bpy.ops.vcmp.export_color_list_json(filepath=str(srgb_filepath))
+        )
+        srgb_payload = json.loads(srgb_filepath.read_text(encoding="utf-8"))
+        first_srgb = Color(first.color[:3]).from_scene_linear_to_srgb()
+        second_srgb = Color(second.color[:3]).from_scene_linear_to_srgb()
+        assert srgb_payload == [
+            {
+                "Name": "木材",
+                "Color": [
+                    float(first_srgb[0]),
+                    float(first_srgb[1]),
+                    float(first_srgb[2]),
+                ],
+            },
+            {
+                "Name": "Glass",
+                "Color": [
+                    float(second_srgb[0]),
+                    float(second_srgb[1]),
+                    float(second_srgb[2]),
+                ],
+            },
+        ]
+
         scene.vcmp_color_items.clear()
+        scene.vcmp_export_json_srgb = False
         empty_filepath = Path(temp_dir) / "empty.json"
         assert_finished(
             bpy.ops.vcmp.export_color_list_json(filepath=str(empty_filepath))

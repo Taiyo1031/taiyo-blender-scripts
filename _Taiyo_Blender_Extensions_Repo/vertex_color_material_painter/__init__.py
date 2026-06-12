@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Material Painter",
     "author": "Taiyo",
-    "version": (1, 0, 6),
+    "version": (1, 0, 7),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > VC Painter",
     "description": "Paint selected edit-mode faces with scene-saved material ID colors",
@@ -778,20 +778,25 @@ def _remove_matching_attributes(context):
     }
 
 
-def _color_list_json_data(color_items):
+def _json_color_channels(color, use_srgb):
+    rgb = Color(color[:3]).from_scene_linear_to_srgb() if use_srgb else color[:3]
+    return [float(channel) for channel in rgb]
+
+
+def _color_list_json_data(color_items, use_srgb=False):
     return [
         {
             "Name": item.name,
-            "Color": [float(channel) for channel in item.color[:3]],
+            "Color": _json_color_channels(item.color, use_srgb),
         }
         for item in color_items
     ]
 
 
-def _write_color_list_json(filepath, color_items):
+def _write_color_list_json(filepath, color_items, use_srgb=False):
     with open(filepath, "w", encoding="utf-8", newline="\n") as handle:
         json.dump(
-            _color_list_json_data(color_items),
+            _color_list_json_data(color_items, use_srgb),
             handle,
             ensure_ascii=False,
             indent=2,
@@ -930,7 +935,7 @@ class VCMP_OT_move_color(Operator):
 class VCMP_OT_export_color_list_json(Operator, ExportHelper):
     bl_idname = "vcmp.export_color_list_json"
     bl_label = "Export JSON"
-    bl_description = "Color ListのNameと線形RGBをJSONファイルへ書き出します"
+    bl_description = "Color ListのNameとRGBをJSONファイルへ書き出します"
 
     filename_ext = ".json"
     filter_glob: StringProperty(default="*.json", options={'HIDDEN'})
@@ -945,6 +950,7 @@ class VCMP_OT_export_color_list_json(Operator, ExportHelper):
             _write_color_list_json(
                 self.filepath,
                 context.scene.vcmp_color_items,
+                context.scene.vcmp_export_json_srgb,
             )
         except (OSError, TypeError, ValueError) as error:
             self.report({'ERROR'}, f"JSONを書き出せませんでした: {error}")
@@ -952,7 +958,10 @@ class VCMP_OT_export_color_list_json(Operator, ExportHelper):
 
         self.report(
             {'INFO'},
-            f"{len(context.scene.vcmp_color_items)}色をJSONへ書き出しました。",
+            (
+                f"{len(context.scene.vcmp_color_items)}色を"
+                f"{'sRGB' if context.scene.vcmp_export_json_srgb else 'Linear RGB'} JSONへ書き出しました。"
+            ),
         )
         return {'FINISHED'}
 
@@ -1401,6 +1410,7 @@ class VCMP_PT_panel(Panel):
         apply_row = box.row()
         apply_row.operator(VCMP_OT_apply_color.bl_idname, icon='BRUSH_DATA')
         apply_row.operator(VCMP_OT_select_by_color.bl_idname, icon='RESTRICT_SELECT_OFF')
+        box.prop(scene, "vcmp_export_json_srgb", text="Export JSON as sRGB")
         box.operator(VCMP_OT_export_color_list_json.bl_idname, icon='EXPORT')
 
         box = layout.box()
@@ -1598,6 +1608,11 @@ def register():
         items=COLOR_TYPE_ITEMS,
         default=DEFAULT_ATTRIBUTE_TYPE,
     )
+    bpy.types.Scene.vcmp_export_json_srgb = BoolProperty(
+        name="Export JSON as sRGB",
+        description="Export Color List RGB values as sRGB instead of the default Linear RGB",
+        default=False,
+    )
     bpy.types.Scene.vcmp_remove_helper_enabled = BoolProperty(
         name="Use Remove Helper",
         description="Show live remove counts and shared-mesh warnings in the panel. Disable this for heavy scenes",
@@ -1651,6 +1666,7 @@ def unregister():
         "vcmp_remove_target_object",
         "vcmp_copy_target_type",
         "vcmp_copy_target_name",
+        "vcmp_export_json_srgb",
         "vcmp_new_color",
         "vcmp_new_color_name",
         "vcmp_active_index",
