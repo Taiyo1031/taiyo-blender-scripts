@@ -48,6 +48,7 @@ packages=(
 )
 
 compatibility_archives=(
+  "blend_reference_graph-0.1.4.zip"
   "collection_linked_mesh_replacer-1.0.0.zip"
   "collection_linked_mesh_replacer-1.0.1.zip"
   "collection_linked_mesh_replacer-1.0.2.zip"
@@ -57,6 +58,8 @@ compatibility_archives=(
   "collection_linked_mesh_replacer-1.0.6.zip"
   "collection_linked_mesh_replacer-1.0.7.zip"
   "collection_linked_mesh_replacer-1.0.8.zip"
+  "laid_collection_instance_linker-1.0.0.zip"
+  "laid_collection_instance_linker-1.0.1.zip"
   "modular_asset_renamer-1.0.0.zip"
   "modular_asset_renamer-1.0.1.zip"
   "modular_asset_renamer-1.0.2.zip"
@@ -67,6 +70,11 @@ compatibility_archives=(
   "modular_asset_renamer-1.0.7.zip"
   "move_selected_to_own_collections-1.3.0.zip"
   "move_selected_to_own_collections-1.4.0.zip"
+  "vertex_color_material_painter-1.0.0.zip"
+  "vertex_color_material_painter-1.0.1.zip"
+  "vertex_color_material_painter-1.0.2.zip"
+  "vertex_color_material_painter-1.0.3.zip"
+  "vertex_color_material_painter-1.0.4.zip"
 )
 
 if [[ ! -x "$BLENDER_BIN" ]]; then

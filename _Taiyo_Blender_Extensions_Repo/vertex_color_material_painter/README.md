@@ -17,6 +17,7 @@ Edit Mode で選択している面、または Object Mode で選択している
 - 作成できる Color Attribute は `BYTE_COLOR` / `CORNER` または `FLOAT_COLOR` / `CORNER` です。
 - 既存Attributeがある場合は、UIの型指定ではなく既存Attributeの型を使います。
 - カラーリストは `.blend` ファイル内の Scene プロパティとして保存されます。
+- `Export JSON`でカラーリストのNameと線形RGBを外部ファイルへ書き出せます。
 - Edit Mode ではアクティブな Mesh の選択面だけを塗ります。
 - Edit Mode では、カラー行ごとの選択ボタンで同じ色の面を再選択できます。
 - Object Mode では選択中の Mesh オブジェクトそれぞれの全フェイスを塗ります。
@@ -50,6 +51,27 @@ Edit Mode で選択している面、または Object Mode で選択している
 2. `VC Painter` パネルで Paint Attribute 名と New Type を確認します。
 3. カラーリストから用途カラーを選びます。
 4. リスト行のブラシボタン、または `Apply Color` を押します。
+
+## カラーリストをJSONへ書き出す
+
+1. `Color List` の `Export JSON` を押します。
+2. 保存先を選びます。初期ファイル名は `vertex_color_material_colors.json` です。
+3. カラーリストの順序を維持したまま、各項目の `Name` と `Color` が保存されます。
+
+`Color` はアルファ値を含まない線形RGBで、各チャンネルを `0.0` から `1.0` の小数として出力します。日本語名はUTF-8のまま保存され、空のカラーリストは `[]` として書き出されます。
+
+```json
+[
+  {
+    "Name": "Wood",
+    "Color": [
+      0.45,
+      0.24,
+      0.09
+    ]
+  }
+]
+```
 
 ## 他のColor Attributeへコピーする
 

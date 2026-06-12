@@ -1,3 +1,4 @@
+import json
 import importlib.util
 import sys
 import tempfile
@@ -93,6 +94,62 @@ def assert_color_close(actual, expected, tolerance=0.005):
         abs(float(actual[index]) - float(expected[index])) <= tolerance
         for index in range(4)
     ), (tuple(actual), tuple(expected))
+
+
+def test_color_list_json_export(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    first = scene.vcmp_color_items.add()
+    first.name = "木材"
+    first.color = (0.45, 0.24, 0.09, 0.25)
+    second = scene.vcmp_color_items.add()
+    second.name = "Glass"
+    second.color = (0.1, 0.2, 0.3, 0.75)
+
+    with tempfile.TemporaryDirectory(prefix="vcmp_json_") as temp_dir:
+        filepath = Path(temp_dir) / "colors.json"
+        assert_finished(
+            bpy.ops.vcmp.export_color_list_json(filepath=str(filepath))
+        )
+        content = filepath.read_text(encoding="utf-8")
+        payload = json.loads(content)
+
+        assert content.endswith("\n")
+        assert "木材" in content
+        assert payload == [
+            {
+                "Name": "木材",
+                "Color": [
+                    float(first.color[0]),
+                    float(first.color[1]),
+                    float(first.color[2]),
+                ],
+            },
+            {
+                "Name": "Glass",
+                "Color": [
+                    float(second.color[0]),
+                    float(second.color[1]),
+                    float(second.color[2]),
+                ],
+            },
+        ]
+        assert all(len(item["Color"]) == 3 for item in payload)
+
+        scene.vcmp_color_items.clear()
+        empty_filepath = Path(temp_dir) / "empty.json"
+        assert_finished(
+            bpy.ops.vcmp.export_color_list_json(filepath=str(empty_filepath))
+        )
+        assert empty_filepath.read_text(encoding="utf-8") == "[]\n"
+
+        invalid_filepath = Path(temp_dir) / "missing" / "colors.json"
+        try:
+            bpy.ops.vcmp.export_color_list_json(filepath=str(invalid_filepath))
+        except RuntimeError as error:
+            assert "JSONを書き出せませんでした" in str(error)
+        else:
+            raise AssertionError("Invalid export path should report an error.")
 
 
 def test_paint_color_consistency(addon):
@@ -486,6 +543,7 @@ def main():
     addon.register()
 
     try:
+        test_color_list_json_export(addon)
         test_paint_color_consistency(addon)
         test_edit_mode_color_copy_consistency(addon)
         test_automatic_legacy_color_repair(addon)
