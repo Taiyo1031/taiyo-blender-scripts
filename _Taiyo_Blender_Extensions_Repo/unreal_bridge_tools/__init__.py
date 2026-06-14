@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Unreal Bridge Tools",
     "author": "Overnight Artelier",
-    "version": (2, 2, 15),
+    "version": (2, 2, 16),
     "blender": (4, 2, 0),
     "location": "3D Viewport > N Panel > Unreal Bridge Tools",
     "description": "Export transforms & collision tags from Blender to CSV for Unreal Engine PCG pipeline.",
@@ -12,7 +12,7 @@ bl_info = {
 
 DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md"
 
-import bpy, os, csv, re, tempfile, datetime
+import bpy, os, csv, re, tempfile, datetime, time
 from bpy.props import (
     StringProperty, PointerProperty, BoolProperty, EnumProperty,
     CollectionProperty, IntProperty
@@ -23,6 +23,10 @@ from math import pi
 # Regex for numeric suffix .001+
 _NUM_SUFFIX_RE = re.compile(r"\.(\d{3,})$")
 _COLL = "-coll"
+EXPORT_TIMER_INTERVAL = 0.02
+EXPORT_SECONDS_PER_TICK = 0.012
+EXPORT_PROGRESS_INTERVAL = 0.08
+_EXPORT_RUNNING = False
 
 # -----------------------------
 # Preferences
@@ -83,17 +87,62 @@ def _contains(name, key, case_sensitive=False):
     return key in name
 
 def name_filters_pass(name: str, items, case_sensitive=False) -> bool:
-    includes = [it for it in items if it.mode == 'include' and it.text]
-    excludes = [it for it in items if it.mode == 'exclude' and it.text]
-    for it in excludes:
-        if _contains(name, it.text, case_sensitive=case_sensitive):
+    return name_filters_pass_values(
+        name,
+        [(it.mode, it.text) for it in items],
+        case_sensitive=case_sensitive,
+    )
+
+def name_filters_pass_values(name: str, items, case_sensitive=False) -> bool:
+    includes = [text for mode, text in items if mode == 'include' and text]
+    excludes = [text for mode, text in items if mode == 'exclude' and text]
+    for text in excludes:
+        if _contains(name, text, case_sensitive=case_sensitive):
             return False
     if includes:
-        for it in includes:
-            if _contains(name, it.text, case_sensitive=case_sensitive):
+        for text in includes:
+            if _contains(name, text, case_sensitive=case_sensitive):
                 return True
         return False
     return True
+
+def _count_collection_objects(coll, recursive=True):
+    seen = set()
+    stack = [coll]
+    while stack:
+        current = stack.pop()
+        for ob in current.objects:
+            if ob.name not in seen:
+                seen.add(ob.name)
+        if recursive:
+            stack.extend(current.children)
+    return len(seen)
+
+def _estimate_object_count(context, scope, collection):
+    if scope == 'all':
+        return len(context.view_layer.objects)
+    if collection is None:
+        return 0
+    if scope == 'direct':
+        return len(collection.objects)
+    return _count_collection_objects(collection, recursive=True)
+
+def _set_status_text(context, text=None):
+    workspace = getattr(context, "workspace", None)
+    if workspace is None:
+        return
+    try:
+        workspace.status_text_set(text)
+    except Exception:
+        pass
+
+def _redraw_view3d(context):
+    screen = getattr(context, "screen", None)
+    if screen is None:
+        return
+    for area in screen.areas:
+        if area.type == "VIEW_3D":
+            area.tag_redraw()
 
 def _enforce_csv_ext(path: str) -> str:
     base, ext = os.path.splitext(path)
@@ -291,85 +340,294 @@ class UBT_OT_ExportCSV(Operator):
     bl_label = "Export CSV"
     bl_options = {'REGISTER'}
 
+    _timer = None
+    _file = None
+    _writer = None
+    _iterator = None
+
     def invoke(self, context, event):
-        prefs = context.preferences.addons[__package__].preferences
-        p = context.scene.ubt_props
-        if not p.export_path:
-            p.export_path = prefs.default_export_path
-        return self.execute(context)
+        if context.window is None:
+            return self._run_blocking(context)
+        return self._start_modal(context)
 
     def execute(self, context):
-        p = context.scene.ubt_props
+        return self._run_blocking(context)
 
-        # Objects to export
+    def modal(self, context, event):
+        if event.type == 'ESC':
+            return self._finish(context, cancelled=True)
+        if event.type != 'TIMER':
+            return {'PASS_THROUGH'}
+
+        try:
+            has_more = self._process_tick(context)
+        except Exception as exc:
+            if self._try_restart_to_temp(context, exc):
+                return {'PASS_THROUGH'}
+            return self._finish(context, error_message=str(exc))
+
+        self._update_progress(context)
+        _redraw_view3d(context)
+        if not has_more:
+            return self._finish(context)
+        return {'PASS_THROUGH'}
+
+    def _start_modal(self, context):
+        result = self._initialize(context)
+        if result is not None:
+            return result
+
+        self._timer = context.window_manager.event_timer_add(
+            EXPORT_TIMER_INTERVAL,
+            window=context.window,
+        )
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def _run_blocking(self, context):
+        result = self._initialize(context)
+        if result is not None:
+            return result
+
+        try:
+            while self._process_tick(context):
+                self._update_progress(context)
+        except Exception as exc:
+            if self._try_restart_to_temp(context, exc):
+                try:
+                    while self._process_tick(context):
+                        self._update_progress(context)
+                except Exception as fallback_exc:
+                    return self._finish(context, error_message=str(fallback_exc))
+            else:
+                return self._finish(context, error_message=str(exc))
+        return self._finish(context)
+
+    def _initialize(self, context):
+        global _EXPORT_RUNNING
+        if _EXPORT_RUNNING:
+            self.report({'WARNING'}, "Export CSV is already running.")
+            return {'CANCELLED'}
+
+        p = context.scene.ubt_props
+        addon_key = __package__ or __name__
+        addon = context.preferences.addons.get(addon_key)
+        prefs = addon.preferences if addon else None
+        if not p.export_path and prefs is not None:
+            p.export_path = prefs.default_export_path
+
         if p.scope == 'all':
-            objs_iter = _iter_all_scene_objects(context)
+            collection = None
         else:
             if p.collection is None:
                 self.report({'ERROR'}, "Select a collection.")
                 return {'CANCELLED'}
-            objs_iter = _iter_collection_objects(p.collection, recursive=(p.scope=='recursive'))
+            collection = p.collection
+
+        self._scope = p.scope
+        self._collection = collection
+        self._select_visible_only = p.select_visible_only
+        self._case_sensitive = p.case_sensitive
+        self._filters = [(it.mode, it.text) for it in p.filters if it.text]
+        self._name_mode = p.name_mode
+        self._total = max(1, _estimate_object_count(context, self._scope, self._collection))
+        self._processed = 0
+        self._exported = 0
+        self._row_id = 1
+        self._last_progress_time = 0.0
+        self._using_temp = False
+        self._original_error = ""
+        self._iterator = self._make_iterator(context)
 
         export_path = bpy.path.abspath(_enforce_csv_ext(p.export_path or "//exports/TransformData.csv"))
         folder = os.path.dirname(export_path)
         try:
             os.makedirs(folder, exist_ok=True)
-        except:
+        except Exception as exc:
             export_path = _safe_temp_csv_path()
-
-        # Collect
-        objs = []
-        for ob in objs_iter:
-            if p.select_visible_only and not ob.visible_get():
-                continue
-            if not name_filters_pass(ob.name, p.filters, p.case_sensitive):
-                continue
-            objs.append(ob)
-
-        # Name mode helpers
-        def resolve_name(ob):
-            name = ob.name
-            if p.name_mode == 'keep_raw':
-                return name
-            elif p.name_mode == 'numeric_suffix':
-                return strip_numeric_suffix(name)
-            elif p.name_mode == 'trim_after_dot':
-                return name.split(".",1)[0] if "." in name else name
-            return name
-
-        # Write CSV
-        def _write(path):
-            with open(path, "w", newline="", encoding="utf-8") as f:
-                w = csv.writer(f)
-                w.writerow(["id","tx","ty","tz","rx","ry","rz","sx","sy","sz","objname","colname"])
-                for i, ob in enumerate(objs, start=1):
-                    m = ob.matrix_world
-                    loc = m.to_translation()
-                    rot = m.to_euler('XYZ')
-                    scl = m.to_scale()
-                    objname = resolve_name(ob)
-                    colname = ob.users_collection[0].name if ob.users_collection else ""
-                    w.writerow([
-                        i,
-                        round(loc.x,6), round(loc.y,6), round(loc.z,6),
-                        round(rot.x*180/pi,6), round(rot.y*180/pi,6), round(rot.z*180/pi,6),
-                        round(scl.x,6), round(scl.y,6), round(scl.z,6),
-                        objname,
-                        colname
-                    ])
+            self._using_temp = True
+            self._original_error = str(exc)
 
         try:
-            _write(export_path)
-            self.report({'INFO'}, f"Exported {len(objs)} objects → {export_path}")
-        except:
+            self._open_export_file(export_path)
+        except Exception as exc:
             fallback = _safe_temp_csv_path()
             try:
-                _write(fallback)
-                self.report({'WARNING'}, f"Export failed. Exported to temp: {fallback}")
-            except Exception as e:
-                self.report({'ERROR'}, f"Failed: {e}")
+                self._using_temp = True
+                self._original_error = str(exc)
+                self._open_export_file(fallback)
+            except Exception as fallback_exc:
+                self._close_export_file()
+                self.report({'ERROR'}, f"Failed: {fallback_exc}")
                 return {'CANCELLED'}
 
+        _EXPORT_RUNNING = True
+        context.window_manager.progress_begin(0, self._total)
+        self._update_progress(context, force=True)
+        return None
+
+    def _make_iterator(self, context):
+        if self._scope == 'all':
+            return _iter_all_scene_objects(context)
+        return _iter_collection_objects(
+            self._collection,
+            recursive=(self._scope == 'recursive'),
+        )
+
+    def _open_export_file(self, path):
+        self._close_export_file()
+        self._export_path = path
+        self._file = open(path, "w", newline="", encoding="utf-8")
+        self._writer = csv.writer(self._file)
+        self._writer.writerow([
+            "id", "tx", "ty", "tz", "rx", "ry", "rz",
+            "sx", "sy", "sz", "objname", "colname",
+        ])
+
+    def _close_export_file(self):
+        file = getattr(self, "_file", None)
+        self._writer = None
+        self._file = None
+        if file is not None:
+            file.close()
+
+    def _process_tick(self, context):
+        started = time.perf_counter()
+        processed_this_tick = 0
+        while True:
+            if not self._process_one(context):
+                return False
+            processed_this_tick += 1
+            if (
+                processed_this_tick > 0
+                and time.perf_counter() - started >= EXPORT_SECONDS_PER_TICK
+            ):
+                return True
+
+    def _process_one(self, context):
+        try:
+            ob = next(self._iterator)
+        except StopIteration:
+            return False
+
+        self._processed += 1
+        if self._select_visible_only:
+            try:
+                if not ob.visible_get():
+                    return True
+            except RuntimeError:
+                return True
+        if not name_filters_pass_values(
+            ob.name,
+            self._filters,
+            case_sensitive=self._case_sensitive,
+        ):
+            return True
+
+        m = ob.matrix_world
+        loc = m.to_translation()
+        rot = m.to_euler('XYZ')
+        scl = m.to_scale()
+        objname = self._resolve_name(ob.name)
+        colname = ob.users_collection[0].name if ob.users_collection else ""
+        self._writer.writerow([
+            self._row_id,
+            round(loc.x, 6), round(loc.y, 6), round(loc.z, 6),
+            round(rot.x * 180 / pi, 6),
+            round(rot.y * 180 / pi, 6),
+            round(rot.z * 180 / pi, 6),
+            round(scl.x, 6), round(scl.y, 6), round(scl.z, 6),
+            objname,
+            colname,
+        ])
+        self._row_id += 1
+        self._exported += 1
+        return True
+
+    def _resolve_name(self, name):
+        if self._name_mode == 'numeric_suffix':
+            return strip_numeric_suffix(name)
+        if self._name_mode == 'trim_after_dot':
+            return name.split(".", 1)[0] if "." in name else name
+        return name
+
+    def _update_progress(self, context, force=False, done=False):
+        now = time.perf_counter()
+        if not force and not done and now - self._last_progress_time < EXPORT_PROGRESS_INTERVAL:
+            return
+        self._last_progress_time = now
+        value = self._total if done else min(self._processed, self._total)
+        context.window_manager.progress_update(value)
+        _set_status_text(
+            context,
+            (
+                f"Unreal Bridge Export: scanned {self._processed} / {self._total}, "
+                f"exported {self._exported}. Press ESC to cancel."
+            ),
+        )
+
+    def _try_restart_to_temp(self, context, exc):
+        if self._using_temp or not isinstance(exc, OSError):
+            return False
+        self._using_temp = True
+        self._original_error = str(exc)
+        self._iterator = self._make_iterator(context)
+        self._processed = 0
+        self._exported = 0
+        self._row_id = 1
+        self._last_progress_time = 0.0
+        try:
+            self._open_export_file(_safe_temp_csv_path())
+        except Exception:
+            return False
+        self._update_progress(context, force=True)
+        return True
+
+    def _finish(self, context, cancelled=False, error_message=""):
+        global _EXPORT_RUNNING
+        if self._timer is not None:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+
+        if not error_message:
+            try:
+                self._close_export_file()
+            except Exception as exc:
+                error_message = str(exc)
+        else:
+            try:
+                self._close_export_file()
+            except Exception:
+                pass
+
+        try:
+            self._update_progress(
+                context,
+                force=True,
+                done=not cancelled and not error_message,
+            )
+            context.window_manager.progress_end()
+        except RuntimeError:
+            pass
+        _set_status_text(context, None)
+        _EXPORT_RUNNING = False
+
+        if error_message:
+            self.report({'ERROR'}, f"Failed: {error_message}")
+            return {'CANCELLED'}
+        if cancelled:
+            self.report(
+                {'WARNING'},
+                f"Canceled after scanning {self._processed} object(s); partial CSV: {self._export_path}",
+            )
+            return {'CANCELLED'}
+        if self._using_temp:
+            self.report(
+                {'WARNING'},
+                f"Exported {self._exported} objects to temp: {self._export_path}",
+            )
+        else:
+            self.report({'INFO'}, f"Exported {self._exported} objects -> {self._export_path}")
         return {'FINISHED'}
 
 # -----------------------------
@@ -419,7 +677,12 @@ class UBT_PT_Main(Panel):
         box.label(text="Name Normalization")
         box.prop(p, "name_mode")
 
-        layout.operator("ubt.export_csv", icon="EXPORT")
+        previous_operator_context = layout.operator_context
+        layout.operator_context = 'INVOKE_DEFAULT'
+        row = layout.row()
+        row.enabled = not _EXPORT_RUNNING
+        row.operator("ubt.export_csv", icon="EXPORT")
+        layout.operator_context = previous_operator_context
 
 # -----------------------------
 # Registration

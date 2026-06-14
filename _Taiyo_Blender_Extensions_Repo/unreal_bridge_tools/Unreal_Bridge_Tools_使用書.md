@@ -22,7 +22,7 @@
 1. Blenderを開く
 2. `Edit > Preferences > Add-ons` を開く
 3. `Install...` を押す
-4. `unreal_bridge_tools-2.2.15.zip` を選択
+4. `unreal_bridge_tools-2.2.16.zip` を選択
 5. Add-on一覧で **Unreal Bridge Tools** を有効化
 6. 3D Viewの右側サイドバーを開く
 7. `Unreal Bridge Tools` タブを開く
@@ -37,6 +37,7 @@
 6. 必要に応じて `Filters`、`Visible Only`、`Name Normalization` を設定する
 7. `Test Write` で保存先に書けるか確認する
 8. `Export CSV` を押す
+9. 書き出し中はBlender下部のステータスバーに進捗が出ます。中断したい場合は `Esc` を押します。
 
 ## 4. Scope & Export
 
@@ -53,6 +54,8 @@
 ### Export CSV
 
 CSVの保存先です。拡張子が `.csv` でない場合は自動的に `.csv` に補正されます。
+
+書き出し処理は大量オブジェクトでも固まりにくいようにtimer tickごとに分割して実行されます。進捗はNパネル内ではなく、Blender下部のステータスバーに表示されます。
 
 ### Test Write
 
@@ -121,4 +124,5 @@ id,tx,ty,tz,rx,ry,rz,sx,sy,sz,objname,colname
 - `Scope` が `All Collections` 以外のときは、必ず `Target Collection` を指定してください。
 - 書き出し先フォルダを作成できない場合、一時フォルダへフォールバックします。
 - `Visible Only` がONの場合、Viewportで非表示のオブジェクトはCSVに出ません。
+- 書き出し中に中断したい場合は `Esc` を押してください。中断時は途中までのCSVが残る場合があります。
 - 大量処理前に `.blend` を保存しておくと、名前変更やタグ付けを戻しやすくなります。
