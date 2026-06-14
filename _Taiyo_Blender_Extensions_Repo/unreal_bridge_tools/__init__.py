@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Unreal Bridge Tools",
     "author": "Overnight Artelier",
-    "version": (2, 2, 16),
+    "version": (2, 2, 17),
     "blender": (4, 2, 0),
     "location": "3D Viewport > N Panel > Unreal Bridge Tools",
     "description": "Export transforms & collision tags from Blender to CSV for Unreal Engine PCG pipeline.",
@@ -26,6 +26,10 @@ _COLL = "-coll"
 EXPORT_TIMER_INTERVAL = 0.02
 EXPORT_SECONDS_PER_TICK = 0.012
 EXPORT_PROGRESS_INTERVAL = 0.08
+EXPORT_INITIAL_ITEMS_PER_TICK = 64
+EXPORT_MIN_ITEMS_PER_TICK = 4
+EXPORT_MAX_ITEMS_PER_TICK = 8192
+EXPORT_RATE_SMOOTHING = 0.3
 _EXPORT_RUNNING = False
 
 # -----------------------------
@@ -143,6 +147,22 @@ def _redraw_view3d(context):
     for area in screen.areas:
         if area.type == "VIEW_3D":
             area.tag_redraw()
+
+def _clamp_int(value, minimum, maximum):
+    return max(minimum, min(maximum, int(value)))
+
+def _format_eta(seconds):
+    if seconds is None:
+        return "--"
+    seconds = max(0, int(round(seconds)))
+    if seconds >= 3600:
+        hours, remainder = divmod(seconds, 3600)
+        minutes = remainder // 60
+        return f"{hours}h {minutes:02d}m"
+    if seconds >= 60:
+        minutes, seconds = divmod(seconds, 60)
+        return f"{minutes}m {seconds:02d}s"
+    return f"{seconds}s"
 
 def _enforce_csv_ext(path: str) -> str:
     base, ext = os.path.splitext(path)
@@ -435,6 +455,10 @@ class UBT_OT_ExportCSV(Operator):
         self._exported = 0
         self._row_id = 1
         self._last_progress_time = 0.0
+        self._started_time = time.perf_counter()
+        self._items_per_tick = EXPORT_INITIAL_ITEMS_PER_TICK
+        self._items_per_second = 0.0
+        self._last_tick_seconds = 0.0
         self._using_temp = False
         self._original_error = ""
         self._iterator = self._make_iterator(context)
@@ -494,15 +518,14 @@ class UBT_OT_ExportCSV(Operator):
     def _process_tick(self, context):
         started = time.perf_counter()
         processed_this_tick = 0
-        while True:
+        max_items = self._items_per_tick
+        while processed_this_tick < max_items:
             if not self._process_one(context):
+                self._adjust_items_per_tick(processed_this_tick, started)
                 return False
             processed_this_tick += 1
-            if (
-                processed_this_tick > 0
-                and time.perf_counter() - started >= EXPORT_SECONDS_PER_TICK
-            ):
-                return True
+        self._adjust_items_per_tick(processed_this_tick, started)
+        return True
 
     def _process_one(self, context):
         try:
@@ -551,18 +574,70 @@ class UBT_OT_ExportCSV(Operator):
             return name.split(".", 1)[0] if "." in name else name
         return name
 
+    def _adjust_items_per_tick(self, processed_this_tick, started):
+        elapsed = max(time.perf_counter() - started, 0.000001)
+        self._last_tick_seconds = elapsed
+        if processed_this_tick <= 0:
+            return
+
+        instant_rate = processed_this_tick / elapsed
+        if self._items_per_second > 0.0:
+            self._items_per_second = (
+                self._items_per_second * (1.0 - EXPORT_RATE_SMOOTHING)
+                + instant_rate * EXPORT_RATE_SMOOTHING
+            )
+        else:
+            self._items_per_second = instant_rate
+
+        proposed = processed_this_tick * EXPORT_SECONDS_PER_TICK / elapsed
+        current = max(1, self._items_per_tick)
+        if elapsed < EXPORT_SECONDS_PER_TICK * 0.55:
+            proposed = max(proposed, current * 1.75)
+        elif elapsed > EXPORT_SECONDS_PER_TICK * 1.25:
+            proposed = min(proposed, current * 0.65)
+
+        if proposed > current:
+            proposed = min(proposed, current * 2.0)
+        else:
+            proposed = max(proposed, current * 0.5)
+
+        self._items_per_tick = _clamp_int(
+            round(proposed),
+            EXPORT_MIN_ITEMS_PER_TICK,
+            EXPORT_MAX_ITEMS_PER_TICK,
+        )
+
+    def _progress_percent(self, done=False):
+        if done:
+            return 100.0
+        return min(100.0, self._processed / max(1, self._total) * 100.0)
+
+    def _eta_seconds(self, done=False):
+        if done or self._processed >= self._total:
+            return 0
+        rate = self._items_per_second
+        if rate <= 0.0 and self._processed:
+            elapsed = max(time.perf_counter() - self._started_time, 0.000001)
+            rate = self._processed / elapsed
+        if rate <= 0.0:
+            return None
+        return max(0, self._total - self._processed) / rate
+
     def _update_progress(self, context, force=False, done=False):
         now = time.perf_counter()
         if not force and not done and now - self._last_progress_time < EXPORT_PROGRESS_INTERVAL:
             return
         self._last_progress_time = now
         value = self._total if done else min(self._processed, self._total)
+        percent = self._progress_percent(done=done)
+        eta = _format_eta(self._eta_seconds(done=done))
         context.window_manager.progress_update(value)
         _set_status_text(
             context,
             (
-                f"Unreal Bridge Export: scanned {self._processed} / {self._total}, "
-                f"exported {self._exported}. Press ESC to cancel."
+                f"Unreal Bridge Export: {percent:.1f}% | ETA {eta} | "
+                f"{self._processed}/{self._total} scanned, {self._exported} exported | "
+                f"{self._items_per_tick}/tick | ESC cancels"
             ),
         )
 
@@ -576,6 +651,10 @@ class UBT_OT_ExportCSV(Operator):
         self._exported = 0
         self._row_id = 1
         self._last_progress_time = 0.0
+        self._started_time = time.perf_counter()
+        self._items_per_tick = EXPORT_INITIAL_ITEMS_PER_TICK
+        self._items_per_second = 0.0
+        self._last_tick_seconds = 0.0
         try:
             self._open_export_file(_safe_temp_csv_path())
         except Exception:
