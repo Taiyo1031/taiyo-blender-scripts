@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Map Link Tools",
     "author": "Generated for production map workflow",
-    "version": (0, 2, 3),
+    "version": (0, 2, 4),
     "blender": (4, 5, 0),
     "location": "View3D > Sidebar > Map Link Tools",
     "description": "Minimal map layout tools for renaming, checking mesh links, and replacing objects.",

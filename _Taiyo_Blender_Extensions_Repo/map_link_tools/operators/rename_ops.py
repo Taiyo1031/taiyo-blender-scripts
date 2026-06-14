@@ -4,6 +4,7 @@ from bpy.types import Operator
 from ..utils.naming import (
     has_blender_numeric_suffix,
     remove_blender_numeric_suffix,
+    remove_suffix_sort_key,
     short_list,
     unique_temporary_name,
 )
@@ -25,33 +26,43 @@ def _report_remove_suffix_result(operator, changed, skipped, renamed_conflicts, 
 
 
 def _rename_exact(obj, name):
-    obj.name = name
+    try:
+        obj.name = name
+    except (AttributeError, RuntimeError, TypeError):
+        return False
     return obj.name == name
 
 
-def _replace_name(name_to_object, existing_names, old_name, new_name, obj):
-    name_to_object.pop(old_name, None)
-    existing_names.discard(old_name)
-    name_to_object[new_name] = obj
-    existing_names.add(new_name)
+def _object_name_state():
+    name_to_object = {obj.name: obj for obj in bpy.data.objects}
+    return name_to_object, set(name_to_object)
 
 
-def _swap_with_unselected_conflict(obj, blocker, target_name, name_to_object, existing_names):
+def _rollback_rename(obj, name):
+    try:
+        obj.name = name
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+    return obj.name == name
+
+
+def _swap_with_unselected_conflict(obj, blocker, target_name, existing_names):
     old_name = obj.name
     blocker_name = blocker.name
     temp_name = unique_temporary_name(existing_names)
 
     if not _rename_exact(obj, temp_name):
         return False
-    _replace_name(name_to_object, existing_names, old_name, temp_name, obj)
 
     if not _rename_exact(blocker, old_name):
+        _rollback_rename(obj, old_name)
         return False
-    _replace_name(name_to_object, existing_names, blocker_name, old_name, blocker)
 
     if not _rename_exact(obj, target_name):
+        _rollback_rename(blocker, blocker_name)
+        _rollback_rename(obj, old_name)
         return False
-    _replace_name(name_to_object, existing_names, temp_name, target_name, obj)
+
     return True
 
 
@@ -63,10 +74,9 @@ class MAPLINK_OT_remove_suffix_selected(Operator):
 
     def execute(self, context):
         settings = context.scene.maplink_settings
-        selected_objects = list(context.selected_objects)
+        selected_objects = sorted(context.selected_objects, key=lambda obj: remove_suffix_sort_key(obj.name))
         selected_pointers = {obj.as_pointer() for obj in selected_objects}
-        name_to_object = {obj.name: obj for obj in bpy.data.objects}
-        existing_names = set(name_to_object)
+        name_to_object, existing_names = _object_name_state()
         changed = 0
         skipped = 0
         skipped_names = []
@@ -89,20 +99,24 @@ class MAPLINK_OT_remove_suffix_selected(Operator):
                     skipped += 1
                     skipped_names.append(f"{old_name} -> {target_name} (unselected conflict)")
                     continue
-                if not _swap_with_unselected_conflict(obj, blocker, target_name, name_to_object, existing_names):
+                if not _swap_with_unselected_conflict(obj, blocker, target_name, existing_names):
+                    name_to_object, existing_names = _object_name_state()
                     skipped += 1
                     skipped_names.append(f"{old_name} -> {target_name} (rename failed)")
                     continue
 
+                name_to_object, existing_names = _object_name_state()
                 renamed_conflicts += 1
                 changed += 1
                 continue
 
-            name_to_object.pop(old_name, None)
-            existing_names.discard(old_name)
-            obj.name = target_name
-            name_to_object[target_name] = obj
-            existing_names.add(target_name)
+            if not _rename_exact(obj, target_name):
+                name_to_object, existing_names = _object_name_state()
+                skipped += 1
+                skipped_names.append(f"{old_name} -> {target_name} (rename failed)")
+                continue
+
+            name_to_object, existing_names = _object_name_state()
             changed += 1
 
         _report_remove_suffix_result(self, changed, skipped, renamed_conflicts, skipped_names)
