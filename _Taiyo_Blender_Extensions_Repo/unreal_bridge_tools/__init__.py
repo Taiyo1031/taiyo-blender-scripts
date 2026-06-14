@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Unreal Bridge Tools",
     "author": "Overnight Artelier",
-    "version": (2, 2, 17),
+    "version": (2, 2, 18),
     "blender": (4, 2, 0),
     "location": "3D Viewport > N Panel > Unreal Bridge Tools",
     "description": "Export transforms & collision tags from Blender to CSV for Unreal Engine PCG pipeline.",
@@ -13,6 +13,7 @@ bl_info = {
 DOCUMENTATION_URL = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md"
 
 import bpy, os, csv, re, tempfile, datetime, time
+from bpy_extras.io_utils import ExportHelper, ImportHelper
 from bpy.props import (
     StringProperty, PointerProperty, BoolProperty, EnumProperty,
     CollectionProperty, IntProperty
@@ -20,17 +21,25 @@ from bpy.props import (
 from bpy.types import Operator, Panel, AddonPreferences, PropertyGroup, UIList
 from math import pi
 
+try:
+    from . import preset_utils
+except ImportError:
+    import preset_utils
+
 # Regex for numeric suffix .001+
 _NUM_SUFFIX_RE = re.compile(r"\.(\d{3,})$")
 _COLL = "-coll"
 EXPORT_TIMER_INTERVAL = 0.02
-EXPORT_SECONDS_PER_TICK = 0.012
-EXPORT_PROGRESS_INTERVAL = 0.08
-EXPORT_INITIAL_ITEMS_PER_TICK = 64
+EXPORT_SECONDS_PER_TICK = 0.024
+EXPORT_PROGRESS_INTERVAL = 0.18
+EXPORT_INITIAL_ITEMS_PER_TICK = 256
 EXPORT_MIN_ITEMS_PER_TICK = 4
-EXPORT_MAX_ITEMS_PER_TICK = 8192
-EXPORT_RATE_SMOOTHING = 0.3
+EXPORT_MAX_ITEMS_PER_TICK = 32768
+EXPORT_RATE_SMOOTHING = 0.45
 _EXPORT_RUNNING = False
+_EMPTY_PRESET_ENUM_ITEMS = [("__NONE__", "No Presets", "No presets are available")]
+_PRESET_ENUM_CACHE = None
+_PRESET_ENUM_RETIRED_ITEMS = []
 
 # -----------------------------
 # Preferences
@@ -98,14 +107,36 @@ def name_filters_pass(name: str, items, case_sensitive=False) -> bool:
     )
 
 def name_filters_pass_values(name: str, items, case_sensitive=False) -> bool:
-    includes = [text for mode, text in items if mode == 'include' and text]
-    excludes = [text for mode, text in items if mode == 'exclude' and text]
+    includes, excludes = compile_name_filters(items, case_sensitive)
+    return compiled_name_filters_pass(
+        name,
+        includes,
+        excludes,
+        case_sensitive=case_sensitive,
+    )
+
+def compile_name_filters(items, case_sensitive=False):
+    includes = []
+    excludes = []
+    for mode, text in items:
+        if not text:
+            continue
+        value = text if case_sensitive else text.lower()
+        if mode == 'include':
+            includes.append(value)
+        elif mode == 'exclude':
+            excludes.append(value)
+    return includes, excludes
+
+def compiled_name_filters_pass(name, includes, excludes, case_sensitive=False):
+    if not case_sensitive:
+        name = name.lower()
     for text in excludes:
-        if _contains(name, text, case_sensitive=case_sensitive):
+        if text in name:
             return False
     if includes:
         for text in includes:
-            if _contains(name, text, case_sensitive=case_sensitive):
+            if text in name:
                 return True
         return False
     return True
@@ -176,6 +207,38 @@ def _safe_temp_csv_path() -> str:
 def strip_numeric_suffix(name: str) -> str:
     return _NUM_SUFFIX_RE.sub("", name)
 
+def preset_enum_items(_self, _context):
+    global _PRESET_ENUM_CACHE
+    try:
+        presets = preset_utils.load_presets()
+    except Exception:
+        presets = []
+    if not presets:
+        return _EMPTY_PRESET_ENUM_ITEMS
+
+    signature = tuple(preset["name"] for preset in presets)
+    if (
+        _PRESET_ENUM_CACHE is not None
+        and _PRESET_ENUM_CACHE["signature"] == signature
+    ):
+        return _PRESET_ENUM_CACHE["items"]
+
+    items = [
+        (preset["name"], preset["name"], f"{len(preset['filters'])} filter(s)")
+        for preset in presets
+    ]
+    if _PRESET_ENUM_CACHE is not None:
+        _PRESET_ENUM_RETIRED_ITEMS.append(_PRESET_ENUM_CACHE["items"])
+    _PRESET_ENUM_CACHE = {
+        "signature": signature,
+        "items": items,
+    }
+    return items
+
+def selected_preset_updated(self, _context):
+    selected = getattr(self, "selected_preset", "")
+    self.preset_name = "" if selected == "__NONE__" else selected
+
 # -----------------------------
 # Name Filters
 # -----------------------------
@@ -197,6 +260,15 @@ class UBT_UL_Filters(UIList):
 # Properties
 # -----------------------------
 class UBT_Props(PropertyGroup):
+    selected_preset: EnumProperty(
+        name="Preset",
+        items=preset_enum_items,
+        update=selected_preset_updated,
+    )
+    preset_name: StringProperty(
+        name="Preset Name",
+        default=""
+    )
     collection: PointerProperty(
         name="Target Collection",
         type=bpy.types.Collection
@@ -264,6 +336,198 @@ class UBT_OT_FilterRemove(Operator):
         if p.filters and 0 <= p.filters_index < len(p.filters):
             p.filters.remove(p.filters_index)
             p.filters_index = max(0, p.filters_index-1)
+        return {'FINISHED'}
+
+# -----------------------------
+# Presets
+# -----------------------------
+def _selected_preset(settings):
+    name = settings.selected_preset
+    if not name or name == "__NONE__":
+        return None
+    return preset_utils.find_preset(preset_utils.load_presets(), name)
+
+def _load_preset_report(operator, context, preset):
+    settings = context.scene.ubt_props
+    missing_collection = preset_utils.load_preset_into_settings(settings, preset)
+    settings.selected_preset = preset["name"]
+    settings.preset_name = preset["name"]
+    if missing_collection:
+        operator.report(
+            {'WARNING'},
+            f"Loaded preset, but collection was not found: {missing_collection}",
+        )
+    else:
+        operator.report({'INFO'}, f"Loaded preset '{preset['name']}'.")
+
+class UBT_OT_LoadPreset(Operator):
+    bl_idname = "ubt.load_preset"
+    bl_label = "Load Preset"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        settings = context.scene.ubt_props
+        try:
+            preset = _selected_preset(settings)
+        except Exception as exc:
+            self.report({'ERROR'}, f"Preset load failed: {exc}")
+            return {'CANCELLED'}
+        if preset is None:
+            self.report({'ERROR'}, "Preset not found.")
+            return {'CANCELLED'}
+        try:
+            _load_preset_report(self, context, preset)
+        except Exception as exc:
+            self.report({'ERROR'}, f"Preset load failed: {exc}")
+            return {'CANCELLED'}
+        return {'FINISHED'}
+
+class UBT_OT_SavePreset(Operator):
+    bl_idname = "ubt.save_preset"
+    bl_label = "Save Preset"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        settings = context.scene.ubt_props
+        name = settings.selected_preset
+        if not name or name == "__NONE__":
+            self.report({'ERROR'}, "Select a preset or use Save As New.")
+            return {'CANCELLED'}
+        try:
+            presets = preset_utils.load_presets()
+            if preset_utils.find_preset(presets, name) is None:
+                self.report({'ERROR'}, "Preset not found. Use Save As New.")
+                return {'CANCELLED'}
+            presets = preset_utils.upsert_preset(
+                presets,
+                preset_utils.settings_to_preset(settings, name),
+            )
+            preset_utils.save_presets(presets)
+        except Exception as exc:
+            self.report({'ERROR'}, f"Preset save failed: {exc}")
+            return {'CANCELLED'}
+        settings.selected_preset = name
+        settings.preset_name = name
+        self.report({'INFO'}, f"Saved preset '{name}'.")
+        return {'FINISHED'}
+
+class UBT_OT_SavePresetAs(Operator):
+    bl_idname = "ubt.save_preset_as"
+    bl_label = "Save As New"
+    bl_options = {'REGISTER'}
+
+    preset_name: StringProperty(name="Preset Name", default="")
+
+    def invoke(self, context, event):
+        settings = context.scene.ubt_props
+        self.preset_name = (
+            settings.preset_name
+            if settings.preset_name
+            else (settings.selected_preset if settings.selected_preset != "__NONE__" else "")
+        )
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, "preset_name")
+
+    def execute(self, context):
+        settings = context.scene.ubt_props
+        name = self.preset_name.strip()
+        if not name:
+            self.report({'ERROR'}, "Preset name is empty.")
+            return {'CANCELLED'}
+        try:
+            presets = preset_utils.load_presets()
+            if preset_utils.find_preset(presets, name) is not None:
+                self.report({'ERROR'}, "A preset with this name already exists. Use Save.")
+                return {'CANCELLED'}
+            presets = preset_utils.upsert_preset(
+                presets,
+                preset_utils.settings_to_preset(settings, name),
+            )
+            preset_utils.save_presets(presets)
+        except Exception as exc:
+            self.report({'ERROR'}, f"Preset save failed: {exc}")
+            return {'CANCELLED'}
+        settings.selected_preset = name
+        settings.preset_name = name
+        self.report({'INFO'}, f"Saved preset '{name}'.")
+        return {'FINISHED'}
+
+class UBT_OT_DeletePreset(Operator):
+    bl_idname = "ubt.delete_preset"
+    bl_label = "Delete Preset"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        settings = context.scene.ubt_props
+        name = settings.selected_preset
+        if not name or name == "__NONE__":
+            self.report({'ERROR'}, "Preset not found.")
+            return {'CANCELLED'}
+        try:
+            presets = preset_utils.load_presets()
+            if preset_utils.find_preset(presets, name) is None:
+                self.report({'ERROR'}, "Preset not found.")
+                return {'CANCELLED'}
+            remaining = preset_utils.delete_preset(presets, name)
+            preset_utils.save_presets(remaining)
+        except Exception as exc:
+            self.report({'ERROR'}, f"Preset delete failed: {exc}")
+            return {'CANCELLED'}
+        settings.selected_preset = remaining[0]["name"] if remaining else "__NONE__"
+        settings.preset_name = "" if not remaining else remaining[0]["name"]
+        self.report({'INFO'}, f"Deleted preset '{name}'.")
+        return {'FINISHED'}
+
+class UBT_OT_ImportPresets(Operator, ImportHelper):
+    bl_idname = "ubt.import_presets"
+    bl_label = "Import Presets"
+    bl_options = {'REGISTER'}
+
+    filename_ext = ".json"
+    filter_glob: StringProperty(default="*.json", options={'HIDDEN'})
+
+    def execute(self, context):
+        try:
+            imported = preset_utils.read_preset_file(self.filepath)
+            merged = preset_utils.merge_presets(
+                preset_utils.load_presets(),
+                imported,
+            )
+            preset_utils.save_presets(merged)
+        except Exception as exc:
+            self.report({'ERROR'}, f"Preset import failed: {exc}")
+            return {'CANCELLED'}
+        if imported:
+            context.scene.ubt_props.selected_preset = imported[0]["name"]
+            context.scene.ubt_props.preset_name = imported[0]["name"]
+        self.report({'INFO'}, f"Imported {len(imported)} preset(s).")
+        return {'FINISHED'}
+
+class UBT_OT_ExportPresets(Operator, ExportHelper):
+    bl_idname = "ubt.export_presets"
+    bl_label = "Export Presets"
+    bl_options = {'REGISTER'}
+
+    filename_ext = ".json"
+    filter_glob: StringProperty(default="*.json", options={'HIDDEN'})
+
+    def invoke(self, context, event):
+        if not self.filepath:
+            self.filepath = "unreal_bridge_tools_presets.json"
+        return super().invoke(context, event)
+
+    def execute(self, context):
+        try:
+            preset_utils.write_preset_file(
+                self.filepath,
+                preset_utils.load_presets(),
+            )
+        except Exception as exc:
+            self.report({'ERROR'}, f"Preset export failed: {exc}")
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"Exported presets to {self.filepath}.")
         return {'FINISHED'}
 
 # -----------------------------
@@ -448,7 +712,10 @@ class UBT_OT_ExportCSV(Operator):
         self._collection = collection
         self._select_visible_only = p.select_visible_only
         self._case_sensitive = p.case_sensitive
-        self._filters = [(it.mode, it.text) for it in p.filters if it.text]
+        self._filter_includes, self._filter_excludes = compile_name_filters(
+            [(it.mode, it.text) for it in p.filters if it.text],
+            self._case_sensitive,
+        )
         self._name_mode = p.name_mode
         self._total = max(1, _estimate_object_count(context, self._scope, self._collection))
         self._processed = 0
@@ -540,9 +807,10 @@ class UBT_OT_ExportCSV(Operator):
                     return True
             except RuntimeError:
                 return True
-        if not name_filters_pass_values(
+        if not compiled_name_filters_pass(
             ob.name,
-            self._filters,
+            self._filter_includes,
+            self._filter_excludes,
             case_sensitive=self._case_sensitive,
         ):
             return True
@@ -591,13 +859,15 @@ class UBT_OT_ExportCSV(Operator):
 
         proposed = processed_this_tick * EXPORT_SECONDS_PER_TICK / elapsed
         current = max(1, self._items_per_tick)
-        if elapsed < EXPORT_SECONDS_PER_TICK * 0.55:
-            proposed = max(proposed, current * 1.75)
-        elif elapsed > EXPORT_SECONDS_PER_TICK * 1.25:
-            proposed = min(proposed, current * 0.65)
+        if elapsed < EXPORT_SECONDS_PER_TICK * 0.50:
+            proposed = max(proposed, current * 2.5)
+        elif elapsed < EXPORT_SECONDS_PER_TICK * 0.85:
+            proposed = max(proposed, current * 1.5)
+        elif elapsed > EXPORT_SECONDS_PER_TICK * 1.35:
+            proposed = min(proposed, current * 0.75)
 
         if proposed > current:
-            proposed = min(proposed, current * 2.0)
+            proposed = min(proposed, current * 3.0)
         else:
             proposed = max(proposed, current * 0.5)
 
@@ -724,6 +994,20 @@ class UBT_PT_Main(Panel):
         p = context.scene.ubt_props
 
         box = layout.box()
+        box.label(text="Presets", icon="PRESET")
+        box.prop(p, "selected_preset")
+        row = box.row(align=True)
+        row.enabled = not _EXPORT_RUNNING
+        row.operator("ubt.load_preset", text="Load", icon="IMPORT")
+        row.operator("ubt.save_preset", text="Save", icon="FILE_TICK")
+        row.operator("ubt.save_preset_as", text="Save As New", icon="ADD")
+        row = box.row(align=True)
+        row.enabled = not _EXPORT_RUNNING
+        row.operator("ubt.delete_preset", text="Delete", icon="TRASH")
+        row.operator("ubt.import_presets", text="Import", icon="IMPORT")
+        row.operator("ubt.export_presets", text="Export", icon="EXPORT")
+
+        box = layout.box()
         box.label(text="Scope & Export")
         row = box.row(align=True)
         row.prop(p, "scope", expand=True)
@@ -773,6 +1057,12 @@ classes = (
     UBT_Props,
     UBT_OT_FilterAdd,
     UBT_OT_FilterRemove,
+    UBT_OT_LoadPreset,
+    UBT_OT_SavePreset,
+    UBT_OT_SavePresetAs,
+    UBT_OT_DeletePreset,
+    UBT_OT_ImportPresets,
+    UBT_OT_ExportPresets,
     UBT_OT_AddColl,
     UBT_OT_RemoveColl,
     UBT_OT_SelectWithColl,

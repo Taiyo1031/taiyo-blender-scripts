@@ -84,4 +84,5 @@ repo/
 - Taiyo Extension Managerのフィルター・並び替え統合テストは `blender --background --python tools/test_taiyo_extension_manager.py` で実行します。
 - Laid Collection Instance Linkerの統合テストは `blender --background --python tools/test_laid_collection_instance_linker.py` で実行します。
 - Vertex Color Material Painterの統合テストは `blender --background --python tools/test_vertex_color_material_painter.py` で実行します。
+- Unreal Bridge Toolsの統合テストは `blender --background --python tools/test_unreal_bridge_tools.py` で実行します。
 - `tools/build_extensions.sh` はRepository index生成後に `tools/add_extension_update_metadata.py` を実行し、各packageの最終Git更新時刻を `taiyo_updated_at` として `docs/extensions/index.json` に追記します。マネージャーの `Recently Updated` はこの値を使います。

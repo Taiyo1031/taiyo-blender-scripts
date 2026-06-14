@@ -8,7 +8,7 @@ Blender上のオブジェクトTransform情報とCollection情報をCSVへ書き
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar (N) > Unreal Bridge Tools`
-- バージョン: `2.2.17`
+- バージョン: `2.2.18`
 - 対応Blender目安: `4.2.0` 以降
 - カテゴリ: `Import-Export`
 
@@ -28,11 +28,12 @@ Blender上のオブジェクトTransform情報とCollection情報をCSVへ書き
 
 ## 主な機能
 - `Scope`: Direct Only / Recursive / All Collections の切り替え
+- `Presets`: Scope、Collection、Export CSV、Filters、Name Normalizationをユーザー設定に保存・復元
 - `Filters`: Include / Exclude テキスト条件で対象名を絞り込み
 - `Collision Tag`: 選択オブジェクトへ `-coll` を追加・削除・選択
 - `Name Normalize`: 生名維持、数値サフィックス除去、ドット以降削除
 - `Test Write`: CSV保存先への書き込み可否を確認
-- `Export CSV`: 大量オブジェクト時も固まりにくいよう、timer tickごとに分割して書き出し。進捗率、残り時間、実測に基づくtick処理数を下部ステータスバーに表示
+- `Export CSV`: 大量オブジェクト時も固まりにくいよう、timer tickごとに分割して書き出し。高速優先の自動batch調整、進捗率、残り時間、実測に基づくtick処理数を下部ステータスバーに表示
 
 ## 出力CSV
 出力列は以下です。
@@ -47,6 +48,7 @@ id, tx, ty, tz, rx, ry, rz, sx, sy, sz, objname, colname
 - `Visible Only` がONの場合、Viewportで見えているオブジェクトだけを書き出します。
 - `Scope` が `All Collections` 以外の場合は `Target Collection` の指定が必要です。
 - 保存先フォルダを作れない場合は、一時フォルダへフォールバックします。
+- プリセットはBlenderのユーザー設定領域に保存され、Extension更新後も維持されます。
 - 書き出し中の進捗率と残り時間はNパネルではなくBlender下部のステータスバーに表示され、`Esc` で中断できます。
 - 大量の書き出し前に `.blend` を保存しておくと安心です。
 

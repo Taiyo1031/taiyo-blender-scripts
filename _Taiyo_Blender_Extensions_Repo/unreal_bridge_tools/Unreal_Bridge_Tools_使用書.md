@@ -22,7 +22,7 @@
 1. Blenderを開く
 2. `Edit > Preferences > Add-ons` を開く
 3. `Install...` を押す
-4. `unreal_bridge_tools-2.2.17.zip` を選択
+4. `unreal_bridge_tools-2.2.18.zip` を選択
 5. Add-on一覧で **Unreal Bridge Tools** を有効化
 6. 3D Viewの右側サイドバーを開く
 7. `Unreal Bridge Tools` タブを開く
@@ -35,11 +35,24 @@
 4. `All Collections` 以外の場合は `Target Collection` を指定する
 5. `Export CSV` に保存先を指定する
 6. 必要に応じて `Filters`、`Visible Only`、`Name Normalization` を設定する
-7. `Test Write` で保存先に書けるか確認する
-8. `Export CSV` を押す
-9. 書き出し中はBlender下部のステータスバーに進捗率と残り時間が出ます。中断したい場合は `Esc` を押します。
+7. 必要なら最上部の `Presets` で設定を保存または読み込む
+8. `Test Write` で保存先に書けるか確認する
+9. `Export CSV` を押す
+10. 書き出し中はBlender下部のステータスバーに進捗率と残り時間が出ます。中断したい場合は `Esc` を押します。
 
 ## 4. Scope & Export
+
+### Presets
+
+Nパネル最上部の `Presets` では、現在のScope、Target Collection名、Export CSV、Filters、Name Normalization、Visible Only、Case Sensitiveをユーザー設定として保存できます。
+
+- `Load`: 選択中プリセットを現在の設定へ読み込みます。
+- `Save`: 選択中プリセットを現在の設定で上書きします。
+- `Save As New`: 新しい名前で保存します。
+- `Delete`: 選択中プリセットを削除します。
+- `Import` / `Export`: プリセットJSONを読み込み・書き出しします。
+
+プリセットはBlenderのユーザー設定領域に保存されるため、Extensionを更新しても維持されます。Target Collectionは名前で保存され、読み込み時に同名Collectionが無い場合は警告し、その他の設定だけ復元します。
 
 ### Scope
 
@@ -55,7 +68,7 @@
 
 CSVの保存先です。拡張子が `.csv` でない場合は自動的に `.csv` に補正されます。
 
-書き出し処理は大量オブジェクトでも固まりにくいようにtimer tickごとに分割して実行されます。進捗率、残り時間、現在のtick処理数はNパネル内ではなく、Blender下部のステータスバーに表示されます。tickごとの処理数は実測時間に応じて自動調整されます。
+書き出し処理は大量オブジェクトでも固まりにくいようにtimer tickごとに分割して実行されます。進捗率、残り時間、現在のtick処理数はNパネル内ではなく、Blender下部のステータスバーに表示されます。tickごとの処理数は高速優先で、実測時間に応じて自動調整されます。
 
 ### Test Write
 
