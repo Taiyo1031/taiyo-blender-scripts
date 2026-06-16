@@ -57,6 +57,8 @@ scale
 viewport
 custom-property
 mesh
+timeline
+animation
 メタデータ
 名前整理
 差し替え

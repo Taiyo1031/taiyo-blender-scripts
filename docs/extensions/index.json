@@ -223,7 +223,7 @@
       "archive_url": "./map_link_tools-0.2.4.zip",
       "archive_size": 15328,
       "archive_hash": "sha256:ba0da866f51c76d270a6f8e19962f01f10ace113e681f3f671e078e790525f5d",
-      "taiyo_updated_at": 1781456355
+      "taiyo_updated_at": 1781456428
     },
     {
       "schema_version": "1.0.0",
@@ -265,6 +265,29 @@
       "archive_size": 5638,
       "archive_hash": "sha256:dbe96f3eec538fb0daf4e307fb5889b10d27131c69431af5358f11de568c2d3c",
       "taiyo_updated_at": 1780996276
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "object_preview_sequencer",
+      "name": "Object Preview Sequencer",
+      "tagline": "Build temporary visibility sequences for selected objects",
+      "version": "1.0.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/object_preview_sequencer/README.md",
+      "tags": [
+        "Object",
+        "Animation",
+        "Scene"
+      ],
+      "archive_url": "./object_preview_sequencer-1.0.0.zip",
+      "archive_size": 4838,
+      "archive_hash": "sha256:1730c615bfe0e5fa8a7e2b5faac852206737da299c5c1663204a6851b41202d4",
+      "taiyo_updated_at": 1781598260
     },
     {
       "schema_version": "1.0.0",
@@ -343,7 +366,7 @@
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
       "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.10",
+      "version": "1.0.11",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -351,10 +374,10 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.10.zip",
-      "archive_size": 12805,
-      "archive_hash": "sha256:dbf4cee074695312e629422850b2c2b62e56845d0d091a708ec51a08cbd5f368",
-      "taiyo_updated_at": 1781104735
+      "archive_url": "./taiyo_extension_manager-1.0.11.zip",
+      "archive_size": 12999,
+      "archive_hash": "sha256:e6244ff916e36661144e861229031218cee65f83579a2ff88ef355ca9d601545",
+      "taiyo_updated_at": 1781598260
     },
     {
       "schema_version": "1.0.0",
@@ -372,7 +395,7 @@
       "archive_url": "./unreal_bridge_tools-2.2.18.zip",
       "archive_size": 15051,
       "archive_hash": "sha256:b0521a8711cf06e002a49f46614b45a5a1dd669c7370c3e7dacb11dedd753a39",
-      "taiyo_updated_at": 1781456063
+      "taiyo_updated_at": 1781456153
     },
     {
       "schema_version": "1.0.0",
@@ -408,7 +431,7 @@
       "archive_url": "./vertex_color_material_painter-1.0.10.zip",
       "archive_size": 18411,
       "archive_hash": "sha256:d46db79d7eece405ae6fa71882dff6b1440db1dcb8f143fd9f71cbf40164077f",
-      "taiyo_updated_at": 1781596555
+      "taiyo_updated_at": 1781596595
     },
     {
       "schema_version": "1.0.0",

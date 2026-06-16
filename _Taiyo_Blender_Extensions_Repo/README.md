@@ -18,6 +18,7 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 - `map_link_tools`: Map Link Tools
 - `modular_asset_renamer`: Modular Asset Renamer
 - `move_selected_to_own_collections`: Move Objects to Own Collections
+- `object_preview_sequencer`: Object Preview Sequencer
 - `overlap_selector`: Overlap Object Selector
 - `proportional_dimensions`: Proportional Dimensions
 - `rb_instance_helper`: RB Instance Helper

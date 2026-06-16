@@ -55,7 +55,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 
 このコマンドは以下を行います。
 
-- `_Taiyo_Blender_Extensions_Repo` 内の22個のパッケージを validate
+- `_Taiyo_Blender_Extensions_Repo` 内の23個のパッケージを validate
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `docs/extensions/index.json` と `docs/extensions/index.html` を生成
 
@@ -76,6 +76,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 | `map_link_tools` | Map Link Tools | リンク配置・共有Mesh・名前整理 |
 | `modular_asset_renamer` | Modular Asset Renamer | モジュール式の命名ルールで一括リネーム |
 | `move_selected_to_own_collections` | Move Objects to Own Collections | 選択を個別コレクションへ整理 |
+| `object_preview_sequencer` | Object Preview Sequencer | 選択オブジェクトをタイムラインで順番プレビュー |
 | `overlap_selector` | Overlap Object Selector | 重なりオブジェクトを検出・選択 |
 | `proportional_dimensions` | Proportional Dimensions | 比率維持で寸法合わせ |
 | `rb_instance_helper` | RB Instance Helper | インスタンス用Rigid Body補助 |

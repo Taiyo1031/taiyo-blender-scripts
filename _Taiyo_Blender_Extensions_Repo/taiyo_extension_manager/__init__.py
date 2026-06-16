@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 10),
+    "version": (1, 0, 11),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -86,6 +86,11 @@ TAG_ALIASES = {
     "move_selected_to_own_collections": (
         "collection", "move", "organize", "selected", "sort", "cleanup",
         "移動", "整理", "選択", "コレクション", "片付け",
+    ),
+    "object_preview_sequencer": (
+        "animation", "hide", "object", "preview", "sequence", "timeline",
+        "visibility", "visible",
+        "アニメーション", "オブジェクト", "キーフレーム", "タイムライン", "プレビュー", "表示", "非表示",
     ),
     "modular_asset_renamer": (
         "asset", "batch", "choice", "dimensions", "index", "module", "name",
@@ -178,6 +183,10 @@ DESCRIPTION_ALIASES = {
     "move_selected_to_own_collections": {
         "ja": "選択オブジェクトを名前に対応した子コレクションへ移動します。",
         "en": "Move selected objects into matching child collections.",
+    },
+    "object_preview_sequencer": {
+        "ja": "選択オブジェクトを1フレームずつ表示する一時プレビューシーケンスを作ります。",
+        "en": "Build a temporary one-frame-per-object visibility preview sequence.",
     },
     "modular_asset_renamer": {
         "ja": "モジュール式の命名ルールで選択ObjectとMesh Dataを一括リネームします。",

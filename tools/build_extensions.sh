@@ -36,6 +36,7 @@ packages=(
   "map_link_tools"
   "modular_asset_renamer"
   "move_selected_to_own_collections"
+  "object_preview_sequencer"
   "overlap_selector"
   "proportional_dimensions"
   "rb_instance_helper"
