@@ -249,8 +249,13 @@ def test_edit_mode_color_copy_consistency(addon):
 
 def test_object_mode_select_painted_faces_scan_is_chunked(addon):
     reset_scene()
+    scene = bpy.context.scene
+    scene.vcmp_color_items.clear()
+    scene.vcmp_attribute_name = "mat_color"
     target_color = (0.45, 0.24, 0.09, 1.0)
     other_color = (0.08, 0.32, 0.7, 1.0)
+    add_color_list_item(scene, "Target", target_color)
+    scene.vcmp_active_index = 0
     obj_a = new_mesh_object("ObjectSelectA", new_three_face_mesh("ObjectSelectMeshA"))
     obj_b = new_mesh_object("ObjectSelectB", new_three_face_mesh("ObjectSelectMeshB"))
 
@@ -286,6 +291,12 @@ def test_object_mode_select_painted_faces_scan_is_chunked(addon):
 
     assert tick_count == 3, scan
     assert scan["selected_face_count"] == 4, scan
+    assert [polygon.select for polygon in obj_a.data.polygons] == [True, False, True]
+    assert [polygon.select for polygon in obj_b.data.polygons] == [True, False, True]
+
+    select_only(obj_a, obj_b, active=obj_a)
+    assert_finished(bpy.ops.vcmp.select_by_color('EXEC_DEFAULT'))
+    assert bpy.context.mode == 'OBJECT'
     assert [polygon.select for polygon in obj_a.data.polygons] == [True, False, True]
     assert [polygon.select for polygon in obj_b.data.polygons] == [True, False, True]
 
@@ -405,6 +416,7 @@ def test_object_mode_select_unknown_color_objects(addon):
         active=known_obj,
     )
     assert_finished(bpy.ops.vcmp.select_unknown_color_objects('EXEC_DEFAULT'))
+    assert bpy.context.mode == 'OBJECT'
     selected_names = {obj.name for obj in bpy.context.selected_objects}
     assert selected_names == {
         "UnknownByteObject",
@@ -454,8 +466,8 @@ def test_edit_mode_select_unknown_color_objects_uses_bmesh(addon):
     )
 
     assert_finished(bpy.ops.vcmp.select_unknown_color_objects('EXEC_DEFAULT'))
-    assert bpy.context.mode == 'OBJECT'
-    assert {obj.name for obj in bpy.context.selected_objects} == {"EditUnknown"}
+    assert bpy.context.mode == 'EDIT_MESH'
+    assert {obj.name for obj in bpy.context.objects_in_mode} == {"EditUnknown"}
 
 
 def test_automatic_legacy_color_repair(addon):

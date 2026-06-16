@@ -21,6 +21,7 @@ Edit Mode で選択している面、または Object Mode で選択している
 - Edit Mode ではアクティブな Mesh の選択面だけを塗ります。
 - Edit Mode / Object Mode では、カラー行ごとの選択ボタンで同じ色の面を再選択できます。
 - Object Modeの `Select Painted Faces` は選択中Meshを対象にし、スキャンをタイマーで分割してUIフリーズを避けます。
+- 選択系ボタンは実行前のModeを維持します。Object Modeから実行した場合はObject Mode、Edit Modeから実行した場合はEdit Modeのままです。
 - `Select Unknown Color Objects` で、Color Listに存在しない色を持つMesh Objectをまとめて選択できます。
 - Object Mode では選択中の Mesh オブジェクトそれぞれの全フェイスを塗ります。
 - Attribute HelperのCopyで、Paint Attribute全体を別のColor Attributeへコピーできます。
@@ -47,7 +48,7 @@ Edit Mode で選択している面、または Object Mode で選択している
 2. `VC Painter` パネルで Paint Attribute 名を確認します。
 3. カラーリスト行の選択ボタン、または `Select Painted Faces` を押します。
 4. そのカラーと一致する面だけが選択されます。
-5. Object Modeから実行した場合は、選択中Meshを複数ティックに分けてスキャンし、完了後にFace SelectのEdit Modeへ入ります。
+5. Object Modeから実行した場合は、選択中Meshを複数ティックに分けてスキャンし、Object Modeのまま選択状態を保持します。
 
 ## Color List外の色を持つObjectを選択する
 
@@ -57,7 +58,7 @@ Edit Mode で選択している面、または Object Mode で選択している
 4. `Select Unknown Color Objects` を押します。
 5. 指定Attribute内にColor Listと一致しないLoop Colorを1つでも持つObjectだけが選択されます。
 
-判定はColor Listの色値で行います。名前やHex文字列は使いません。Color Listが空の場合は、指定Attributeを持つObjectをすべて未知色ありとして選択します。Edit Modeから実行した場合は、結果をObject選択で表示するためObject Modeへ戻ります。
+判定はColor Listの色値で行います。名前やHex文字列は使いません。Color Listが空の場合は、指定Attributeを持つObjectをすべて未知色ありとして選択します。Edit Modeから実行した場合は、未知色を持つObjectだけをEdit Modeで開き直します。
 
 ## Object Mode で複数オブジェクト全体を塗る
 
@@ -125,8 +126,8 @@ Edit ModeではアクティブMeshのAttribute全体をコピーします。Obje
 
 - Object Mode では面選択状態は使わず、選択中 Mesh オブジェクトの全フェイスに塗ります。
 - Vertex / Edge Select でも、Blender 側で `face.select` が立っている面だけを塗ります。
-- 色で面を選択するときは、指定色と面の全ループカラーが一致する面だけを選択します。Object Modeでは選択中Meshをタイマーで分割スキャンし、完了後にEdit Modeへ入ります。
-- Color List外の色でObjectを選択するときは、指定Attribute内のLoop Colorをタイマーで分割スキャンし、未知色を1つでも持つObjectだけをObject Modeで選択します。
+- 色で面を選択するときは、指定色と面の全ループカラーが一致する面だけを選択します。Object Modeでは選択中Meshをタイマーで分割スキャンし、Object Modeのまま結果を保持します。
+- Color List外の色でObjectを選択するときは、指定Attribute内のLoop Colorをタイマーで分割スキャンし、未知色を1つでも持つObjectだけを現在のModeのまま選択します。
 - Attribute HelperのCopyは面選択範囲ではなく、Attribute全体をコピーします。
 - Attribute HelperのRemoveはColor Attribute以外を含むMesh Attributeを条件指定で削除します。
 - `is_internal` または `is_required` のAttributeは、`All Removable`を含むすべての削除条件で保護されます。

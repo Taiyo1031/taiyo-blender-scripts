@@ -82,6 +82,7 @@ compatibility_archives=(
   "vertex_color_material_painter-1.0.6.zip"
   "vertex_color_material_painter-1.0.7.zip"
   "vertex_color_material_painter-1.0.8.zip"
+  "vertex_color_material_painter-1.0.9.zip"
 )
 
 if [[ ! -x "$BLENDER_BIN" ]]; then

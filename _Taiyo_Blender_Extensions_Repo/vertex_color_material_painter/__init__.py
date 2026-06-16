@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Material Painter",
     "author": "Taiyo",
-    "version": (1, 0, 9),
+    "version": (1, 0, 10),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > VC Painter",
     "description": "Paint selected edit-mode faces with scene-saved material ID colors",
@@ -1424,8 +1424,6 @@ class VCMP_OT_select_by_color(Operator):
         if self._scan["targets"]:
             context.view_layer.objects.active = self._scan["targets"][0]["object"]
             context.tool_settings.mesh_select_mode = (False, False, True)
-            if context.mode == 'OBJECT':
-                bpy.ops.object.mode_set(mode='EDIT')
 
         skipped_count = (
             self._scan["skipped_missing"]
@@ -1482,12 +1480,12 @@ class VCMP_OT_select_by_color(Operator):
 
         return {'RUNNING_MODAL'}
 
-    def _execute_object_mode(self, context, item, attribute_name):
+    def _prepare_object_mode_scan(self, context, item, attribute_name):
         objects = _object_mode_mesh_targets(context)
 
         if not objects:
             self.report({'ERROR'}, "選択中のメッシュオブジェクトがありません。")
-            return {'CANCELLED'}
+            return False
 
         scan = _build_object_color_selection_scan(objects, attribute_name)
 
@@ -1505,39 +1503,61 @@ class VCMP_OT_select_by_color(Operator):
                     f" / スキップ: {skipped_count}"
                 ),
             )
-            return {'CANCELLED'}
+            return False
 
         self._scan = scan
         self._color = tuple(item.color)
         self._color_name = item.name
         self._timer = None
         self._progress_started = False
+        return True
 
-        if context.window is None:
-            done = False
-            while not done:
-                done = _scan_object_color_selection_step(
-                    self._scan,
-                    self._color,
-                    OBJECT_SELECT_SCAN_FACES_PER_TICK,
-                )
-            return self._finish_object_mode_scan(context)
+    def _run_object_mode_scan_synchronously(self, context):
+        done = False
+        while not done:
+            done = _scan_object_color_selection_step(
+                self._scan,
+                self._color,
+                OBJECT_SELECT_SCAN_FACES_PER_TICK,
+            )
+        return self._finish_object_mode_scan(context)
 
+    def _start_object_mode_scan_modal(self, context, item):
         self._timer = context.window_manager.event_timer_add(
             OBJECT_SELECT_SCAN_TIMER_INTERVAL,
             window=context.window,
         )
-        context.window_manager.progress_begin(0, max(1, scan["total_face_count"]))
+        context.window_manager.progress_begin(0, max(1, self._scan["total_face_count"]))
         self._progress_started = True
         context.window_manager.modal_handler_add(self)
         self.report(
             {'INFO'},
             (
                 f"'{item.name}' の面選択スキャンを開始しました。"
-                f" Mesh: {len(scan['targets'])}, Faces: {scan['total_face_count']}"
+                f" Mesh: {len(self._scan['targets'])}, Faces: {self._scan['total_face_count']}"
             ),
         )
         return {'RUNNING_MODAL'}
+
+    def invoke(self, context, event):
+        item, error = _get_color_item(context, self.index)
+
+        if error:
+            self.report({'ERROR'}, error)
+            return {'CANCELLED'}
+
+        attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
+
+        if context.mode != 'OBJECT':
+            return self.execute(context)
+
+        if not self._prepare_object_mode_scan(context, item, attribute_name):
+            return {'CANCELLED'}
+
+        if context.window is None:
+            return self._run_object_mode_scan_synchronously(context)
+
+        return self._start_object_mode_scan_modal(context, item)
 
     def execute(self, context):
         item, error = _get_color_item(context, self.index)
@@ -1549,7 +1569,9 @@ class VCMP_OT_select_by_color(Operator):
         attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
 
         if context.mode == 'OBJECT':
-            return self._execute_object_mode(context, item, attribute_name)
+            if not self._prepare_object_mode_scan(context, item, attribute_name):
+                return {'CANCELLED'}
+            return self._run_object_mode_scan_synchronously(context)
 
         obj, error = _active_mesh_edit_object(context)
 
@@ -1597,6 +1619,7 @@ class VCMP_OT_select_unknown_color_objects(Operator):
 
     def _finish_scan(self, context):
         self._cleanup(context)
+        return_to_edit_mode = self._expected_mode == 'EDIT_MESH'
 
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -1614,6 +1637,13 @@ class VCMP_OT_select_unknown_color_objects(Operator):
 
         if selected_objects:
             context.view_layer.objects.active = selected_objects[0]
+        elif return_to_edit_mode and self._scan["objects"]:
+            for obj in self._scan["objects"]:
+                obj.select_set(True)
+            context.view_layer.objects.active = self._scan["objects"][0]
+
+        if return_to_edit_mode and (selected_objects or self._scan["objects"]):
+            bpy.ops.object.mode_set(mode='EDIT')
 
         skipped_count = (
             self._scan["skipped_missing"]

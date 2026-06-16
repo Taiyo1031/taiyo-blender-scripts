@@ -397,7 +397,7 @@
       "id": "vertex_color_material_painter",
       "name": "Vertex Color Material Painter",
       "tagline": "Paint selected edit-mode faces with material ID colors",
-      "version": "1.0.9",
+      "version": "1.0.10",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -405,10 +405,10 @@
       ],
       "blender_version_min": "4.5.9",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/vertex_color_material_painter/README.md",
-      "archive_url": "./vertex_color_material_painter-1.0.9.zip",
-      "archive_size": 18277,
-      "archive_hash": "sha256:9fed9d6bf225a2fd7e0cfa691f26ebe025e5988cacc2ea49d5977401cc1ae287",
-      "taiyo_updated_at": 1781596072
+      "archive_url": "./vertex_color_material_painter-1.0.10.zip",
+      "archive_size": 18411,
+      "archive_hash": "sha256:d46db79d7eece405ae6fa71882dff6b1440db1dcb8f143fd9f71cbf40164077f",
+      "taiyo_updated_at": 1781596555
     },
     {
       "schema_version": "1.0.0",
