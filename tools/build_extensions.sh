@@ -72,6 +72,7 @@ compatibility_archives=(
   "move_selected_to_own_collections-1.3.0.zip"
   "move_selected_to_own_collections-1.4.0.zip"
   "object_preview_sequencer-1.0.0.zip"
+  "object_preview_sequencer-1.0.1.zip"
   "unreal_bridge_tools-2.2.15.zip"
   "unreal_bridge_tools-2.2.16.zip"
   "unreal_bridge_tools-2.2.17.zip"

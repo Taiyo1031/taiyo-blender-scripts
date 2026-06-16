@@ -121,6 +121,9 @@ def test_register_build_restore(addon):
     assert temp_action.name.startswith(addon.TEMP_ACTION_PREFIX)
     assert temp_action.get(addon.TEMP_ACTION_MARKER)
     assert action_fcurve_paths(temp_action) == {"hide_viewport", "hide_render"}
+    assert unregistered.animation_data is None or not unregistered.animation_data.action
+    temp_actions = [action for action in bpy.data.actions if action.name.startswith(addon.TEMP_ACTION_PREFIX)]
+    assert len(temp_actions) == 2, [action.name for action in temp_actions]
 
     assert_visibility(42, first, [second, unregistered])
     assert_visibility(43, second, [first, unregistered])
@@ -211,14 +214,18 @@ def test_restore_after_save_and_reopen(addon):
         reopened_scene = bpy.context.scene
         settings = reopened_scene.opseq_settings
         assert settings.sequence_active
+        assert bpy.data.objects["Unregistered"].hide_viewport
         assert bpy.ops.opseq.restore_sequence() == {"FINISHED"}
 
         reopened_first = bpy.data.objects["First"]
         reopened_second = bpy.data.objects["Second"]
+        reopened_unregistered = bpy.data.objects["Unregistered"]
         assert reopened_first.animation_data.action.name == "Original_Reopen_Action"
         assert reopened_scene.frame_start == 1
         assert reopened_scene.frame_end == 80
         assert reopened_scene.frame_current == 5
+        assert not reopened_unregistered.hide_viewport
+        assert not reopened_unregistered.hide_render
         assert reopened_first.select_get()
         assert reopened_second.select_get()
         assert bpy.context.view_layer.objects.active == reopened_first

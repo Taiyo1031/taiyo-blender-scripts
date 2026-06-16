@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Object Preview Sequencer",
     "author": "Taiyo",
-    "version": (1, 0, 1),
+    "version": (1, 0, 2),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar (N) > Object Preview",
     "description": "Build a temporary one-frame-per-object visibility preview sequence.",
@@ -16,7 +16,7 @@ DOCUMENTATION_URL = (
 TEMP_ACTION_PREFIX = "OPSEQ_TEMP_"
 TEMP_ACTION_MARKER = "object_preview_sequencer_temp"
 RESTORE_STATE_KEY = "object_preview_sequencer_restore_state"
-BUILD_OBJECTS_PER_TICK = 1
+BUILD_OBJECTS_PER_TICK = 50
 
 import json
 import bpy
@@ -387,6 +387,7 @@ def _prepare_build_sequence(context, settings):
         "end_frame": frames[-1],
         "index": 0,
         "built_count": 0,
+        "action_count": 0,
     }
 
 
@@ -412,14 +413,24 @@ def _process_build_state(context, settings, state, object_limit=None):
             item.original_hidden = obj.hide_get()
             item.was_selected = obj.select_get()
 
-            action = _create_temp_visibility_action(
-                obj,
-                state["start_frame"],
-                state["end_frame"],
-                state["target_frames"].get(_object_key(obj)),
-            )
-            item.temp_action_name = action.name
-            obj.hide_set(False)
+            visible_frame = state["target_frames"].get(_object_key(obj))
+            if visible_frame is None:
+                obj.hide_viewport = True
+                obj.hide_render = True
+                try:
+                    obj.hide_set(True)
+                except Exception:
+                    pass
+            else:
+                action = _create_temp_visibility_action(
+                    obj,
+                    state["start_frame"],
+                    state["end_frame"],
+                    visible_frame,
+                )
+                item.temp_action_name = action.name
+                obj.hide_set(False)
+                state["action_count"] += 1
             state["built_count"] += 1
         except Exception:
             continue
@@ -429,8 +440,11 @@ def _process_build_state(context, settings, state, object_limit=None):
 
 def _finish_build_sequence(context, settings, state):
     scene = context.scene
-    if state["built_count"] == 0:
-        _clear_collection(settings.restore_items)
+    if state["built_count"] == 0 or state["action_count"] == 0:
+        if settings.restore_items:
+            restore_sequence(context, settings)
+        else:
+            _clear_collection(settings.restore_items)
         return False
 
     scene.frame_start = state["start_frame"]
