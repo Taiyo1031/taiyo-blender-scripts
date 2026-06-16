@@ -271,7 +271,7 @@
       "id": "object_preview_sequencer",
       "name": "Object Preview Sequencer",
       "tagline": "Build temporary visibility sequences for selected objects",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -284,10 +284,10 @@
         "Animation",
         "Scene"
       ],
-      "archive_url": "./object_preview_sequencer-1.0.0.zip",
-      "archive_size": 4838,
-      "archive_hash": "sha256:1730c615bfe0e5fa8a7e2b5faac852206737da299c5c1663204a6851b41202d4",
-      "taiyo_updated_at": 1781598260
+      "archive_url": "./object_preview_sequencer-1.0.1.zip",
+      "archive_size": 6754,
+      "archive_hash": "sha256:37953a0a01c00a3df771a1220c187edf34a458e378f22609fa2bcec756f7e4c5",
+      "taiyo_updated_at": 1781607062
     },
     {
       "schema_version": "1.0.0",
@@ -377,7 +377,7 @@
       "archive_url": "./taiyo_extension_manager-1.0.11.zip",
       "archive_size": 12999,
       "archive_hash": "sha256:e6244ff916e36661144e861229031218cee65f83579a2ff88ef355ca9d601545",
-      "taiyo_updated_at": 1781598260
+      "taiyo_updated_at": 1781598387
     },
     {
       "schema_version": "1.0.0",

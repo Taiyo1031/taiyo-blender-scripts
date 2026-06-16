@@ -1,4 +1,6 @@
 import importlib.util
+import os
+import tempfile
 from pathlib import Path
 
 import bpy
@@ -67,6 +69,14 @@ def assert_visibility(frame, visible, hidden):
         assert obj.hide_render, f"{obj.name} should be render-hidden on frame {frame}"
 
 
+def assert_all_hidden(frame, objects):
+    bpy.context.scene.frame_set(frame)
+    bpy.context.view_layer.update()
+    for obj in objects:
+        assert obj.hide_viewport, f"{obj.name} should be hidden on frame {frame}"
+        assert obj.hide_render, f"{obj.name} should be render-hidden on frame {frame}"
+
+
 def action_fcurve_paths(action):
     paths = {fcurve.data_path for fcurve in getattr(action, "fcurves", [])}
     for layer in getattr(action, "layers", []):
@@ -114,10 +124,20 @@ def test_register_build_restore(addon):
 
     assert_visibility(42, first, [second, unregistered])
     assert_visibility(43, second, [first, unregistered])
+    assert_all_hidden(44, [first, second, unregistered])
+
+    assert scene.get(addon.RESTORE_STATE_KEY), "Expected restore data to be saved in the .blend scene"
+    addon._clear_collection(settings.restore_items)
+    settings.sequence_active = False
+    settings.sequence_start = 0
+    settings.sequence_end = 0
+    addon._sync_scene_from_persistent_state(scene)
+    assert settings.sequence_active, "Expected saved restore data to re-enable restore mode"
 
     result = bpy.ops.opseq.restore_sequence()
     assert result == {"FINISHED"}, result
     assert not settings.sequence_active
+    assert addon.RESTORE_STATE_KEY not in scene
     assert first.animation_data.action == original_action
     assert second.animation_data is None or second.animation_data.action is None
     assert scene.frame_start == 10
@@ -133,6 +153,80 @@ def test_register_build_restore(addon):
     assert first.select_get()
     assert bpy.context.view_layer.objects.active == second
     assert not [action for action in bpy.data.actions if action.name.startswith(addon.TEMP_ACTION_PREFIX)]
+
+
+def test_start_frame_is_clamped_to_one(addon):
+    first, second, _unregistered = make_fixture()
+    scene = bpy.context.scene
+    scene.frame_start = -20
+    scene.frame_end = 20
+    scene.frame_set(0)
+    original_frame_start = scene.frame_start
+    original_frame_end = scene.frame_end
+    select_only([first, second], active=second)
+
+    result = bpy.ops.opseq.register_selected()
+    assert result == {"FINISHED"}, result
+    result = bpy.ops.opseq.build_sequence()
+    assert result == {"FINISHED"}, result
+
+    settings = scene.opseq_settings
+    assert settings.sequence_active
+    assert scene.frame_start == 1
+    assert scene.frame_end == 2
+    assert_visibility(1, first, [second])
+    assert_visibility(2, second, [first])
+
+    result = bpy.ops.opseq.restore_sequence()
+    assert result == {"FINISHED"}, result
+    assert scene.frame_start == original_frame_start
+    assert scene.frame_end == original_frame_end
+    assert scene.frame_current == 0
+
+
+def test_restore_after_save_and_reopen(addon):
+    first, second, _unregistered = make_fixture()
+    original_action = bpy.data.actions.new("Original_Reopen_Action")
+    first.animation_data_create()
+    first.animation_data.action = original_action
+
+    scene = bpy.context.scene
+    scene.frame_start = 1
+    scene.frame_end = 80
+    scene.frame_set(5)
+    select_only([first, second], active=first)
+
+    assert bpy.ops.opseq.register_selected() == {"FINISHED"}
+    assert bpy.ops.opseq.build_sequence() == {"FINISHED"}
+    assert scene.get(addon.RESTORE_STATE_KEY)
+
+    handle = tempfile.NamedTemporaryFile(suffix=".blend", delete=False)
+    filepath = handle.name
+    handle.close()
+    try:
+        bpy.ops.wm.save_as_mainfile(filepath=filepath)
+        bpy.ops.wm.open_mainfile(filepath=filepath)
+        addon._sync_all_scenes_from_persistent_state()
+
+        reopened_scene = bpy.context.scene
+        settings = reopened_scene.opseq_settings
+        assert settings.sequence_active
+        assert bpy.ops.opseq.restore_sequence() == {"FINISHED"}
+
+        reopened_first = bpy.data.objects["First"]
+        reopened_second = bpy.data.objects["Second"]
+        assert reopened_first.animation_data.action.name == "Original_Reopen_Action"
+        assert reopened_scene.frame_start == 1
+        assert reopened_scene.frame_end == 80
+        assert reopened_scene.frame_current == 5
+        assert reopened_first.select_get()
+        assert reopened_second.select_get()
+        assert bpy.context.view_layer.objects.active == reopened_first
+        assert addon.RESTORE_STATE_KEY not in reopened_scene
+        assert not [action for action in bpy.data.actions if action.name.startswith(addon.TEMP_ACTION_PREFIX)]
+    finally:
+        if os.path.exists(filepath):
+            os.remove(filepath)
 
 
 def test_deleted_registered_object_is_skipped(addon):
@@ -164,6 +258,8 @@ def main():
     addon.register()
     try:
         test_register_build_restore(addon)
+        test_start_frame_is_clamped_to_one(addon)
+        test_restore_after_save_and_reopen(addon)
         test_deleted_registered_object_is_skipped(addon)
     finally:
         if hasattr(bpy.types.Scene, "opseq_settings"):
