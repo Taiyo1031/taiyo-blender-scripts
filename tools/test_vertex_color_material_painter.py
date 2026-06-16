@@ -120,6 +120,13 @@ def paint_polygon(attribute, polygon, color):
         attribute.data[loop_index].color = color
 
 
+def add_color_list_item(scene, name, color):
+    item = scene.vcmp_color_items.add()
+    item.name = name
+    item.color = color
+    return item
+
+
 def test_color_list_hex_csv_export(addon):
     reset_scene()
     scene = bpy.context.scene
@@ -281,6 +288,174 @@ def test_object_mode_select_painted_faces_scan_is_chunked(addon):
     assert scan["selected_face_count"] == 4, scan
     assert [polygon.select for polygon in obj_a.data.polygons] == [True, False, True]
     assert [polygon.select for polygon in obj_b.data.polygons] == [True, False, True]
+
+
+def test_object_mode_select_unknown_color_objects(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    scene.vcmp_color_items.clear()
+    scene.vcmp_attribute_name = "mat_color"
+    known_color = (0.45, 0.24, 0.09, 1.0)
+    second_known_color = (0.08, 0.32, 0.7, 1.0)
+    unknown_color = (0.28, 0.3, 0.33, 1.0)
+    add_color_list_item(scene, "Known", known_color)
+    add_color_list_item(scene, "SecondKnown", second_known_color)
+
+    known_obj = new_mesh_object("KnownObject", new_three_face_mesh("KnownObjectMesh"))
+    known_attr = known_obj.data.color_attributes.new(
+        name="mat_color",
+        type='BYTE_COLOR',
+        domain='CORNER',
+    )
+    for polygon in known_obj.data.polygons:
+        paint_polygon(known_attr, polygon, known_color)
+
+    unknown_byte_obj = new_mesh_object(
+        "UnknownByteObject",
+        new_three_face_mesh("UnknownByteObjectMesh"),
+    )
+    unknown_byte_attr = unknown_byte_obj.data.color_attributes.new(
+        name="mat_color",
+        type='BYTE_COLOR',
+        domain='CORNER',
+    )
+    for polygon in unknown_byte_obj.data.polygons:
+        paint_polygon(
+            unknown_byte_attr,
+            polygon,
+            unknown_color if polygon.index == 1 else known_color,
+        )
+
+    unknown_float_obj = new_mesh_object(
+        "UnknownFloatObject",
+        new_three_face_mesh("UnknownFloatObjectMesh"),
+    )
+    unknown_float_attr = unknown_float_obj.data.color_attributes.new(
+        name="mat_color",
+        type='FLOAT_COLOR',
+        domain='CORNER',
+    )
+    for polygon in unknown_float_obj.data.polygons:
+        paint_polygon(
+            unknown_float_attr,
+            polygon,
+            unknown_color if polygon.index == 2 else second_known_color,
+        )
+
+    shared_mesh = new_three_face_mesh("UnknownSharedMesh")
+    shared_a = new_mesh_object("UnknownSharedA", shared_mesh)
+    shared_b = new_mesh_object("UnknownSharedB", shared_mesh)
+    shared_attr = shared_mesh.color_attributes.new(
+        name="mat_color",
+        type='BYTE_COLOR',
+        domain='CORNER',
+    )
+    for polygon in shared_mesh.polygons:
+        paint_polygon(shared_attr, polygon, unknown_color)
+
+    missing_attr_obj = new_mesh_object("MissingAttributeObject")
+    invalid_attr_obj = new_mesh_object("InvalidAttributeObject")
+    invalid_attr_obj.data.color_attributes.new(
+        name="mat_color",
+        type='BYTE_COLOR',
+        domain='POINT',
+    )
+    empty_obj = new_mesh_object("EmptyObject", bpy.data.meshes.new("EmptyMesh"))
+
+    select_only(
+        known_obj,
+        unknown_byte_obj,
+        unknown_float_obj,
+        shared_a,
+        shared_b,
+        missing_attr_obj,
+        invalid_attr_obj,
+        empty_obj,
+        active=known_obj,
+    )
+    reference_colors = [tuple(item.color) for item in scene.vcmp_color_items]
+    scan = addon._build_unknown_color_object_scan(
+        bpy.context,
+        "mat_color",
+        reference_colors,
+    )
+    assert len(scan["targets"]) == 4, scan
+    assert scan["skipped_duplicate"] == 1, scan
+    assert scan["skipped_missing"] == 1, scan
+    assert scan["skipped_invalid"] == 1, scan
+    assert scan["skipped_empty"] == 1, scan
+
+    done = addon._scan_unknown_color_objects_step(scan, 1)
+    assert done is False
+    while not done:
+        done = addon._scan_unknown_color_objects_step(scan, 1)
+
+    assert scan["unknown_mesh_count"] == 3, scan
+    assert scan["unknown_object_count"] == 4, scan
+
+    select_only(
+        known_obj,
+        unknown_byte_obj,
+        unknown_float_obj,
+        shared_a,
+        shared_b,
+        missing_attr_obj,
+        invalid_attr_obj,
+        empty_obj,
+        active=known_obj,
+    )
+    assert_finished(bpy.ops.vcmp.select_unknown_color_objects('EXEC_DEFAULT'))
+    selected_names = {obj.name for obj in bpy.context.selected_objects}
+    assert selected_names == {
+        "UnknownByteObject",
+        "UnknownFloatObject",
+        "UnknownSharedA",
+        "UnknownSharedB",
+    }, selected_names
+
+    scene.vcmp_color_items.clear()
+    select_only(known_obj, unknown_byte_obj, active=known_obj)
+    assert_finished(bpy.ops.vcmp.select_unknown_color_objects('EXEC_DEFAULT'))
+    assert {obj.name for obj in bpy.context.selected_objects} == {
+        "KnownObject",
+        "UnknownByteObject",
+    }
+
+
+def test_edit_mode_select_unknown_color_objects_uses_bmesh(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    scene.vcmp_color_items.clear()
+    scene.vcmp_attribute_name = "mat_color"
+    known_color = (0.45, 0.24, 0.09, 1.0)
+    unknown_color = (0.28, 0.3, 0.33, 1.0)
+    add_color_list_item(scene, "Known", known_color)
+
+    known_obj = new_mesh_object("EditKnown", new_three_face_mesh("EditKnownMesh"))
+    unknown_obj = new_mesh_object("EditUnknown", new_three_face_mesh("EditUnknownMesh"))
+
+    for obj in (known_obj, unknown_obj):
+        attr = obj.data.color_attributes.new(
+            name="mat_color",
+            type='BYTE_COLOR',
+            domain='CORNER',
+        )
+        for polygon in obj.data.polygons:
+            paint_polygon(attr, polygon, known_color)
+
+    select_only(known_obj, unknown_obj, active=known_obj)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bm = bmesh.from_edit_mesh(unknown_obj.data)
+    bm.faces.ensure_lookup_table()
+    layer = bm.loops.layers.color.get("mat_color")
+    bm.faces[0].loops[0][layer] = addon._scene_linear_to_bmesh_color(
+        unknown_color,
+        'BYTE_COLOR',
+    )
+
+    assert_finished(bpy.ops.vcmp.select_unknown_color_objects('EXEC_DEFAULT'))
+    assert bpy.context.mode == 'OBJECT'
+    assert {obj.name for obj in bpy.context.selected_objects} == {"EditUnknown"}
 
 
 def test_automatic_legacy_color_repair(addon):
@@ -607,6 +782,8 @@ def main():
         test_paint_color_consistency(addon)
         test_edit_mode_color_copy_consistency(addon)
         test_object_mode_select_painted_faces_scan_is_chunked(addon)
+        test_object_mode_select_unknown_color_objects(addon)
+        test_edit_mode_select_unknown_color_objects_uses_bmesh(addon)
         test_automatic_legacy_color_repair(addon)
         test_same_name(addon)
         test_data_type_direct_and_reference(addon)

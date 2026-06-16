@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Material Painter",
     "author": "Taiyo",
-    "version": (1, 0, 8),
+    "version": (1, 0, 9),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > VC Painter",
     "description": "Paint selected edit-mode faces with scene-saved material ID colors",
@@ -134,6 +134,18 @@ def _object_mode_mesh_targets(context):
 
     return [
         obj for obj in selected_objects
+        if obj is not None and obj.type == 'MESH' and obj.data is not None
+    ]
+
+
+def _selected_or_edit_mode_mesh_targets(context):
+    if context.mode == 'EDIT_MESH':
+        candidates = getattr(context, "objects_in_mode", ())
+    else:
+        candidates = context.selected_objects
+
+    return [
+        obj for obj in candidates
         if obj is not None and obj.type == 'MESH' and obj.data is not None
     ]
 
@@ -441,6 +453,223 @@ def _scan_object_color_selection_step(scan, color, face_limit):
         if target["polygon_index"] >= len(polygons):
             mesh.update()
             scan["finished_mesh_count"] += 1
+
+        if remaining <= 0:
+            break
+
+    return scan["finished_mesh_count"] >= len(scan["targets"])
+
+
+def _color_matches_reference_list(color, reference_colors, attribute_type):
+    return any(
+        _colors_match(color, reference_color, attribute_type)
+        for reference_color in reference_colors
+    )
+
+
+def _unknown_scan_color_count(target):
+    if target["source"] == 'BMESH':
+        return sum(len(face.loops) for face in target["bm"].faces)
+
+    return len(target["attribute"].data)
+
+
+def _build_unknown_color_object_scan(context, attribute_name, reference_colors):
+    objects = _selected_or_edit_mode_mesh_targets(context)
+    targets = []
+    seen_meshes = set()
+    target_by_mesh_pointer = {}
+    skipped_missing = 0
+    skipped_invalid = 0
+    skipped_non_editable = 0
+    skipped_duplicate = 0
+    skipped_empty = 0
+    use_bmesh = context.mode == 'EDIT_MESH'
+
+    for obj in objects:
+        mesh = obj.data
+        mesh_pointer = mesh.as_pointer()
+
+        if mesh_pointer in target_by_mesh_pointer:
+            target_by_mesh_pointer[mesh_pointer]["objects"].append(obj)
+            skipped_duplicate += 1
+            continue
+
+        if mesh_pointer in seen_meshes:
+            skipped_duplicate += 1
+            continue
+
+        seen_meshes.add(mesh_pointer)
+
+        if not getattr(mesh, "is_editable", True):
+            skipped_non_editable += 1
+            continue
+
+        if not mesh.polygons:
+            skipped_empty += 1
+            continue
+
+        attribute = mesh.color_attributes.get(attribute_name)
+
+        if attribute is None:
+            skipped_missing += 1
+            continue
+
+        try:
+            _validate_color_attribute(attribute, attribute_name)
+        except ValueError:
+            skipped_invalid += 1
+            continue
+
+        target = {
+            "object": obj,
+            "objects": [obj],
+            "mesh": mesh,
+            "attribute": attribute,
+            "attribute_type": attribute.data_type,
+            "source": 'BMESH' if use_bmesh else 'MESH',
+            "unknown_found": False,
+            "finished": False,
+            "processed_color_count": 0,
+        }
+
+        if use_bmesh:
+            bm = bmesh.from_edit_mesh(mesh)
+            bm.faces.ensure_lookup_table()
+            color_layer, attribute_type = _get_bmesh_color_layer(mesh, bm, attribute_name)
+            target.update(
+                {
+                    "bm": bm,
+                    "color_layer": color_layer,
+                    "attribute_type": attribute_type,
+                    "face_index": 0,
+                    "loop_index": 0,
+                }
+            )
+        else:
+            target["color_index"] = 0
+
+        target["color_count"] = _unknown_scan_color_count(target)
+        targets.append(target)
+        target_by_mesh_pointer[mesh_pointer] = target
+
+    return {
+        "objects": objects,
+        "targets": targets,
+        "reference_colors": reference_colors,
+        "skipped_missing": skipped_missing,
+        "skipped_invalid": skipped_invalid,
+        "skipped_non_editable": skipped_non_editable,
+        "skipped_duplicate": skipped_duplicate,
+        "skipped_empty": skipped_empty,
+        "total_color_count": sum(target["color_count"] for target in targets),
+        "processed_color_count": 0,
+        "finished_mesh_count": 0,
+        "unknown_mesh_count": 0,
+        "unknown_object_count": 0,
+    }
+
+
+def _finish_unknown_color_target(scan, target):
+    if target["finished"]:
+        return
+
+    target["finished"] = True
+    scan["finished_mesh_count"] += 1
+
+    if target["unknown_found"]:
+        scan["unknown_mesh_count"] += 1
+        scan["unknown_object_count"] += len(target["objects"])
+
+
+def _scan_unknown_mesh_data_target(scan, target, remaining):
+    data = target["attribute"].data
+
+    while target["color_index"] < len(data) and remaining > 0:
+        color = tuple(data[target["color_index"]].color)
+
+        if not _color_matches_reference_list(
+            color,
+            scan["reference_colors"],
+            target["attribute_type"],
+        ):
+            target["unknown_found"] = True
+            target["processed_color_count"] += 1
+            scan["processed_color_count"] += 1
+            target["color_index"] = len(data)
+            _finish_unknown_color_target(scan, target)
+            return remaining - 1
+
+        target["color_index"] += 1
+        target["processed_color_count"] += 1
+        scan["processed_color_count"] += 1
+        remaining -= 1
+
+    if target["color_index"] >= len(data):
+        _finish_unknown_color_target(scan, target)
+
+    return remaining
+
+
+def _scan_unknown_bmesh_target(scan, target, remaining):
+    bm = target["bm"]
+    faces = bm.faces
+
+    while target["face_index"] < len(faces) and remaining > 0:
+        face = faces[target["face_index"]]
+
+        if target["loop_index"] >= len(face.loops):
+            target["face_index"] += 1
+            target["loop_index"] = 0
+            continue
+
+        loop = face.loops[target["loop_index"]]
+        color = _bmesh_color_to_scene_linear(
+            loop[target["color_layer"]],
+            target["attribute_type"],
+        )
+
+        if not _color_matches_reference_list(
+            color,
+            scan["reference_colors"],
+            target["attribute_type"],
+        ):
+            target["unknown_found"] = True
+            target["processed_color_count"] += 1
+            scan["processed_color_count"] += 1
+            target["face_index"] = len(faces)
+            _finish_unknown_color_target(scan, target)
+            return remaining - 1
+
+        target["loop_index"] += 1
+        target["processed_color_count"] += 1
+        scan["processed_color_count"] += 1
+        remaining -= 1
+
+    if target["face_index"] >= len(faces):
+        _finish_unknown_color_target(scan, target)
+
+    return remaining
+
+
+def _scan_unknown_color_objects_step(scan, color_limit):
+    remaining = max(1, int(color_limit))
+
+    for target in scan["targets"]:
+        if target["finished"]:
+            continue
+
+        if not scan["reference_colors"]:
+            target["unknown_found"] = True
+            scan["processed_color_count"] += target["color_count"] - target["processed_color_count"]
+            target["processed_color_count"] = target["color_count"]
+            _finish_unknown_color_target(scan, target)
+            continue
+
+        if target["source"] == 'BMESH':
+            remaining = _scan_unknown_bmesh_target(scan, target, remaining)
+        else:
+            remaining = _scan_unknown_mesh_data_target(scan, target, remaining)
 
         if remaining <= 0:
             break
@@ -1352,6 +1581,175 @@ class VCMP_OT_select_by_color(Operator):
         return {'FINISHED'}
 
 
+class VCMP_OT_select_unknown_color_objects(Operator):
+    bl_idname = "vcmp.select_unknown_color_objects"
+    bl_label = "Select Unknown Color Objects"
+    bl_description = "Color Listに存在しない色を持つMesh Objectをまとめて選択します"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def _cleanup(self, context):
+        if getattr(self, "_timer", None) is not None:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+        if getattr(self, "_progress_started", False):
+            context.window_manager.progress_end()
+            self._progress_started = False
+
+    def _finish_scan(self, context):
+        self._cleanup(context)
+
+        if context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        for obj in context.view_layer.objects:
+            obj.select_set(False)
+
+        selected_objects = []
+        for target in self._scan["targets"]:
+            if not target["unknown_found"]:
+                continue
+            for obj in target["objects"]:
+                obj.select_set(True)
+                selected_objects.append(obj)
+
+        if selected_objects:
+            context.view_layer.objects.active = selected_objects[0]
+
+        skipped_count = (
+            self._scan["skipped_missing"]
+            + self._scan["skipped_invalid"]
+            + self._scan["skipped_non_editable"]
+            + self._scan["skipped_empty"]
+        )
+        report_type = {'WARNING'} if not selected_objects else {'INFO'}
+        self.report(
+            report_type,
+            (
+                f"未知色Object: {len(selected_objects)} / "
+                f"判定Mesh: {len(self._scan['targets'])} / "
+                f"スキップ: {skipped_count} / "
+                f"共有Mesh重複: {self._scan['skipped_duplicate']}"
+            ),
+        )
+        return {'FINISHED'}
+
+    def modal(self, context, event):
+        if event.type == 'ESC':
+            self._cleanup(context)
+            self.report({'WARNING'}, "Select Unknown Color Objectsをキャンセルしました。")
+            return {'CANCELLED'}
+
+        if event.type != 'TIMER':
+            return {'PASS_THROUGH'}
+
+        if context.mode != self._expected_mode:
+            self._cleanup(context)
+            self.report({'ERROR'}, "実行中にModeが変わったため中止しました。")
+            return {'CANCELLED'}
+
+        done = _scan_unknown_color_objects_step(
+            self._scan,
+            OBJECT_SELECT_SCAN_FACES_PER_TICK,
+        )
+
+        if self._scan["total_color_count"]:
+            context.window_manager.progress_update(self._scan["processed_color_count"])
+
+        if done:
+            return self._finish_scan(context)
+
+        return {'RUNNING_MODAL'}
+
+    def _prepare_scan(self, context):
+        if context.mode not in {'OBJECT', 'EDIT_MESH'}:
+            self.report({'ERROR'}, "Object ModeまたはEdit Modeで実行してください。")
+            return None
+
+        attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
+        reference_colors = [
+            tuple(item.color)
+            for item in context.scene.vcmp_color_items
+        ]
+        scan = _build_unknown_color_object_scan(
+            context,
+            attribute_name,
+            reference_colors,
+        )
+
+        if not scan["objects"]:
+            self.report({'ERROR'}, "選択中またはEdit Mode中のMesh Objectがありません。")
+            return None
+
+        if not scan["targets"]:
+            skipped_count = (
+                scan["skipped_missing"]
+                + scan["skipped_invalid"]
+                + scan["skipped_non_editable"]
+                + scan["skipped_empty"]
+            )
+            self.report(
+                {'ERROR'},
+                (
+                    f"判定できるColor Attributeがありません: {attribute_name}"
+                    f" / スキップ: {skipped_count}"
+                ),
+            )
+            return None
+
+        return scan
+
+    def _set_scan_state(self, context, scan):
+        self._scan = scan
+        self._expected_mode = context.mode
+        self._timer = None
+        self._progress_started = False
+
+    def _run_scan_synchronously(self, context):
+        done = False
+        while not done:
+            done = _scan_unknown_color_objects_step(
+                self._scan,
+                OBJECT_SELECT_SCAN_FACES_PER_TICK,
+            )
+        return self._finish_scan(context)
+
+    def invoke(self, context, event):
+        scan = self._prepare_scan(context)
+
+        if scan is None:
+            return {'CANCELLED'}
+
+        self._set_scan_state(context, scan)
+
+        if context.window is None:
+            return self._run_scan_synchronously(context)
+
+        self._timer = context.window_manager.event_timer_add(
+            OBJECT_SELECT_SCAN_TIMER_INTERVAL,
+            window=context.window,
+        )
+        context.window_manager.progress_begin(0, max(1, scan["total_color_count"]))
+        self._progress_started = True
+        context.window_manager.modal_handler_add(self)
+        self.report(
+            {'INFO'},
+            (
+                f"未知色Objectスキャンを開始しました。"
+                f" Mesh: {len(scan['targets'])}, Colors: {scan['total_color_count']}"
+            ),
+        )
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        scan = self._prepare_scan(context)
+
+        if scan is None:
+            return {'CANCELLED'}
+
+        self._set_scan_state(context, scan)
+        return self._run_scan_synchronously(context)
+
+
 class VCMP_OT_copy_attribute(Operator):
     bl_idname = "vcmp.copy_attribute"
     bl_label = "Copy Attribute"
@@ -1669,6 +2067,7 @@ class VCMP_PT_panel(Panel):
         apply_row = box.row()
         apply_row.operator(VCMP_OT_apply_color.bl_idname, icon='BRUSH_DATA')
         apply_row.operator(VCMP_OT_select_by_color.bl_idname, icon='RESTRICT_SELECT_OFF')
+        box.operator(VCMP_OT_select_unknown_color_objects.bl_idname, icon='OBJECT_DATA')
         box.operator(VCMP_OT_export_color_list_csv.bl_idname, icon='EXPORT')
 
         box = layout.box()
@@ -1818,6 +2217,7 @@ classes = (
     VCMP_OT_export_color_list_csv,
     VCMP_OT_apply_color,
     VCMP_OT_select_by_color,
+    VCMP_OT_select_unknown_color_objects,
     VCMP_OT_copy_attribute,
     VCMP_OT_remove_attribute,
     VCMP_OT_repair_legacy_edit_colors,
