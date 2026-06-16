@@ -1,4 +1,3 @@
-import json
 import importlib.util
 import sys
 import tempfile
@@ -44,6 +43,26 @@ def new_mesh(name):
         [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)],
         [],
         [(0, 1, 2)],
+    )
+    return mesh
+
+
+def new_three_face_mesh(name):
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(
+        [
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (1.0, 1.0, 0.0),
+            (2.0, 1.0, 0.0),
+        ],
+        [],
+        [
+            (0, 1, 2),
+            (1, 3, 2),
+            (1, 4, 3),
+        ],
     )
     return mesh
 
@@ -96,87 +115,50 @@ def assert_color_close(actual, expected, tolerance=0.005):
     ), (tuple(actual), tuple(expected))
 
 
-def test_color_list_json_export(addon):
+def paint_polygon(attribute, polygon, color):
+    for loop_index in polygon.loop_indices:
+        attribute.data[loop_index].color = color
+
+
+def test_color_list_hex_csv_export(addon):
     reset_scene()
     scene = bpy.context.scene
-    assert scene.vcmp_export_json_srgb is False
     first = scene.vcmp_color_items.add()
-    first.name = "木材"
+    first.name = "Wood"
     first.color = (0.45, 0.24, 0.09, 0.25)
     second = scene.vcmp_color_items.add()
     second.name = "Glass"
     second.color = (0.1, 0.2, 0.3, 0.75)
 
-    with tempfile.TemporaryDirectory(prefix="vcmp_json_") as temp_dir:
-        filepath = Path(temp_dir) / "colors.json"
+    with tempfile.TemporaryDirectory(prefix="vcmp_csv_") as temp_dir:
+        filepath = Path(temp_dir) / "colors.csv"
         assert_finished(
-            bpy.ops.vcmp.export_color_list_json(filepath=str(filepath))
+            bpy.ops.vcmp.export_color_list_csv(filepath=str(filepath))
         )
-        content = filepath.read_text(encoding="utf-8")
-        payload = json.loads(content)
+        content = filepath.read_text(encoding="utf-8-sig")
+        first_hex = addon._color_to_srgb_hex(first.color)
+        second_hex = addon._color_to_srgb_hex(second.color)
 
-        assert content.endswith("\n")
-        assert "木材" in content
-        assert payload == [
-            {
-                "Name": "木材",
-                "Color": [
-                    float(first.color[0]),
-                    float(first.color[1]),
-                    float(first.color[2]),
-                ],
-            },
-            {
-                "Name": "Glass",
-                "Color": [
-                    float(second.color[0]),
-                    float(second.color[1]),
-                    float(second.color[2]),
-                ],
-            },
-        ]
-        assert all(len(item["Color"]) == 3 for item in payload)
-
-        scene.vcmp_export_json_srgb = True
-        srgb_filepath = Path(temp_dir) / "colors_srgb.json"
-        assert_finished(
-            bpy.ops.vcmp.export_color_list_json(filepath=str(srgb_filepath))
+        assert content == (
+            "Name,HexCode\n"
+            f"Wood,{first_hex}\n"
+            f"Glass,{second_hex}\n"
         )
-        srgb_payload = json.loads(srgb_filepath.read_text(encoding="utf-8"))
-        first_srgb = Color(first.color[:3]).from_scene_linear_to_srgb()
-        second_srgb = Color(second.color[:3]).from_scene_linear_to_srgb()
-        assert srgb_payload == [
-            {
-                "Name": "木材",
-                "Color": [
-                    float(first_srgb[0]),
-                    float(first_srgb[1]),
-                    float(first_srgb[2]),
-                ],
-            },
-            {
-                "Name": "Glass",
-                "Color": [
-                    float(second_srgb[0]),
-                    float(second_srgb[1]),
-                    float(second_srgb[2]),
-                ],
-            },
-        ]
+        assert first_hex.startswith("#") and len(first_hex) == 7
+        assert second_hex.startswith("#") and len(second_hex) == 7
 
         scene.vcmp_color_items.clear()
-        scene.vcmp_export_json_srgb = False
-        empty_filepath = Path(temp_dir) / "empty.json"
+        empty_filepath = Path(temp_dir) / "empty.csv"
         assert_finished(
-            bpy.ops.vcmp.export_color_list_json(filepath=str(empty_filepath))
+            bpy.ops.vcmp.export_color_list_csv(filepath=str(empty_filepath))
         )
-        assert empty_filepath.read_text(encoding="utf-8") == "[]\n"
+        assert empty_filepath.read_text(encoding="utf-8-sig") == "Name,HexCode\n"
 
-        invalid_filepath = Path(temp_dir) / "missing" / "colors.json"
+        invalid_filepath = Path(temp_dir) / "missing" / "colors.csv"
         try:
-            bpy.ops.vcmp.export_color_list_json(filepath=str(invalid_filepath))
+            bpy.ops.vcmp.export_color_list_csv(filepath=str(invalid_filepath))
         except RuntimeError as error:
-            assert "JSONを書き出せませんでした" in str(error)
+            assert "CSV" in str(error)
         else:
             raise AssertionError("Invalid export path should report an error.")
 
@@ -256,6 +238,49 @@ def test_edit_mode_color_copy_consistency(addon):
     target_color = obj.data.color_attributes["float_target"].data[0].color
     assert_color_close(target_color, source_color)
     assert_color_close(target_color, color)
+
+
+def test_object_mode_select_painted_faces_scan_is_chunked(addon):
+    reset_scene()
+    target_color = (0.45, 0.24, 0.09, 1.0)
+    other_color = (0.08, 0.32, 0.7, 1.0)
+    obj_a = new_mesh_object("ObjectSelectA", new_three_face_mesh("ObjectSelectMeshA"))
+    obj_b = new_mesh_object("ObjectSelectB", new_three_face_mesh("ObjectSelectMeshB"))
+
+    for obj in (obj_a, obj_b):
+        attribute = obj.data.color_attributes.new(
+            name="mat_color",
+            type='BYTE_COLOR',
+            domain='CORNER',
+        )
+        for polygon in obj.data.polygons:
+            paint_polygon(
+                attribute,
+                polygon,
+                target_color if polygon.index in {0, 2} else other_color,
+            )
+
+    select_only(obj_a, obj_b, active=obj_a)
+    scan = addon._build_object_color_selection_scan(
+        [obj_a, obj_b],
+        "mat_color",
+    )
+    assert len(scan["targets"]) == 2, scan
+    assert scan["total_face_count"] == 6, scan
+
+    done = addon._scan_object_color_selection_step(scan, target_color, 2)
+    assert done is False
+    assert scan["processed_face_count"] == 2, scan
+
+    tick_count = 1
+    while not done:
+        done = addon._scan_object_color_selection_step(scan, target_color, 2)
+        tick_count += 1
+
+    assert tick_count == 3, scan
+    assert scan["selected_face_count"] == 4, scan
+    assert [polygon.select for polygon in obj_a.data.polygons] == [True, False, True]
+    assert [polygon.select for polygon in obj_b.data.polygons] == [True, False, True]
 
 
 def test_automatic_legacy_color_repair(addon):
@@ -577,10 +602,11 @@ def main():
     addon.register()
 
     try:
-        test_color_list_json_export(addon)
+        test_color_list_hex_csv_export(addon)
         test_remove_helper_default_disabled(addon)
         test_paint_color_consistency(addon)
         test_edit_mode_color_copy_consistency(addon)
+        test_object_mode_select_painted_faces_scan_is_chunked(addon)
         test_automatic_legacy_color_repair(addon)
         test_same_name(addon)
         test_data_type_direct_and_reference(addon)

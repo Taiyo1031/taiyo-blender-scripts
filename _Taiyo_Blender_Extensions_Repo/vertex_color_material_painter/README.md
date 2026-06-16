@@ -17,9 +17,10 @@ Edit Mode で選択している面、または Object Mode で選択している
 - 作成できる Color Attribute は `BYTE_COLOR` / `CORNER` または `FLOAT_COLOR` / `CORNER` です。
 - 既存Attributeがある場合は、UIの型指定ではなく既存Attributeの型を使います。
 - カラーリストは `.blend` ファイル内の Scene プロパティとして保存されます。
-- `Export JSON`でカラーリストのNameとRGBを外部ファイルへ書き出せます。既定はLinear RGBで、`Export JSON as sRGB`をONにするとsRGBへ変換して出力します。
+- `Export Hex CSV`でカラーリストのNameとsRGB HexCodeを外部ファイルへ書き出せます。
 - Edit Mode ではアクティブな Mesh の選択面だけを塗ります。
-- Edit Mode では、カラー行ごとの選択ボタンで同じ色の面を再選択できます。
+- Edit Mode / Object Mode では、カラー行ごとの選択ボタンで同じ色の面を再選択できます。
+- Object Modeの `Select Painted Faces` は選択中Meshを対象にし、スキャンをタイマーで分割してUIフリーズを避けます。
 - Object Mode では選択中の Mesh オブジェクトそれぞれの全フェイスを塗ります。
 - Attribute HelperのCopyで、Paint Attribute全体を別のColor Attributeへコピーできます。
 - Attribute HelperのCopyは `BYTE_COLOR` と `FLOAT_COLOR` の相互コピーに対応します。
@@ -39,12 +40,13 @@ Edit Mode で選択している面、または Object Mode で選択している
 5. `Add New Color` で用途名と色を追加します。
 6. リスト行のブラシボタン、または `Apply Color` を押します。
 
-## Edit Mode で塗った色の面を選択する
+## 塗った色の面を選択する
 
-1. Mesh オブジェクトを Edit Mode にします。
+1. Mesh オブジェクトを Edit Mode、または Object Mode で選択します。
 2. `VC Painter` パネルで Paint Attribute 名を確認します。
 3. カラーリスト行の選択ボタン、または `Select Painted Faces` を押します。
 4. そのカラーと一致する面だけが選択されます。
+5. Object Modeから実行した場合は、選択中Meshを複数ティックに分けてスキャンし、完了後にFace SelectのEdit Modeへ入ります。
 
 ## Object Mode で複数オブジェクト全体を塗る
 
@@ -53,26 +55,17 @@ Edit Mode で選択している面、または Object Mode で選択している
 3. カラーリストから用途カラーを選びます。
 4. リスト行のブラシボタン、または `Apply Color` を押します。
 
-## カラーリストをJSONへ書き出す
+## カラーリストをHex CSVへ書き出す
 
-1. `Color List` の `Export JSON` を押します。
-2. 保存先を選びます。初期ファイル名は `vertex_color_material_colors.json` です。
-3. 必要な場合は `Export JSON as sRGB` をONにします。OFFの既定値ではLinear RGBで保存します。
-4. カラーリストの順序を維持したまま、各項目の `Name` と `Color` が保存されます。
+1. `Color List` の `Export Hex CSV` を押します。
+2. 保存先を選びます。初期ファイル名は `vertex_color_material_colors.csv` です。
+3. カラーリストの順序を維持したまま、各項目の `Name` と `HexCode` が保存されます。
 
-`Color` はアルファ値を含まないRGBで、各チャンネルを `0.0` から `1.0` の小数として出力します。既定はLinear RGBです。日本語名はUTF-8のまま保存され、空のカラーリストは `[]` として書き出されます。
+`HexCode` はアルファ値を含まないsRGBの `#RRGGBB` です。日本語名を表計算ソフトで開きやすいよう、CSVはUTF-8 BOM付きで保存します。空のカラーリストでもヘッダー行 `Name,HexCode` は出力されます。
 
-```json
-[
-  {
-    "Name": "Wood",
-    "Color": [
-      0.45,
-      0.24,
-      0.09
-    ]
-  }
-]
+```csv
+Name,HexCode
+White,#FFFFFF
 ```
 
 ## 他のColor Attributeへコピーする
@@ -121,7 +114,7 @@ Edit ModeではアクティブMeshのAttribute全体をコピーします。Obje
 
 - Object Mode では面選択状態は使わず、選択中 Mesh オブジェクトの全フェイスに塗ります。
 - Vertex / Edge Select でも、Blender 側で `face.select` が立っている面だけを塗ります。
-- 色で選択するときは、指定色と面の全ループカラーが一致する面だけを選択します。
+- 色で選択するときは、指定色と面の全ループカラーが一致する面だけを選択します。Object Modeでは選択中Meshをタイマーで分割スキャンし、完了後にEdit Modeへ入ります。
 - Attribute HelperのCopyは面選択範囲ではなく、Attribute全体をコピーします。
 - Attribute HelperのRemoveはColor Attribute以外を含むMesh Attributeを条件指定で削除します。
 - `is_internal` または `is_required` のAttributeは、`All Removable`を含むすべての削除条件で保護されます。

@@ -1,14 +1,14 @@
 bl_info = {
     "name": "Vertex Color Material Painter",
     "author": "Taiyo",
-    "version": (1, 0, 7),
+    "version": (1, 0, 8),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > VC Painter",
     "description": "Paint selected edit-mode faces with scene-saved material ID colors",
     "category": "Mesh",
 }
 
-import json
+import csv
 
 import bmesh
 import bpy
@@ -33,6 +33,8 @@ DEFAULT_NEW_COLOR = (0.45, 0.24, 0.09, 1.0)
 FLOAT_COLOR_MATCH_TOLERANCE = 0.0001
 BYTE_COLOR_MATCH_TOLERANCE = (1.0 / 255.0) + 0.0001
 AUTO_REPAIR_MATCH_TOLERANCE = 0.01
+OBJECT_SELECT_SCAN_FACES_PER_TICK = 2500
+OBJECT_SELECT_SCAN_TIMER_INTERVAL = 0.01
 SUPPORTED_COLOR_TYPES = {'BYTE_COLOR', 'FLOAT_COLOR'}
 COLOR_TYPE_ITEMS = (
     ('BYTE_COLOR', "Byte Color", "軽量な8bit Color Attributeを作成します"),
@@ -321,6 +323,129 @@ def _select_faces_by_color(obj, attribute_name, color):
     bmesh.update_edit_mesh(mesh, loop_triangles=False, destructive=False)
 
     return selected_count
+
+
+def _face_matches_object_color(attribute, attribute_type, polygon, color):
+    return bool(polygon.loop_indices) and all(
+        _colors_match(
+            attribute.data[loop_index].color,
+            color,
+            attribute_type,
+        )
+        for loop_index in polygon.loop_indices
+    )
+
+
+def _build_object_color_selection_scan(objects, attribute_name):
+    targets = []
+    seen_meshes = set()
+    target_by_mesh_pointer = {}
+    skipped_missing = 0
+    skipped_invalid = 0
+    skipped_non_editable = 0
+    skipped_duplicate = 0
+    skipped_empty = 0
+
+    for obj in objects:
+        mesh = obj.data
+        mesh_pointer = mesh.as_pointer()
+
+        if mesh_pointer in target_by_mesh_pointer:
+            target_by_mesh_pointer[mesh_pointer]["objects"].append(obj)
+            skipped_duplicate += 1
+            continue
+
+        if mesh_pointer in seen_meshes:
+            skipped_duplicate += 1
+            continue
+
+        seen_meshes.add(mesh_pointer)
+
+        if not getattr(mesh, "is_editable", True):
+            skipped_non_editable += 1
+            continue
+
+        if not mesh.polygons:
+            skipped_empty += 1
+            continue
+
+        attribute = mesh.color_attributes.get(attribute_name)
+
+        if attribute is None:
+            skipped_missing += 1
+            continue
+
+        try:
+            _validate_color_attribute(attribute, attribute_name)
+        except ValueError:
+            skipped_invalid += 1
+            continue
+
+        for polygon in mesh.polygons:
+            polygon.select = False
+
+        target = {
+            "object": obj,
+            "objects": [obj],
+            "mesh": mesh,
+            "attribute": attribute,
+            "attribute_type": attribute.data_type,
+            "polygon_index": 0,
+            "selected_count": 0,
+        }
+        targets.append(target)
+        target_by_mesh_pointer[mesh_pointer] = target
+
+    return {
+        "targets": targets,
+        "skipped_missing": skipped_missing,
+        "skipped_invalid": skipped_invalid,
+        "skipped_non_editable": skipped_non_editable,
+        "skipped_duplicate": skipped_duplicate,
+        "skipped_empty": skipped_empty,
+        "total_face_count": sum(len(target["mesh"].polygons) for target in targets),
+        "processed_face_count": 0,
+        "selected_face_count": 0,
+        "finished_mesh_count": 0,
+    }
+
+
+def _scan_object_color_selection_step(scan, color, face_limit):
+    remaining = max(1, int(face_limit))
+
+    for target in scan["targets"]:
+        mesh = target["mesh"]
+        polygons = mesh.polygons
+
+        if target["polygon_index"] >= len(polygons):
+            continue
+
+        while target["polygon_index"] < len(polygons) and remaining > 0:
+            polygon = polygons[target["polygon_index"]]
+            face_matches = _face_matches_object_color(
+                target["attribute"],
+                target["attribute_type"],
+                polygon,
+                color,
+            )
+            polygon.select = face_matches
+
+            if face_matches:
+                target["selected_count"] += 1
+                scan["selected_face_count"] += 1
+
+            target["polygon_index"] += 1
+            scan["processed_face_count"] += 1
+            remaining -= 1
+
+        if target["polygon_index"] >= len(polygons):
+            mesh.update()
+            scan["finished_mesh_count"] += 1
+
+        if remaining <= 0:
+            break
+
+    return scan["finished_mesh_count"] >= len(scan["targets"])
 
 
 def _copy_bmesh_color_attribute(obj, source_name, target_name, target_type):
@@ -778,30 +903,32 @@ def _remove_matching_attributes(context):
     }
 
 
-def _json_color_channels(color, use_srgb):
-    rgb = Color(color[:3]).from_scene_linear_to_srgb() if use_srgb else color[:3]
-    return [float(channel) for channel in rgb]
+def _clamp01(value):
+    return max(0.0, min(1.0, float(value)))
 
 
-def _color_list_json_data(color_items, use_srgb=False):
-    return [
-        {
-            "Name": item.name,
-            "Color": _json_color_channels(item.color, use_srgb),
-        }
-        for item in color_items
+def _color_to_srgb_hex(color):
+    rgb = Color(color[:3]).from_scene_linear_to_srgb()
+    channels = [
+        int(_clamp01(channel) * 255.0 + 0.5)
+        for channel in rgb
     ]
+    return "#{:02X}{:02X}{:02X}".format(*channels)
 
 
-def _write_color_list_json(filepath, color_items, use_srgb=False):
-    with open(filepath, "w", encoding="utf-8", newline="\n") as handle:
-        json.dump(
-            _color_list_json_data(color_items, use_srgb),
-            handle,
-            ensure_ascii=False,
-            indent=2,
-        )
-        handle.write("\n")
+def _color_list_csv_rows(color_items):
+    rows = [["Name", "HexCode"]]
+    rows.extend(
+        [item.name, _color_to_srgb_hex(item.color)]
+        for item in color_items
+    )
+    return rows
+
+
+def _write_color_list_csv(filepath, color_items):
+    with open(filepath, "w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerows(_color_list_csv_rows(color_items))
 
 
 class VCMP_ColorItem(PropertyGroup):
@@ -932,36 +1059,32 @@ class VCMP_OT_move_color(Operator):
         return {'FINISHED'}
 
 
-class VCMP_OT_export_color_list_json(Operator, ExportHelper):
-    bl_idname = "vcmp.export_color_list_json"
-    bl_label = "Export JSON"
-    bl_description = "Color ListのNameとRGBをJSONファイルへ書き出します"
+class VCMP_OT_export_color_list_csv(Operator, ExportHelper):
+    bl_idname = "vcmp.export_color_list_csv"
+    bl_label = "Export Hex CSV"
+    bl_description = "Color ListのNameとsRGB HexCodeをCSVファイルへ書き出します"
 
-    filename_ext = ".json"
-    filter_glob: StringProperty(default="*.json", options={'HIDDEN'})
+    filename_ext = ".csv"
+    filter_glob: StringProperty(default="*.csv", options={'HIDDEN'})
 
     def invoke(self, context, event):
         if not self.filepath:
-            self.filepath = "vertex_color_material_colors.json"
+            self.filepath = "vertex_color_material_colors.csv"
         return super().invoke(context, event)
 
     def execute(self, context):
         try:
-            _write_color_list_json(
+            _write_color_list_csv(
                 self.filepath,
                 context.scene.vcmp_color_items,
-                context.scene.vcmp_export_json_srgb,
             )
         except (OSError, TypeError, ValueError) as error:
-            self.report({'ERROR'}, f"JSONを書き出せませんでした: {error}")
+            self.report({'ERROR'}, f"CSVを書き出せませんでした: {error}")
             return {'CANCELLED'}
 
         self.report(
             {'INFO'},
-            (
-                f"{len(context.scene.vcmp_color_items)}色を"
-                f"{'sRGB' if context.scene.vcmp_export_json_srgb else 'Linear RGB'} JSONへ書き出しました。"
-            ),
+            f"{len(context.scene.vcmp_color_items)}色をHex CSVへ書き出しました。",
         )
         return {'FINISHED'}
 
@@ -1049,18 +1172,145 @@ class VCMP_OT_apply_color(Operator):
 class VCMP_OT_select_by_color(Operator):
     bl_idname = "vcmp.select_by_color"
     bl_label = "Select Painted Faces"
-    bl_description = "Edit Modeで、このカラーが塗られている面を選択します"
+    bl_description = "Edit ModeまたはObject Modeで、このカラーが塗られている面を選択します"
     bl_options = {'REGISTER', 'UNDO'}
 
     index: IntProperty(default=-1)
 
-    def execute(self, context):
-        obj, error = _active_mesh_edit_object(context)
+    def _finish_object_mode_scan(self, context):
+        if self._timer is not None:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+        if getattr(self, "_progress_started", False):
+            context.window_manager.progress_end()
+            self._progress_started = False
 
-        if error:
-            self.report({'ERROR'}, error)
+        for obj in context.view_layer.objects:
+            obj.select_set(False)
+
+        for target in self._scan["targets"]:
+            for obj in target["objects"]:
+                obj.select_set(True)
+
+        if self._scan["targets"]:
+            context.view_layer.objects.active = self._scan["targets"][0]["object"]
+            context.tool_settings.mesh_select_mode = (False, False, True)
+            if context.mode == 'OBJECT':
+                bpy.ops.object.mode_set(mode='EDIT')
+
+        skipped_count = (
+            self._scan["skipped_missing"]
+            + self._scan["skipped_invalid"]
+            + self._scan["skipped_non_editable"]
+            + self._scan["skipped_empty"]
+        )
+        report_type = {'WARNING'} if self._scan["selected_face_count"] == 0 else {'INFO'}
+        self.report(
+            report_type,
+            (
+                f"'{self._color_name}' の色で塗られた "
+                f"{self._scan['selected_face_count']}面を選択しました。"
+                f" Mesh: {len(self._scan['targets'])}, スキップ: {skipped_count}"
+            ),
+        )
+        return {'FINISHED'}
+
+    def modal(self, context, event):
+        if event.type == 'ESC':
+            if self._timer is not None:
+                context.window_manager.event_timer_remove(self._timer)
+                self._timer = None
+            if getattr(self, "_progress_started", False):
+                context.window_manager.progress_end()
+                self._progress_started = False
+            self.report({'WARNING'}, "Select Painted Facesをキャンセルしました。")
             return {'CANCELLED'}
 
+        if event.type != 'TIMER':
+            return {'PASS_THROUGH'}
+
+        if context.mode != 'OBJECT':
+            if self._timer is not None:
+                context.window_manager.event_timer_remove(self._timer)
+                self._timer = None
+            if getattr(self, "_progress_started", False):
+                context.window_manager.progress_end()
+                self._progress_started = False
+            self.report({'ERROR'}, "Object Mode以外に切り替わったため中止しました。")
+            return {'CANCELLED'}
+
+        done = _scan_object_color_selection_step(
+            self._scan,
+            self._color,
+            OBJECT_SELECT_SCAN_FACES_PER_TICK,
+        )
+
+        if self._scan["total_face_count"]:
+            context.window_manager.progress_update(self._scan["processed_face_count"])
+
+        if done:
+            return self._finish_object_mode_scan(context)
+
+        return {'RUNNING_MODAL'}
+
+    def _execute_object_mode(self, context, item, attribute_name):
+        objects = _object_mode_mesh_targets(context)
+
+        if not objects:
+            self.report({'ERROR'}, "選択中のメッシュオブジェクトがありません。")
+            return {'CANCELLED'}
+
+        scan = _build_object_color_selection_scan(objects, attribute_name)
+
+        if not scan["targets"]:
+            skipped_count = (
+                scan["skipped_missing"]
+                + scan["skipped_invalid"]
+                + scan["skipped_non_editable"]
+                + scan["skipped_empty"]
+            )
+            self.report(
+                {'ERROR'},
+                (
+                    f"選択できるColor Attributeがありません: {attribute_name}"
+                    f" / スキップ: {skipped_count}"
+                ),
+            )
+            return {'CANCELLED'}
+
+        self._scan = scan
+        self._color = tuple(item.color)
+        self._color_name = item.name
+        self._timer = None
+        self._progress_started = False
+
+        if context.window is None:
+            done = False
+            while not done:
+                done = _scan_object_color_selection_step(
+                    self._scan,
+                    self._color,
+                    OBJECT_SELECT_SCAN_FACES_PER_TICK,
+                )
+            return self._finish_object_mode_scan(context)
+
+        self._timer = context.window_manager.event_timer_add(
+            OBJECT_SELECT_SCAN_TIMER_INTERVAL,
+            window=context.window,
+        )
+        context.window_manager.progress_begin(0, max(1, scan["total_face_count"]))
+        self._progress_started = True
+        context.window_manager.modal_handler_add(self)
+        self.report(
+            {'INFO'},
+            (
+                f"'{item.name}' の面選択スキャンを開始しました。"
+                f" Mesh: {len(scan['targets'])}, Faces: {scan['total_face_count']}"
+            ),
+        )
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
         item, error = _get_color_item(context, self.index)
 
         if error:
@@ -1068,6 +1318,15 @@ class VCMP_OT_select_by_color(Operator):
             return {'CANCELLED'}
 
         attribute_name = _clean_attribute_name(context.scene.vcmp_attribute_name)
+
+        if context.mode == 'OBJECT':
+            return self._execute_object_mode(context, item, attribute_name)
+
+        obj, error = _active_mesh_edit_object(context)
+
+        if error:
+            self.report({'ERROR'}, error)
+            return {'CANCELLED'}
 
         try:
             selected_count = _select_faces_by_color(
@@ -1410,8 +1669,7 @@ class VCMP_PT_panel(Panel):
         apply_row = box.row()
         apply_row.operator(VCMP_OT_apply_color.bl_idname, icon='BRUSH_DATA')
         apply_row.operator(VCMP_OT_select_by_color.bl_idname, icon='RESTRICT_SELECT_OFF')
-        box.prop(scene, "vcmp_export_json_srgb", text="Export JSON as sRGB")
-        box.operator(VCMP_OT_export_color_list_json.bl_idname, icon='EXPORT')
+        box.operator(VCMP_OT_export_color_list_csv.bl_idname, icon='EXPORT')
 
         box = layout.box()
         box.label(text="Add New Color", icon='ADD')
@@ -1557,7 +1815,7 @@ classes = (
     VCMP_OT_add_color,
     VCMP_OT_remove_color,
     VCMP_OT_move_color,
-    VCMP_OT_export_color_list_json,
+    VCMP_OT_export_color_list_csv,
     VCMP_OT_apply_color,
     VCMP_OT_select_by_color,
     VCMP_OT_copy_attribute,
@@ -1607,11 +1865,6 @@ def register():
         description="コピー先を新規作成する場合の型。既存Attributeがある場合は既存の型を使います",
         items=COLOR_TYPE_ITEMS,
         default=DEFAULT_ATTRIBUTE_TYPE,
-    )
-    bpy.types.Scene.vcmp_export_json_srgb = BoolProperty(
-        name="Export JSON as sRGB",
-        description="Export Color List RGB values as sRGB instead of the default Linear RGB",
-        default=False,
     )
     bpy.types.Scene.vcmp_remove_helper_enabled = BoolProperty(
         name="Use Remove Helper",
@@ -1666,7 +1919,6 @@ def unregister():
         "vcmp_remove_target_object",
         "vcmp_copy_target_type",
         "vcmp_copy_target_name",
-        "vcmp_export_json_srgb",
         "vcmp_new_color",
         "vcmp_new_color_name",
         "vcmp_active_index",
