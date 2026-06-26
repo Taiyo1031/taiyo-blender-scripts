@@ -1,14 +1,13 @@
 bl_info = {
     "name": "Vertex Color Material Painter",
     "author": "Taiyo",
-    "version": (1, 0, 11),
+    "version": (1, 0, 12),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > VC Painter",
     "description": "Paint selected edit-mode faces with scene-saved material ID colors",
     "category": "Mesh",
 }
 
-import csv
 import json
 import math
 
@@ -1135,34 +1134,6 @@ def _remove_matching_attributes(context):
     }
 
 
-def _clamp01(value):
-    return max(0.0, min(1.0, float(value)))
-
-
-def _color_to_srgb_hex(color):
-    rgb = Color(color[:3]).from_scene_linear_to_srgb()
-    channels = [
-        int(_clamp01(channel) * 255.0 + 0.5)
-        for channel in rgb
-    ]
-    return "#{:02X}{:02X}{:02X}".format(*channels)
-
-
-def _color_list_csv_rows(color_items):
-    rows = [["Name", "HexCode"]]
-    rows.extend(
-        [item.name, _color_to_srgb_hex(item.color)]
-        for item in color_items
-    )
-    return rows
-
-
-def _write_color_list_csv(filepath, color_items):
-    with open(filepath, "w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerows(_color_list_csv_rows(color_items))
-
-
 def _coerce_import_color_channel(value, label):
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{label} は数値で指定してください。")
@@ -1235,6 +1206,31 @@ def _replace_scene_color_list(scene, colors):
         item.color = color_spec["color"]
 
     scene.vcmp_active_index = 0 if colors else -1
+
+
+def _color_list_json_payload(color_items):
+    return {
+        "schema_version": COLOR_LIST_JSON_SCHEMA_VERSION,
+        "name": "Material ID Template",
+        "colors": [
+            {
+                "Name": item.name,
+                "Color": [float(channel) for channel in item.color[:3]],
+            }
+            for item in color_items
+        ],
+    }
+
+
+def _write_color_list_json(filepath, color_items):
+    with open(filepath, "w", encoding="utf-8", newline="\n") as handle:
+        json.dump(
+            _color_list_json_payload(color_items),
+            handle,
+            ensure_ascii=False,
+            indent=2,
+        )
+        handle.write("\n")
 
 
 class VCMP_ColorItem(PropertyGroup):
@@ -1365,32 +1361,32 @@ class VCMP_OT_move_color(Operator):
         return {'FINISHED'}
 
 
-class VCMP_OT_export_color_list_csv(Operator, ExportHelper):
-    bl_idname = "vcmp.export_color_list_csv"
-    bl_label = "Export Hex CSV"
-    bl_description = "Color ListのNameとsRGB HexCodeをCSVファイルへ書き出します"
+class VCMP_OT_export_color_list_json(Operator, ExportHelper):
+    bl_idname = "vcmp.export_color_list_json"
+    bl_label = "Export JSON"
+    bl_description = "Color ListのNameと線形RGBをJSONファイルへ書き出します"
 
-    filename_ext = ".csv"
-    filter_glob: StringProperty(default="*.csv", options={'HIDDEN'})
+    filename_ext = ".json"
+    filter_glob: StringProperty(default="*.json", options={'HIDDEN'})
 
     def invoke(self, context, event):
         if not self.filepath:
-            self.filepath = "vertex_color_material_colors.csv"
+            self.filepath = "vertex_color_material_colors.json"
         return super().invoke(context, event)
 
     def execute(self, context):
         try:
-            _write_color_list_csv(
+            _write_color_list_json(
                 self.filepath,
                 context.scene.vcmp_color_items,
             )
         except (OSError, TypeError, ValueError) as error:
-            self.report({'ERROR'}, f"CSVを書き出せませんでした: {error}")
+            self.report({'ERROR'}, f"JSONを書き出せませんでした: {error}")
             return {'CANCELLED'}
 
         self.report(
             {'INFO'},
-            f"{len(context.scene.vcmp_color_items)}色をHex CSVへ書き出しました。",
+            f"{len(context.scene.vcmp_color_items)}色をJSONへ書き出しました。",
         )
         return {'FINISHED'}
 
@@ -2198,7 +2194,7 @@ class VCMP_PT_panel(Panel):
         box.operator(VCMP_OT_select_unknown_color_objects.bl_idname, icon='OBJECT_DATA')
         io_row = box.row(align=True)
         io_row.operator(VCMP_OT_import_color_list_json.bl_idname, icon='IMPORT')
-        io_row.operator(VCMP_OT_export_color_list_csv.bl_idname, icon='EXPORT')
+        io_row.operator(VCMP_OT_export_color_list_json.bl_idname, icon='EXPORT')
 
         box = layout.box()
         box.label(text="Add New Color", icon='ADD')
@@ -2344,7 +2340,7 @@ classes = (
     VCMP_OT_add_color,
     VCMP_OT_remove_color,
     VCMP_OT_move_color,
-    VCMP_OT_export_color_list_csv,
+    VCMP_OT_export_color_list_json,
     VCMP_OT_import_color_list_json,
     VCMP_OT_apply_color,
     VCMP_OT_select_by_color,

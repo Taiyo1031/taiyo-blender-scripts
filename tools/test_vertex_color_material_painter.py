@@ -153,45 +153,82 @@ def assert_import_fails_without_change(filepath, expected_snapshot):
     assert color_list_snapshot(bpy.context.scene) == expected_snapshot
 
 
-def test_color_list_hex_csv_export(addon):
+def test_color_list_json_export(addon):
     reset_scene()
     scene = bpy.context.scene
     first = scene.vcmp_color_items.add()
-    first.name = "Wood"
+    first.name = "木材"
     first.color = (0.45, 0.24, 0.09, 0.25)
     second = scene.vcmp_color_items.add()
     second.name = "Glass"
     second.color = (0.1, 0.2, 0.3, 0.75)
 
-    with tempfile.TemporaryDirectory(prefix="vcmp_csv_") as temp_dir:
-        filepath = Path(temp_dir) / "colors.csv"
+    with tempfile.TemporaryDirectory(prefix="vcmp_json_export_") as temp_dir:
+        filepath = Path(temp_dir) / "colors.json"
         assert_finished(
-            bpy.ops.vcmp.export_color_list_csv(filepath=str(filepath))
+            bpy.ops.vcmp.export_color_list_json(filepath=str(filepath))
         )
-        content = filepath.read_text(encoding="utf-8-sig")
-        first_hex = addon._color_to_srgb_hex(first.color)
-        second_hex = addon._color_to_srgb_hex(second.color)
+        content = filepath.read_text(encoding="utf-8")
+        payload = json.loads(content)
 
-        assert content == (
-            "Name,HexCode\n"
-            f"Wood,{first_hex}\n"
-            f"Glass,{second_hex}\n"
-        )
-        assert first_hex.startswith("#") and len(first_hex) == 7
-        assert second_hex.startswith("#") and len(second_hex) == 7
+        assert content.endswith("\n")
+        assert "木材" in content
+        assert payload == {
+            "schema_version": 1,
+            "name": "Material ID Template",
+            "colors": [
+                {
+                    "Name": "木材",
+                    "Color": [
+                        float(first.color[0]),
+                        float(first.color[1]),
+                        float(first.color[2]),
+                    ],
+                },
+                {
+                    "Name": "Glass",
+                    "Color": [
+                        float(second.color[0]),
+                        float(second.color[1]),
+                        float(second.color[2]),
+                    ],
+                },
+            ],
+        }
+        assert all(len(item["Color"]) == 3 for item in payload["colors"])
 
         scene.vcmp_color_items.clear()
-        empty_filepath = Path(temp_dir) / "empty.csv"
+        empty_filepath = Path(temp_dir) / "empty.json"
         assert_finished(
-            bpy.ops.vcmp.export_color_list_csv(filepath=str(empty_filepath))
+            bpy.ops.vcmp.export_color_list_json(filepath=str(empty_filepath))
         )
-        assert empty_filepath.read_text(encoding="utf-8-sig") == "Name,HexCode\n"
+        assert json.loads(empty_filepath.read_text(encoding="utf-8")) == {
+            "schema_version": 1,
+            "name": "Material ID Template",
+            "colors": [],
+        }
 
-        invalid_filepath = Path(temp_dir) / "missing" / "colors.csv"
+        scene.vcmp_color_items.clear()
+        roundtrip_item = scene.vcmp_color_items.add()
+        roundtrip_item.name = "Roundtrip"
+        roundtrip_item.color = (0.2, 0.3, 0.4, 0.5)
+        roundtrip_filepath = Path(temp_dir) / "roundtrip.json"
+        assert_finished(
+            bpy.ops.vcmp.export_color_list_json(filepath=str(roundtrip_filepath))
+        )
+        scene.vcmp_color_items.clear()
+        assert_finished(
+            bpy.ops.vcmp.import_color_list_json(filepath=str(roundtrip_filepath))
+        )
+        assert color_list_snapshot(scene) == [
+            ("Roundtrip", (0.2, 0.3, 0.4, 1.0)),
+        ]
+
+        invalid_filepath = Path(temp_dir) / "missing" / "colors.json"
         try:
-            bpy.ops.vcmp.export_color_list_csv(filepath=str(invalid_filepath))
+            bpy.ops.vcmp.export_color_list_json(filepath=str(invalid_filepath))
         except RuntimeError as error:
-            assert "CSV" in str(error)
+            assert "JSON" in str(error)
         else:
             raise AssertionError("Invalid export path should report an error.")
 
@@ -908,7 +945,7 @@ def main():
     addon.register()
 
     try:
-        test_color_list_hex_csv_export(addon)
+        test_color_list_json_export(addon)
         test_color_list_json_import(addon)
         test_color_list_json_import_validation(addon)
         test_remove_helper_default_disabled(addon)

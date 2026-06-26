@@ -18,7 +18,7 @@ Edit Mode で選択している面、または Object Mode で選択している
 - 既存Attributeがある場合は、UIの型指定ではなく既存Attributeの型を使います。
 - カラーリストは `.blend` ファイル内の Scene プロパティとして保存されます。
 - `Import JSON`で外部JSONや同梱テンプレートからColor Listを読み込み、現在のリストを置き換えられます。
-- `Export Hex CSV`でカラーリストのNameとsRGB HexCodeを外部ファイルへ書き出せます。
+- `Export JSON`で現在のColor Listを、再ImportできるJSONテンプレート形式で書き出せます。
 - Edit Mode ではアクティブな Mesh の選択面だけを塗ります。
 - Edit Mode / Object Mode では、カラー行ごとの選択ボタンで同じ色の面を再選択できます。
 - Object Modeの `Select Painted Faces` は選択中Meshを対象にし、スキャンをタイマーで分割してUIフリーズを避けます。
@@ -104,17 +104,25 @@ Edit Mode で選択している面、または Object Mode で選択している
 
 同梱テンプレートは `templates/color_list_template.json` にあります。形式エラー、重複名、RGB以外の配列、範囲外の値がある場合は読み込みを中止し、現在のColor Listは変更しません。
 
-## カラーリストをHex CSVへ書き出す
+## カラーリストをJSONへ書き出す
 
-1. `Color List` の `Export Hex CSV` を押します。
-2. 保存先を選びます。初期ファイル名は `vertex_color_material_colors.csv` です。
-3. カラーリストの順序を維持したまま、各項目の `Name` と `HexCode` が保存されます。
+1. `Color List` の `Export JSON` を押します。
+2. 保存先を選びます。初期ファイル名は `vertex_color_material_colors.json` です。
+3. カラーリストの順序を維持したまま、各項目の `Name` と `Color` が保存されます。
 
-`HexCode` はアルファ値を含まないsRGBの `#RRGGBB` です。日本語名を表計算ソフトで開きやすいよう、CSVはUTF-8 BOM付きで保存します。空のカラーリストでもヘッダー行 `Name,HexCode` は出力されます。
+書き出しJSONは `Import JSON` でそのまま読み戻せるテンプレート形式です。`Color` はアルファ値を含まない線形RGB `0.0` から `1.0` の3要素配列です。日本語名はUTF-8のまま保存されます。空のカラーリストは `colors: []` として出力されます。
 
-```csv
-Name,HexCode
-White,#FFFFFF
+```json
+{
+  "schema_version": 1,
+  "name": "Material ID Template",
+  "colors": [
+    {
+      "Name": "White",
+      "Color": [1.0, 1.0, 1.0]
+    }
+  ]
+}
 ```
 
 ## 他のColor Attributeへコピーする
