@@ -1,3 +1,4 @@
+import json
 import importlib.util
 import sys
 import tempfile
@@ -127,6 +128,31 @@ def add_color_list_item(scene, name, color):
     return item
 
 
+def color_list_snapshot(scene):
+    return [
+        (item.name, tuple(round(float(channel), 6) for channel in item.color))
+        for item in scene.vcmp_color_items
+    ]
+
+
+def write_json_file(filepath, payload):
+    filepath.write_text(
+        json.dumps(payload, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def assert_import_fails_without_change(filepath, expected_snapshot):
+    try:
+        result = bpy.ops.vcmp.import_color_list_json(filepath=str(filepath))
+    except RuntimeError as error:
+        assert "JSON" in str(error)
+    else:
+        assert result == {'CANCELLED'}, result
+
+    assert color_list_snapshot(bpy.context.scene) == expected_snapshot
+
+
 def test_color_list_hex_csv_export(addon):
     reset_scene()
     scene = bpy.context.scene
@@ -168,6 +194,99 @@ def test_color_list_hex_csv_export(addon):
             assert "CSV" in str(error)
         else:
             raise AssertionError("Invalid export path should report an error.")
+
+
+def test_color_list_json_import(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    add_color_list_item(scene, "Old", (0.9, 0.8, 0.7, 0.6))
+
+    with tempfile.TemporaryDirectory(prefix="vcmp_json_") as temp_dir:
+        temp_path = Path(temp_dir)
+        array_path = temp_path / "array.json"
+        write_json_file(
+            array_path,
+            [
+                {"Name": "木材", "Color": [0.45, 0.24, 0.09]},
+                {"Name": "Glass", "Color": [0.1, 0.2, 0.3]},
+            ],
+        )
+
+        assert_finished(
+            bpy.ops.vcmp.import_color_list_json(filepath=str(array_path))
+        )
+        assert color_list_snapshot(scene) == [
+            ("木材", (0.45, 0.24, 0.09, 1.0)),
+            ("Glass", (0.1, 0.2, 0.3, 1.0)),
+        ]
+        assert scene.vcmp_active_index == 0
+
+        structured_path = temp_path / "template.json"
+        write_json_file(
+            structured_path,
+            {
+                "schema_version": 1,
+                "name": "Material ID Template",
+                "colors": [
+                    {"Name": "Metal", "Color": [0.6, 0.6, 0.6]},
+                ],
+            },
+        )
+        assert_finished(
+            bpy.ops.vcmp.import_color_list_json(filepath=str(structured_path))
+        )
+        assert color_list_snapshot(scene) == [
+            ("Metal", (0.6, 0.6, 0.6, 1.0)),
+        ]
+
+        empty_path = temp_path / "empty.json"
+        write_json_file(empty_path, [])
+        assert_finished(
+            bpy.ops.vcmp.import_color_list_json(filepath=str(empty_path))
+        )
+        assert color_list_snapshot(scene) == []
+        assert scene.vcmp_active_index == -1
+
+        template_path = ADDON_DIR / "templates" / "color_list_template.json"
+        template_colors = addon._read_color_list_json(template_path)
+        assert [item["name"] for item in template_colors] == [
+            "Wood",
+            "Glass",
+            "Metal",
+        ]
+
+
+def test_color_list_json_import_validation(addon):
+    reset_scene()
+    scene = bpy.context.scene
+    add_color_list_item(scene, "Keep", (0.2, 0.3, 0.4, 0.5))
+
+    invalid_payloads = [
+        [
+            {"Name": "A", "Color": [0.1, 0.2, 0.3]},
+            {"Name": "A", "Color": [0.4, 0.5, 0.6]},
+        ],
+        {"schema_version": 999, "colors": []},
+        [{"Color": [0.1, 0.2, 0.3]}],
+        [{"Name": "Missing Color"}],
+        [{"Name": "RGBA", "Color": [0.1, 0.2, 0.3, 1.0]}],
+        [{"Name": "Out Of Range", "Color": [0.1, -0.2, 0.3]}],
+        [{"Name": "Boolean", "Color": [0.1, True, 0.3]}],
+    ]
+
+    with tempfile.TemporaryDirectory(prefix="vcmp_json_invalid_") as temp_dir:
+        temp_path = Path(temp_dir)
+        for index, payload in enumerate(invalid_payloads):
+            filepath = temp_path / f"invalid_{index}.json"
+            write_json_file(filepath, payload)
+            assert_import_fails_without_change(filepath, [("Keep", (0.2, 0.3, 0.4, 0.5))])
+
+        broken_json_path = temp_path / "broken.json"
+        broken_json_path.write_text("{", encoding="utf-8")
+        assert_import_fails_without_change(
+            broken_json_path,
+            [("Keep", (0.2, 0.3, 0.4, 0.5))],
+        )
 
 
 def test_remove_helper_default_disabled(addon):
@@ -790,6 +909,8 @@ def main():
 
     try:
         test_color_list_hex_csv_export(addon)
+        test_color_list_json_import(addon)
+        test_color_list_json_import_validation(addon)
         test_remove_helper_default_disabled(addon)
         test_paint_color_consistency(addon)
         test_edit_mode_color_copy_consistency(addon)

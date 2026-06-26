@@ -17,6 +17,7 @@ Edit Mode で選択している面、または Object Mode で選択している
 - 作成できる Color Attribute は `BYTE_COLOR` / `CORNER` または `FLOAT_COLOR` / `CORNER` です。
 - 既存Attributeがある場合は、UIの型指定ではなく既存Attributeの型を使います。
 - カラーリストは `.blend` ファイル内の Scene プロパティとして保存されます。
+- `Import JSON`で外部JSONや同梱テンプレートからColor Listを読み込み、現在のリストを置き換えられます。
 - `Export Hex CSV`でカラーリストのNameとsRGB HexCodeを外部ファイルへ書き出せます。
 - Edit Mode ではアクティブな Mesh の選択面だけを塗ります。
 - Edit Mode / Object Mode では、カラー行ごとの選択ボタンで同じ色の面を再選択できます。
@@ -66,6 +67,42 @@ Edit Mode で選択している面、または Object Mode で選択している
 2. `VC Painter` パネルで Paint Attribute 名と New Type を確認します。
 3. カラーリストから用途カラーを選びます。
 4. リスト行のブラシボタン、または `Apply Color` を押します。
+
+## カラーリストをJSONから読み込む
+
+1. `Color List` の `Import JSON` を押します。
+2. 読み込むJSONファイルを選びます。
+3. JSONの内容で現在のColor Listが置き換わります。
+
+`Name` は空でない一意の名前、`Color` はアルファ値を含まない線形RGB `0.0` から `1.0` の3要素配列です。読み込んだColor Listのアルファ値はすべて `1.0` になります。空の配列 `[]` は有効で、現在のColor Listを空にします。
+
+単純な配列形式:
+
+```json
+[
+  {
+    "Name": "Wood",
+    "Color": [0.45, 0.24, 0.09]
+  }
+]
+```
+
+テンプレート形式:
+
+```json
+{
+  "schema_version": 1,
+  "name": "Material ID Template",
+  "colors": [
+    {
+      "Name": "Wood",
+      "Color": [0.45, 0.24, 0.09]
+    }
+  ]
+}
+```
+
+同梱テンプレートは `templates/color_list_template.json` にあります。形式エラー、重複名、RGB以外の配列、範囲外の値がある場合は読み込みを中止し、現在のColor Listは変更しません。
 
 ## カラーリストをHex CSVへ書き出す
 

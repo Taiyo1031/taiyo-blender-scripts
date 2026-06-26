@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "vertex_color_material_painter"
-version = "1.0.10"
+version = "1.0.11"
 name = "Vertex Color Material Painter"
 tagline = "Paint selected edit-mode faces with material ID colors"
 maintainer = "Taiyo"

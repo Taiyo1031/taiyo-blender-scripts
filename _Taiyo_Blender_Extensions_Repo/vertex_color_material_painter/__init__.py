@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Vertex Color Material Painter",
     "author": "Taiyo",
-    "version": (1, 0, 10),
+    "version": (1, 0, 11),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar > VC Painter",
     "description": "Paint selected edit-mode faces with scene-saved material ID colors",
@@ -9,6 +9,8 @@ bl_info = {
 }
 
 import csv
+import json
+import math
 
 import bmesh
 import bpy
@@ -21,7 +23,7 @@ from bpy.props import (
     StringProperty,
 )
 from bpy.types import Operator, Panel, PropertyGroup, UIList
-from bpy_extras.io_utils import ExportHelper
+from bpy_extras.io_utils import ExportHelper, ImportHelper
 from mathutils import Color
 
 
@@ -35,6 +37,7 @@ BYTE_COLOR_MATCH_TOLERANCE = (1.0 / 255.0) + 0.0001
 AUTO_REPAIR_MATCH_TOLERANCE = 0.01
 OBJECT_SELECT_SCAN_FACES_PER_TICK = 2500
 OBJECT_SELECT_SCAN_TIMER_INTERVAL = 0.01
+COLOR_LIST_JSON_SCHEMA_VERSION = 1
 SUPPORTED_COLOR_TYPES = {'BYTE_COLOR', 'FLOAT_COLOR'}
 COLOR_TYPE_ITEMS = (
     ('BYTE_COLOR', "Byte Color", "軽量な8bit Color Attributeを作成します"),
@@ -1160,6 +1163,80 @@ def _write_color_list_csv(filepath, color_items):
         writer.writerows(_color_list_csv_rows(color_items))
 
 
+def _coerce_import_color_channel(value, label):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} は数値で指定してください。")
+
+    channel = float(value)
+    if not math.isfinite(channel) or channel < 0.0 or channel > 1.0:
+        raise ValueError(f"{label} は0.0〜1.0で指定してください。")
+
+    return channel
+
+
+def _normalize_color_list_json_payload(payload):
+    if isinstance(payload, list):
+        raw_colors = payload
+    elif isinstance(payload, dict):
+        schema_version = payload.get("schema_version")
+        if schema_version != COLOR_LIST_JSON_SCHEMA_VERSION:
+            raise ValueError(f"Unsupported color list schema: {schema_version}")
+
+        raw_colors = payload.get("colors")
+        if not isinstance(raw_colors, list):
+            raise ValueError("'colors' は配列で指定してください。")
+    else:
+        raise ValueError("JSON root は配列、または schema_version と colors を持つObjectにしてください。")
+
+    colors = []
+    names = set()
+
+    for index, raw_item in enumerate(raw_colors, start=1):
+        if not isinstance(raw_item, dict):
+            raise ValueError(f"{index}番目のColorはObjectで指定してください。")
+
+        raw_name = raw_item.get("Name")
+        if not isinstance(raw_name, str):
+            raise ValueError(f"{index}番目のNameは文字列で指定してください。")
+
+        name = raw_name.strip()
+        if not name:
+            raise ValueError(f"{index}番目のNameが空です。")
+        if name in names:
+            raise ValueError(f"Color名が重複しています: {name}")
+        names.add(name)
+
+        raw_color = raw_item.get("Color")
+        if not isinstance(raw_color, list) or len(raw_color) != 3:
+            raise ValueError(f"'{name}' のColorはRGB 3要素の配列で指定してください。")
+
+        rgb = [
+            _coerce_import_color_channel(channel, f"'{name}' のColor[{channel_index}]")
+            for channel_index, channel in enumerate(raw_color)
+        ]
+        colors.append({"name": name, "color": (*rgb, 1.0)})
+
+    return colors
+
+
+def _read_color_list_json(filepath):
+    with open(filepath, "r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    return _normalize_color_list_json_payload(payload)
+
+
+def _replace_scene_color_list(scene, colors):
+    scene.vcmp_color_items.clear()
+
+    for color_spec in colors:
+        item = scene.vcmp_color_items.add()
+        item.name = color_spec["name"]
+        item.color = color_spec["color"]
+
+    scene.vcmp_active_index = 0 if colors else -1
+
+
 class VCMP_ColorItem(PropertyGroup):
     name: StringProperty(
         name="Name",
@@ -1315,6 +1392,27 @@ class VCMP_OT_export_color_list_csv(Operator, ExportHelper):
             {'INFO'},
             f"{len(context.scene.vcmp_color_items)}色をHex CSVへ書き出しました。",
         )
+        return {'FINISHED'}
+
+
+class VCMP_OT_import_color_list_json(Operator, ImportHelper):
+    bl_idname = "vcmp.import_color_list_json"
+    bl_label = "Import JSON"
+    bl_description = "JSONファイルからColor Listを読み込み、現在のリストを置き換えます"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    filename_ext = ".json"
+    filter_glob: StringProperty(default="*.json", options={'HIDDEN'})
+
+    def execute(self, context):
+        try:
+            colors = _read_color_list_json(self.filepath)
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            self.report({'ERROR'}, f"JSONを読み込めませんでした: {error}")
+            return {'CANCELLED'}
+
+        _replace_scene_color_list(context.scene, colors)
+        self.report({'INFO'}, f"{len(colors)}色をJSONから読み込みました。")
         return {'FINISHED'}
 
 
@@ -2098,7 +2196,9 @@ class VCMP_PT_panel(Panel):
         apply_row.operator(VCMP_OT_apply_color.bl_idname, icon='BRUSH_DATA')
         apply_row.operator(VCMP_OT_select_by_color.bl_idname, icon='RESTRICT_SELECT_OFF')
         box.operator(VCMP_OT_select_unknown_color_objects.bl_idname, icon='OBJECT_DATA')
-        box.operator(VCMP_OT_export_color_list_csv.bl_idname, icon='EXPORT')
+        io_row = box.row(align=True)
+        io_row.operator(VCMP_OT_import_color_list_json.bl_idname, icon='IMPORT')
+        io_row.operator(VCMP_OT_export_color_list_csv.bl_idname, icon='EXPORT')
 
         box = layout.box()
         box.label(text="Add New Color", icon='ADD')
@@ -2245,6 +2345,7 @@ classes = (
     VCMP_OT_remove_color,
     VCMP_OT_move_color,
     VCMP_OT_export_color_list_csv,
+    VCMP_OT_import_color_list_json,
     VCMP_OT_apply_color,
     VCMP_OT_select_by_color,
     VCMP_OT_select_unknown_color_objects,

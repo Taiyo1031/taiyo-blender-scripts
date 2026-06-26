@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "name": "Material ID Template",
+  "colors": [
+    {
+      "Name": "Wood",
+      "Color": [
+        0.45,
+        0.24,
+        0.09
+      ]
+    },
+    {
+      "Name": "Glass",
+      "Color": [
+        0.1,
+        0.2,
+        0.3
+      ]
+    },
+    {
+      "Name": "Metal",
+      "Color": [
+        0.6,
+        0.6,
+        0.6
+      ]
+    }
+  ]
+}
