@@ -45,6 +45,8 @@ def bind_operator_methods(addon, harness_type):
         "_initialize",
         "_make_iterator",
         "_open_export_file",
+        "_queue_export_row",
+        "_flush_row_buffer",
         "_close_export_file",
         "_process_tick",
         "_process_one",
@@ -85,6 +87,7 @@ def main():
         settings.select_visible_only = False
         settings.case_sensitive = True
         settings.name_mode = "numeric_suffix"
+        settings.export_mode = "responsive"
         settings.export_path = str(temp_dir / "ubt_export_test.csv")
         include = settings.filters.add()
         include.mode = "include"
@@ -105,6 +108,7 @@ def main():
         settings.select_visible_only = True
         settings.case_sensitive = False
         settings.name_mode = "keep_raw"
+        settings.export_mode = "fast_locked"
         settings.export_path = ""
         settings.filters.clear()
         settings.selected_preset = "Preset A"
@@ -116,6 +120,7 @@ def main():
         assert settings.select_visible_only is False
         assert settings.case_sensitive is True
         assert settings.name_mode == "numeric_suffix"
+        assert settings.export_mode == "responsive"
         assert settings.export_path.endswith("ubt_export_test.csv")
         assert [(item.mode, item.text) for item in settings.filters] == [
             ("include", "Keep"),
@@ -181,6 +186,20 @@ def main():
         assert rows[1][11] == "UBT_Test", rows[1]
 
         settings.filters.clear()
+        hidden = new_mesh_object("HiddenBox", mesh, collection)
+        hidden.hide_set(True)
+        settings.select_visible_only = True
+        settings.export_path = str(temp_dir / "ubt_visible_only_export_test.csv")
+        result = bpy.ops.ubt.export_csv()
+        assert result == {"FINISHED"}, result
+        with open(settings.export_path, newline="", encoding="utf-8") as handle:
+            rows = list(csv.reader(handle))
+        assert "HiddenBox" not in {row[10] for row in rows[1:]}, rows
+        assert {row[10] for row in rows[1:]} == {"KeepBox", "SkipBox"}, rows
+        hidden.hide_set(False)
+        settings.select_visible_only = False
+
+        settings.export_mode = "fast_locked"
         settings.export_path = str(temp_dir / "ubt_adaptive_export_test.csv")
         for index in range(600):
             new_mesh_object(f"BatchBox_{index:03d}", mesh, collection)
@@ -196,6 +215,10 @@ def main():
         operator = ModalHarness()
         init_result = operator._initialize(bpy.context)
         assert init_result is None, init_result
+        assert operator._lock_ui is True
+        assert operator._seconds_per_tick == addon.EXPORT_FAST_SECONDS_PER_TICK
+        assert settings.export_running is True
+        assert settings.export_total == len(collection.objects), settings.export_total
         initial_batch = operator._items_per_tick
         for _ in range(8):
             has_more = operator._process_tick(bpy.context)
@@ -205,7 +228,28 @@ def main():
         assert operator._items_per_tick > initial_batch
         assert operator._progress_percent() > 0.0
         assert operator._eta_seconds() is not None
+        assert settings.export_progress > 0.0
+        assert settings.export_processed > 0
+        assert settings.export_exported > 0
         operator._finish(bpy.context)
+        assert settings.export_running is False
+        assert settings.export_progress == 1.0
+        assert settings.export_status.startswith("Exported ")
+        assert operator._row_buffer == []
+        with open(settings.export_path, newline="", encoding="utf-8") as handle:
+            rows = list(csv.reader(handle))
+        assert len(rows) == len(collection.objects) + 1, len(rows)
+
+        settings.export_path = str(temp_dir / "ubt_large_buffer_export_test.csv")
+        for index in range(4600):
+            new_mesh_object(f"LargeBatchBox_{index:04d}", mesh, collection)
+        result = bpy.ops.ubt.export_csv()
+        assert result == {"FINISHED"}, result
+        with open(settings.export_path, newline="", encoding="utf-8") as handle:
+            rows = list(csv.reader(handle))
+        assert len(rows) == len(collection.objects) + 1, len(rows)
+        assert settings.export_exported == len(collection.objects)
+        assert settings.export_items_per_second > 0.0
 
         assert keep.name in bpy.data.objects
         print("Unreal Bridge Tools integration test passed")

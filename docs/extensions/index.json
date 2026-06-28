@@ -287,7 +287,7 @@
       "archive_url": "./object_preview_sequencer-1.0.2.zip",
       "archive_size": 6854,
       "archive_hash": "sha256:70396b0090f7c1b8f3168117c0e5cfd46dfd74fa5a35c6612e79e49757f9adcf",
-      "taiyo_updated_at": 1781611015
+      "taiyo_updated_at": 1781611527
     },
     {
       "schema_version": "1.0.0",
@@ -384,7 +384,7 @@
       "id": "unreal_bridge_tools",
       "name": "Unreal Bridge Tools",
       "tagline": "Export transforms and collision tags for Unreal Engine PCG",
-      "version": "2.2.18",
+      "version": "2.2.19",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -392,10 +392,10 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./unreal_bridge_tools-2.2.18.zip",
-      "archive_size": 15051,
-      "archive_hash": "sha256:b0521a8711cf06e002a49f46614b45a5a1dd669c7370c3e7dacb11dedd753a39",
-      "taiyo_updated_at": 1781456153
+      "archive_url": "./unreal_bridge_tools-2.2.19.zip",
+      "archive_size": 16780,
+      "archive_hash": "sha256:6dcded88fc5c9a449b0fb8548422e3df0bed9d5b3a795591243130dd3957189b",
+      "taiyo_updated_at": 1782638426
     },
     {
       "schema_version": "1.0.0",

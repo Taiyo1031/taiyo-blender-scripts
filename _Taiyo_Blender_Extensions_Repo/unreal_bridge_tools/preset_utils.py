@@ -9,6 +9,7 @@ USER_PRESET_PATH_OVERRIDE = None
 VALID_SCOPES = {"direct", "recursive", "all"}
 VALID_NAME_MODES = {"keep_raw", "numeric_suffix", "trim_after_dot"}
 VALID_FILTER_MODES = {"include", "exclude"}
+VALID_EXPORT_MODES = {"fast_locked", "responsive"}
 
 
 def user_preset_path():
@@ -53,6 +54,10 @@ def _normalize_preset(raw_preset):
     if name_mode not in VALID_NAME_MODES:
         raise ValueError(f"Unsupported name mode: {name_mode}")
 
+    export_mode = str(raw_preset.get("export_mode", "fast_locked"))
+    if export_mode not in VALID_EXPORT_MODES:
+        raise ValueError(f"Unsupported export mode: {export_mode}")
+
     raw_filters = raw_preset.get("filters", [])
     _require_type(raw_filters, list, f"Preset '{name}' filters")
 
@@ -61,6 +66,7 @@ def _normalize_preset(raw_preset):
         "scope": scope,
         "collection_name": str(raw_preset.get("collection_name", "")),
         "export_path": str(raw_preset.get("export_path", "")),
+        "export_mode": export_mode,
         "name_mode": name_mode,
         "select_visible_only": bool(raw_preset.get("select_visible_only", True)),
         "case_sensitive": bool(raw_preset.get("case_sensitive", False)),
@@ -148,6 +154,7 @@ def settings_to_preset(settings, name):
         "scope": settings.scope,
         "collection_name": settings.collection.name if settings.collection else "",
         "export_path": settings.export_path,
+        "export_mode": settings.export_mode,
         "name_mode": settings.name_mode,
         "select_visible_only": settings.select_visible_only,
         "case_sensitive": settings.case_sensitive,
@@ -165,6 +172,7 @@ def load_preset_into_settings(settings, preset):
     normalized = _normalize_preset(preset)
     settings.scope = normalized["scope"]
     settings.export_path = normalized["export_path"]
+    settings.export_mode = normalized["export_mode"]
     settings.name_mode = normalized["name_mode"]
     settings.select_visible_only = normalized["select_visible_only"]
     settings.case_sensitive = normalized["case_sensitive"]

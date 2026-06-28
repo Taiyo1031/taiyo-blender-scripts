@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Unreal Bridge Tools",
     "author": "Overnight Artelier",
-    "version": (2, 2, 18),
+    "version": (2, 2, 19),
     "blender": (4, 2, 0),
     "location": "3D Viewport > N Panel > Unreal Bridge Tools",
     "description": "Export transforms & collision tags from Blender to CSV for Unreal Engine PCG pipeline.",
@@ -16,7 +16,7 @@ import bpy, os, csv, re, tempfile, datetime, time
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 from bpy.props import (
     StringProperty, PointerProperty, BoolProperty, EnumProperty,
-    CollectionProperty, IntProperty
+    CollectionProperty, IntProperty, FloatProperty
 )
 from bpy.types import Operator, Panel, AddonPreferences, PropertyGroup, UIList
 from math import pi
@@ -29,12 +29,16 @@ except ImportError:
 # Regex for numeric suffix .001+
 _NUM_SUFFIX_RE = re.compile(r"\.(\d{3,})$")
 _COLL = "-coll"
-EXPORT_TIMER_INTERVAL = 0.02
-EXPORT_SECONDS_PER_TICK = 0.024
+EXPORT_RESPONSIVE_TIMER_INTERVAL = 0.02
+EXPORT_FAST_TIMER_INTERVAL = 0.01
+EXPORT_RESPONSIVE_SECONDS_PER_TICK = 0.024
+EXPORT_FAST_SECONDS_PER_TICK = 0.38
 EXPORT_PROGRESS_INTERVAL = 0.18
 EXPORT_INITIAL_ITEMS_PER_TICK = 256
 EXPORT_MIN_ITEMS_PER_TICK = 4
-EXPORT_MAX_ITEMS_PER_TICK = 32768
+EXPORT_MAX_ITEMS_PER_TICK = 131072
+EXPORT_ROW_BUFFER_LIMIT = 4096
+EXPORT_TIME_CHECK_INTERVAL = 256
 EXPORT_RATE_SMOOTHING = 0.45
 _EXPORT_RUNNING = False
 _EMPTY_PRESET_ENUM_ITEMS = [("__NONE__", "No Presets", "No presets are available")]
@@ -171,13 +175,22 @@ def _set_status_text(context, text=None):
     except Exception:
         pass
 
-def _redraw_view3d(context):
+def _redraw_progress_ui(context):
     screen = getattr(context, "screen", None)
     if screen is None:
         return
     for area in screen.areas:
-        if area.type == "VIEW_3D":
+        if area.type == "STATUSBAR":
             area.tag_redraw()
+            continue
+        if area.type != "VIEW_3D":
+            continue
+        for region in area.regions:
+            if region.type == "UI":
+                try:
+                    region.tag_redraw()
+                except Exception:
+                    pass
 
 def _clamp_int(value, minimum, maximum):
     return max(minimum, min(maximum, int(value)))
@@ -278,6 +291,22 @@ class UBT_Props(PropertyGroup):
         subtype='FILE_PATH',
         default=""
     )
+    export_mode: EnumProperty(
+        name="Export Mode",
+        items=[
+            (
+                'fast_locked',
+                "Fast Locked",
+                "Best for 60k+ objects. Locks most UI events and updates progress in larger chunks.",
+            ),
+            (
+                'responsive',
+                "Responsive",
+                "Keeps Blender more responsive with smaller export chunks.",
+            ),
+        ],
+        default='fast_locked',
+    )
 
     # --- NEW: name_mode (Keep Raw added, legacy Keep removed) ---
     name_mode: EnumProperty(
@@ -311,6 +340,15 @@ class UBT_Props(PropertyGroup):
 
     filters: CollectionProperty(type=UBT_FilterItem)
     filters_index: IntProperty(default=0)
+    export_running: BoolProperty(default=False)
+    export_cancel_requested: BoolProperty(default=False)
+    export_progress: FloatProperty(default=0.0, min=0.0, max=1.0)
+    export_processed: IntProperty(default=0, min=0)
+    export_total: IntProperty(default=0, min=0)
+    export_exported: IntProperty(default=0, min=0)
+    export_eta: StringProperty(default="--")
+    export_status: StringProperty(default="")
+    export_items_per_second: FloatProperty(default=0.0, min=0.0)
 
 # -----------------------------
 # Operators (filter add/remove)
@@ -638,23 +676,24 @@ class UBT_OT_ExportCSV(Operator):
         return self._run_blocking(context)
 
     def modal(self, context, event):
-        if event.type == 'ESC':
+        p = context.scene.ubt_props
+        if event.type == 'ESC' or p.export_cancel_requested:
             return self._finish(context, cancelled=True)
         if event.type != 'TIMER':
-            return {'PASS_THROUGH'}
+            return {'RUNNING_MODAL'} if self._lock_ui else {'PASS_THROUGH'}
 
         try:
             has_more = self._process_tick(context)
         except Exception as exc:
             if self._try_restart_to_temp(context, exc):
-                return {'PASS_THROUGH'}
+                return {'RUNNING_MODAL'} if self._lock_ui else {'PASS_THROUGH'}
             return self._finish(context, error_message=str(exc))
 
-        self._update_progress(context)
-        _redraw_view3d(context)
+        if self._update_progress(context):
+            _redraw_progress_ui(context)
         if not has_more:
             return self._finish(context)
-        return {'PASS_THROUGH'}
+        return {'RUNNING_MODAL'} if self._lock_ui else {'PASS_THROUGH'}
 
     def _start_modal(self, context):
         result = self._initialize(context)
@@ -662,7 +701,7 @@ class UBT_OT_ExportCSV(Operator):
             return result
 
         self._timer = context.window_manager.event_timer_add(
-            EXPORT_TIMER_INTERVAL,
+            self._timer_interval,
             window=context.window,
         )
         context.window_manager.modal_handler_add(self)
@@ -708,6 +747,18 @@ class UBT_OT_ExportCSV(Operator):
                 return {'CANCELLED'}
             collection = p.collection
 
+        self._export_mode = getattr(p, "export_mode", 'fast_locked')
+        self._lock_ui = self._export_mode == 'fast_locked'
+        self._seconds_per_tick = (
+            EXPORT_FAST_SECONDS_PER_TICK
+            if self._lock_ui
+            else EXPORT_RESPONSIVE_SECONDS_PER_TICK
+        )
+        self._timer_interval = (
+            EXPORT_FAST_TIMER_INTERVAL
+            if self._lock_ui
+            else EXPORT_RESPONSIVE_TIMER_INTERVAL
+        )
         self._scope = p.scope
         self._collection = collection
         self._select_visible_only = p.select_visible_only
@@ -729,6 +780,7 @@ class UBT_OT_ExportCSV(Operator):
         self._using_temp = False
         self._original_error = ""
         self._iterator = self._make_iterator(context)
+        self._row_buffer = []
 
         export_path = bpy.path.abspath(_enforce_csv_ext(p.export_path or "//exports/TransformData.csv"))
         folder = os.path.dirname(export_path)
@@ -753,6 +805,15 @@ class UBT_OT_ExportCSV(Operator):
                 return {'CANCELLED'}
 
         _EXPORT_RUNNING = True
+        p.export_running = True
+        p.export_cancel_requested = False
+        p.export_progress = 0.0
+        p.export_processed = 0
+        p.export_total = self._total
+        p.export_exported = 0
+        p.export_eta = "--"
+        p.export_items_per_second = 0.0
+        p.export_status = "Starting Unreal Bridge export..."
         context.window_manager.progress_begin(0, self._total)
         self._update_progress(context, force=True)
         return None
@@ -766,21 +827,38 @@ class UBT_OT_ExportCSV(Operator):
         )
 
     def _open_export_file(self, path):
-        self._close_export_file()
+        try:
+            self._close_export_file()
+        except Exception:
+            pass
         self._export_path = path
         self._file = open(path, "w", newline="", encoding="utf-8")
         self._writer = csv.writer(self._file)
+        self._row_buffer = []
         self._writer.writerow([
             "id", "tx", "ty", "tz", "rx", "ry", "rz",
             "sx", "sy", "sz", "objname", "colname",
         ])
 
+    def _queue_export_row(self, row):
+        self._row_buffer.append(row)
+        if len(self._row_buffer) >= EXPORT_ROW_BUFFER_LIMIT:
+            self._flush_row_buffer()
+
+    def _flush_row_buffer(self):
+        if self._writer is None or not self._row_buffer:
+            return
+        self._writer.writerows(self._row_buffer)
+        self._row_buffer.clear()
+
     def _close_export_file(self):
         file = getattr(self, "_file", None)
+        if file is not None:
+            self._flush_row_buffer()
+            file.flush()
+            file.close()
         self._writer = None
         self._file = None
-        if file is not None:
-            file.close()
 
     def _process_tick(self, context):
         started = time.perf_counter()
@@ -791,6 +869,11 @@ class UBT_OT_ExportCSV(Operator):
                 self._adjust_items_per_tick(processed_this_tick, started)
                 return False
             processed_this_tick += 1
+            if (
+                processed_this_tick % EXPORT_TIME_CHECK_INTERVAL == 0
+                and time.perf_counter() - started >= self._seconds_per_tick
+            ):
+                break
         self._adjust_items_per_tick(processed_this_tick, started)
         return True
 
@@ -821,7 +904,7 @@ class UBT_OT_ExportCSV(Operator):
         scl = m.to_scale()
         objname = self._resolve_name(ob.name)
         colname = ob.users_collection[0].name if ob.users_collection else ""
-        self._writer.writerow([
+        self._queue_export_row([
             self._row_id,
             round(loc.x, 6), round(loc.y, 6), round(loc.z, 6),
             round(rot.x * 180 / pi, 6),
@@ -857,13 +940,14 @@ class UBT_OT_ExportCSV(Operator):
         else:
             self._items_per_second = instant_rate
 
-        proposed = processed_this_tick * EXPORT_SECONDS_PER_TICK / elapsed
+        target_seconds = self._seconds_per_tick
+        proposed = processed_this_tick * target_seconds / elapsed
         current = max(1, self._items_per_tick)
-        if elapsed < EXPORT_SECONDS_PER_TICK * 0.50:
+        if elapsed < target_seconds * 0.50:
             proposed = max(proposed, current * 2.5)
-        elif elapsed < EXPORT_SECONDS_PER_TICK * 0.85:
+        elif elapsed < target_seconds * 0.85:
             proposed = max(proposed, current * 1.5)
-        elif elapsed > EXPORT_SECONDS_PER_TICK * 1.35:
+        elif elapsed > target_seconds * 1.35:
             proposed = min(proposed, current * 0.75)
 
         if proposed > current:
@@ -896,11 +980,22 @@ class UBT_OT_ExportCSV(Operator):
     def _update_progress(self, context, force=False, done=False):
         now = time.perf_counter()
         if not force and not done and now - self._last_progress_time < EXPORT_PROGRESS_INTERVAL:
-            return
+            return False
         self._last_progress_time = now
         value = self._total if done else min(self._processed, self._total)
         percent = self._progress_percent(done=done)
         eta = _format_eta(self._eta_seconds(done=done))
+        p = context.scene.ubt_props
+        p.export_progress = min(1.0, percent / 100.0)
+        p.export_processed = value
+        p.export_total = self._total
+        p.export_exported = self._exported
+        p.export_eta = eta
+        p.export_items_per_second = max(0.0, self._items_per_second)
+        p.export_status = (
+            f"{percent:.1f}% | ETA {eta} | "
+            f"{self._processed}/{self._total} scanned, {self._exported} exported"
+        )
         context.window_manager.progress_update(value)
         _set_status_text(
             context,
@@ -910,6 +1005,7 @@ class UBT_OT_ExportCSV(Operator):
                 f"{self._items_per_tick}/tick | ESC cancels"
             ),
         )
+        return True
 
     def _try_restart_to_temp(self, context, exc):
         if self._using_temp or not isinstance(exc, OSError):
@@ -925,6 +1021,7 @@ class UBT_OT_ExportCSV(Operator):
         self._items_per_tick = EXPORT_INITIAL_ITEMS_PER_TICK
         self._items_per_second = 0.0
         self._last_tick_seconds = 0.0
+        self._row_buffer = []
         try:
             self._open_export_file(_safe_temp_csv_path())
         except Exception:
@@ -960,22 +1057,38 @@ class UBT_OT_ExportCSV(Operator):
             pass
         _set_status_text(context, None)
         _EXPORT_RUNNING = False
+        p = context.scene.ubt_props
+        p.export_running = False
+        p.export_cancel_requested = False
 
         if error_message:
+            p.export_status = f"Failed: {error_message}"
+            _redraw_progress_ui(context)
             self.report({'ERROR'}, f"Failed: {error_message}")
             return {'CANCELLED'}
         if cancelled:
+            p.export_status = (
+                f"Canceled after scanning {self._processed} object(s). "
+                "Partial CSV kept."
+            )
+            _redraw_progress_ui(context)
             self.report(
                 {'WARNING'},
                 f"Canceled after scanning {self._processed} object(s); partial CSV: {self._export_path}",
             )
             return {'CANCELLED'}
         if self._using_temp:
+            p.export_progress = 1.0
+            p.export_status = f"Exported {self._exported} objects to temp folder."
+            _redraw_progress_ui(context)
             self.report(
                 {'WARNING'},
                 f"Exported {self._exported} objects to temp: {self._export_path}",
             )
         else:
+            p.export_progress = 1.0
+            p.export_status = f"Exported {self._exported} objects."
+            _redraw_progress_ui(context)
             self.report({'INFO'}, f"Exported {self._exported} objects -> {self._export_path}")
         return {'FINISHED'}
 
@@ -1014,6 +1127,7 @@ class UBT_PT_Main(Panel):
         if p.scope != 'all':
             box.prop(p, "collection")
         box.prop(p, "export_path")
+        box.prop(p, "export_mode")
         box.operator("ubt.test_write", icon="FILE_TICK")
 
         box = layout.box()
@@ -1046,6 +1160,34 @@ class UBT_PT_Main(Panel):
         row.enabled = not _EXPORT_RUNNING
         row.operator("ubt.export_csv", icon="EXPORT")
         layout.operator_context = previous_operator_context
+
+        if p.export_running or p.export_status:
+            box = layout.box()
+            box.label(text="Export Progress", icon="TIME")
+            if p.export_status and not p.export_running:
+                box.label(text=p.export_status)
+            if p.export_running:
+                if hasattr(box, "progress"):
+                    box.progress(
+                        factor=p.export_progress,
+                        type="BAR",
+                        text=f"{int(p.export_progress * 100)}%",
+                    )
+                else:
+                    box.label(text=f"Progress: {p.export_progress * 100:.1f}%")
+                box.label(
+                    text=(
+                        f"{p.export_processed}/{p.export_total} scanned | "
+                        f"{p.export_exported} exported"
+                    )
+                )
+                box.label(
+                    text=(
+                        f"ETA {p.export_eta} | "
+                        f"{p.export_items_per_second:.0f} objects/s | ESC cancels"
+                    ),
+                    icon="INFO",
+                )
 
 # -----------------------------
 # Registration
