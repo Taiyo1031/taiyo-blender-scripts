@@ -27,6 +27,24 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "csv_mesh_instancer",
+      "name": "CSV Mesh Instancer",
+      "tagline": "Place linked meshes from CSV using Collection or FBX sources",
+      "version": "1.0.3",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.9",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/csv_mesh_instancer/CSV_Mesh_Instancer_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./csv_mesh_instancer-1.0.3.zip",
+      "archive_size": 18614,
+      "archive_hash": "sha256:0f5dee01bf51d7b08d53a106dd6ea0fb8af86843855c6830897ee6ef91aa1556",
+      "taiyo_updated_at": 1784368972
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "vertex_color_material_painter",
       "name": "Vertex Color Material Painter",
       "tagline": "Paint selected edit-mode faces with material ID colors",
@@ -41,7 +59,7 @@
       "archive_url": "./vertex_color_material_painter-1.0.12.zip",
       "archive_size": 19482,
       "archive_hash": "sha256:52a0be0a7440e61ba726fd41d8da1581d9fe15e18955dd3d2f58b034a60b2256",
-      "taiyo_updated_at": 1784368438
+      "taiyo_updated_at": 1784368972
     },
     {
       "schema_version": "1.0.0",
@@ -60,24 +78,6 @@
       "archive_size": 14302,
       "archive_hash": "sha256:016ae7c2e15b13131070525204eac3b97f26def227dd3c2fc038bb67d767fcb8",
       "taiyo_updated_at": 1779596198
-    },
-    {
-      "schema_version": "1.0.0",
-      "id": "csv_mesh_instancer",
-      "name": "CSV Mesh Instancer",
-      "tagline": "Place linked meshes from CSV using Collection or FBX sources",
-      "version": "1.0.2",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.5.9",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/csv_mesh_instancer/CSV_Mesh_Instancer_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./csv_mesh_instancer-1.0.2.zip",
-      "archive_size": 18320,
-      "archive_hash": "sha256:12b3621324ba9c16d2b6c09733585e9737c48e37013bd57eb50f0a317807ea87",
-      "taiyo_updated_at": 1784368438
     },
     {
       "schema_version": "1.0.0",
@@ -218,7 +218,7 @@
       "archive_url": "./move_selected_to_own_collections-1.5.0.zip",
       "archive_size": 5539,
       "archive_hash": "sha256:f18b5a91ad9fc43f4f5abbbd620bce8bccec2af5c2f30ff4464efb49f22d3240",
-      "taiyo_updated_at": 1784368438
+      "taiyo_updated_at": 1784368972
     },
     {
       "schema_version": "1.0.0",
@@ -236,7 +236,7 @@
       "archive_url": "./unreal_bridge_tools-2.2.19.zip",
       "archive_size": 16536,
       "archive_hash": "sha256:a1b0eec63362395ef95513b1f5f6163e2730dcfbe9a46994c252bb8804b37f00",
-      "taiyo_updated_at": 1784368438
+      "taiyo_updated_at": 1784368972
     },
     {
       "schema_version": "1.0.0",
@@ -277,7 +277,7 @@
       "archive_url": "./overlap_selector-1.2.2.zip",
       "archive_size": 14448,
       "archive_hash": "sha256:c99016467ad149dd5fcba054d527671d5828c7bc39a8764c47d87aaae94093be",
-      "taiyo_updated_at": 1784368438
+      "taiyo_updated_at": 1784368972
     },
     {
       "schema_version": "1.0.0",
@@ -318,7 +318,7 @@
       "archive_url": "./taiyo_extension_manager-1.0.12.zip",
       "archive_size": 12895,
       "archive_hash": "sha256:37c8a51ac58b82bfe33ed04495901a7d5274c7449a234288930f74b10be84acf",
-      "taiyo_updated_at": 1784368438
+      "taiyo_updated_at": 1784368973
     },
     {
       "schema_version": "1.0.0",
@@ -359,7 +359,7 @@
       "archive_url": "./collection_number_to_mesh_name-1.0.1.zip",
       "archive_size": 4918,
       "archive_hash": "sha256:5350e92910238e5b7d34cf76f2a0398d4be35a041c58e6c4c2b93ec41398c8e9",
-      "taiyo_updated_at": 1784368438
+      "taiyo_updated_at": 1784368973
     },
     {
       "schema_version": "1.0.0",
@@ -377,7 +377,7 @@
       "archive_url": "./collection_mesh_merge_fbx_exporter-0.3.1.zip",
       "archive_size": 18882,
       "archive_hash": "sha256:8b44fd87e8a58539b4479739f1b2aa93f2d7fb37986b6e3d8a8015d64bf480d2",
-      "taiyo_updated_at": 1784368438
+      "taiyo_updated_at": 1784368973
     },
     {
       "schema_version": "1.0.0",
@@ -413,7 +413,7 @@
       "archive_url": "./replace_selected_with_active-3.0.1.zip",
       "archive_size": 10313,
       "archive_hash": "sha256:ece7816556bab6115745eeb043e5f815da0b9d3f80bbd4a79930a5bf3bf92229",
-      "taiyo_updated_at": 1784368438
+      "taiyo_updated_at": 1784368973
     },
     {
       "schema_version": "1.0.0",

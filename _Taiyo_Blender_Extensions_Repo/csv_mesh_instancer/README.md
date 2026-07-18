@@ -12,7 +12,7 @@ CSVの`objname`とTransformを読み取り、CollectionまたはFBX内のMeshを
 
 - CSVのインポート・安全な再インポート
 - CollectionまたはFBXをMeshソースとして使用
-- FBX配置へ既定でDelta Scale `0.01`・Delta X Rotation `90°`の単位／軸補正を適用（UIで調整・無効化可能）
+- FBX配置へ既定でDelta Scale `0.01`・Local X Rotation `90°`の単位／軸補正を適用（`R`→`X`→`X`と同じローカル軸、UIで調整・無効化可能）
 - FBX管理Collectionを全View Layerから除外（不可時はCollectionを非表示）
 - 子Collectionを含むMesh検索
 - 完全一致優先と`.001`等の数値サフィックス無視

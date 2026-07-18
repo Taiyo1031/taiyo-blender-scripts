@@ -1,7 +1,7 @@
 bl_info = {
     "name": "CSV Mesh Instancer",
     "author": "Taiyo",
-    "version": (1, 0, 2),
+    "version": (1, 0, 3),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar(N) > CSV Instancer",
     "description": "Create linked mesh objects from CSV transforms using Collection or FBX sources.",
@@ -15,6 +15,7 @@ import re
 import time
 import traceback
 import bpy
+from mathutils import Quaternion
 from bpy.app.handlers import persistent
 from bpy.props import (
     BoolProperty,
@@ -77,7 +78,10 @@ def apply_csv_transform(obj, row, props):
     obj.delta_location = (0.0, 0.0, 0.0)
     if props.source_mode == 'FBX' and props.apply_fbx_correction:
         correction = props.fbx_unit_scale
-        obj.delta_rotation_euler = (props.fbx_rotation_x, 0.0, 0.0)
+        csv_rotation = obj.rotation_euler.to_quaternion()
+        local_x_rotation = Quaternion((1.0, 0.0, 0.0), props.fbx_rotation_x)
+        world_delta = csv_rotation @ local_x_rotation @ csv_rotation.conjugated()
+        obj.delta_rotation_euler = world_delta.to_euler('XYZ')
         obj.delta_scale = (correction, correction, correction)
     else:
         obj.delta_rotation_euler = (0.0, 0.0, 0.0)
@@ -1167,11 +1171,11 @@ class CSVMI_Props(PropertyGroup):
         description="Uniform Delta Scale applied to placements that use an FBX source",
     )
     fbx_rotation_x: FloatProperty(
-        name="X Rotation",
+        name="Local X Rotation",
         default=math.radians(90.0),
         subtype='ANGLE',
         unit='ROTATION',
-        description="Delta X rotation applied to placements that use an FBX source",
+        description="Local X rotation applied after each CSV rotation, like pressing R, X, X in Blender",
     )
     output_collection_name: StringProperty(name="Collection Name", default="CSV_Output")
     ignore_numeric_suffix: BoolProperty(name="Ignore .001 Numeric Suffixes", default=False)

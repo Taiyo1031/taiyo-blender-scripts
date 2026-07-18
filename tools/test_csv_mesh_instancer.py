@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 
 import bpy
+from mathutils import Euler, Matrix
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,10 @@ import csv_mesh_instancer as csvmi  # noqa: E402
 def check(condition, message):
     if not condition:
         raise AssertionError(message)
+
+
+def matrix_error(a, b):
+    return sum(abs(a[row][column] - b[row][column]) for row in range(3) for column in range(3))
 
 
 def expect_operator_cancel(callable_operator, message):
@@ -364,13 +369,23 @@ def test_fbx_mode(temp_dir):
     check(placement.data == imported_source.data, "FBX placement did not share the source Mesh")
     check(tuple(round(v, 5) for v in placement.scale) == (2.0, 3.0, 4.0), "FBX correction changed CSV Scale")
     check(
+        tuple(round(math.degrees(value), 5) for value in placement.rotation_euler) == (10.0, 20.0, 30.0),
+        "FBX local correction changed the CSV Euler values",
+    )
+    check(
         tuple(round(v, 5) for v in placement.delta_scale) == (0.01, 0.01, 0.01),
         "Default FBX Delta Scale correction is missing",
     )
     check(
-        math.isclose(placement.delta_rotation_euler.x, math.pi / 2, abs_tol=1e-6),
-        "Default FBX Delta X Rotation correction is missing",
+        math.isclose(props.fbx_rotation_x, math.pi / 2, abs_tol=1e-6),
+        "Default FBX Local X Rotation setting is incorrect",
     )
+    csv_rotation = Euler(tuple(math.radians(value) for value in (10.0, 20.0, 30.0)), 'XYZ').to_matrix()
+    local_expected = csv_rotation @ Matrix.Rotation(math.pi / 2, 3, 'X')
+    world_incorrect = Matrix.Rotation(math.pi / 2, 3, 'X') @ csv_rotation
+    actual_rotation = placement.matrix_basis.to_3x3().normalized()
+    check(matrix_error(actual_rotation, local_expected) < 1e-5, "FBX correction was not applied around local X")
+    check(matrix_error(actual_rotation, world_incorrect) > 0.1, "FBX correction still behaves as a world X rotation")
 
     props.apply_fbx_correction = False
     check(bpy.ops.csvmi.update('EXEC_DEFAULT') == {'FINISHED'}, "Disabling FBX correction failed")
@@ -384,7 +399,12 @@ def test_fbx_mode(temp_dir):
     check(bpy.ops.csvmi.update('EXEC_DEFAULT') == {'FINISHED'}, "Custom FBX correction update failed")
     placement = bpy.data.collections["FBX_Output"].objects[0]
     check(tuple(round(v, 5) for v in placement.delta_scale) == (0.02, 0.02, 0.02), "Custom FBX Unit Scale failed")
-    check(math.isclose(placement.delta_rotation_euler.x, -math.pi / 2, abs_tol=1e-6), "Custom FBX X Rotation failed")
+    custom_expected = csv_rotation @ Matrix.Rotation(-math.pi / 2, 3, 'X')
+    check(
+        matrix_error(placement.matrix_basis.to_3x3().normalized(), custom_expected) < 1e-5,
+        "Custom FBX Local X Rotation failed",
+    )
+    saved_delta_rotation = tuple(placement.delta_rotation_euler)
 
     fbx_cache = csvmi.get_csv_cache(scene)
     _, existing_output, resolved, missing_names, missing_rows = csvmi.validate_source_and_output(scene, fbx_cache)
@@ -410,7 +430,7 @@ def test_fbx_mode(temp_dir):
     drain_task(correction_cancel, 0.001)
     check(tuple(round(v, 5) for v in existing.delta_scale) == (0.02, 0.02, 0.02), "Cancel did not restore FBX Delta Scale")
     check(
-        math.isclose(existing.delta_rotation_euler.x, -math.pi / 2, abs_tol=1e-6),
+        all(math.isclose(actual, expected, abs_tol=1e-6) for actual, expected in zip(existing.delta_rotation_euler, saved_delta_rotation)),
         "Cancel did not restore FBX Delta Rotation",
     )
     check(not props.running and props.active_operation == 'NONE', "FBX import did not release the UI lock")
@@ -454,8 +474,13 @@ def run_scale_test(temp_dir, valid_rows=60568, name_count=1232, reupdate=True):
         make_object(name, shared_mesh, source)
 
     props.csv_path = str(stress_csv)
-    props.source_mode = 'COLLECTION'
-    props.source_collection = source
+    if "--stress-fbx" in sys.argv:
+        source[csvmi.FBX_MANAGED_KEY] = True
+        props.source_mode = 'FBX'
+        props.fbx_managed_collection = source
+    else:
+        props.source_mode = 'COLLECTION'
+        props.source_collection = source
     props.ignore_numeric_suffix = False
     props.output_collection_name = "Stress_Output"
     props.use_multi_tick = True
