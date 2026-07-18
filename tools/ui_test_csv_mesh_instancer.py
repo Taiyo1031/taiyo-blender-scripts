@@ -49,6 +49,12 @@ props.output_collection_name = "CSV_Output"
 props.use_multi_tick = True
 props.status = "UI test CSV is ready. Click Import CSV."
 
+if "--ui-running" in sys.argv:
+    props.running = True
+    props.active_operation = 'FBX_IMPORT'
+    props.phase = "FBX import"
+    props.status = "Importing FBX. Cancellation is applied after Blender finishes this step."
+
 for area in bpy.context.screen.areas:
     if area.type == 'VIEW_3D':
         area.spaces.active.show_region_ui = True

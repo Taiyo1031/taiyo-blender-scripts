@@ -1,7 +1,7 @@
 bl_info = {
     "name": "CSV Mesh Instancer",
     "author": "Taiyo",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar(N) > CSV Instancer",
     "description": "Create linked mesh objects from CSV transforms using Collection or FBX sources.",
@@ -424,6 +424,40 @@ def remove_collection_with_contents(collection):
         bpy.data.collections.remove(collection)
 
 
+def find_layer_collection(layer_collection, collection):
+    if layer_collection.collection == collection:
+        return layer_collection
+    for child in layer_collection.children:
+        match = find_layer_collection(child, collection)
+        if match is not None:
+            return match
+    return None
+
+
+def isolate_fbx_source_collection(scene, collection):
+    """Exclude an FBX source from every View Layer, or hide it globally as fallback."""
+    layer_collections = []
+    for view_layer in scene.view_layers:
+        layer_collection = find_layer_collection(view_layer.layer_collection, collection)
+        if layer_collection is None:
+            layer_collections = []
+            break
+        layer_collections.append(layer_collection)
+
+    if layer_collections:
+        try:
+            for layer_collection in layer_collections:
+                layer_collection.exclude = True
+            if all(layer_collection.exclude for layer_collection in layer_collections):
+                return 'VIEW_LAYER_EXCLUDE'
+        except (AttributeError, RuntimeError, TypeError):
+            pass
+
+    collection.hide_viewport = True
+    collection.hide_render = True
+    return 'COLLECTION_HIDE'
+
+
 def _property_update_source_collection(self, context):
     if context is None or context.scene is None:
         return
@@ -454,21 +488,91 @@ def tag_view3d_redraw(context):
             area.tag_redraw()
 
 
+class BlenderNameAllocator:
+    """Reserve deterministic Blender-style Object names without touching bpy data."""
+
+    def __init__(self, used_names):
+        self.used_names = set(used_names)
+        self.next_suffix = {}
+
+    def reserve(self, requested_name):
+        if requested_name not in self.used_names:
+            self.used_names.add(requested_name)
+            return requested_name
+
+        match = NUMERIC_SUFFIX_RE.search(requested_name)
+        if match:
+            stem = requested_name[:match.start()]
+            start = int(match.group(1)) + 1
+        else:
+            stem = requested_name
+            start = 1
+
+        suffix = max(start, self.next_suffix.get(stem, start))
+        while True:
+            candidate = f"{stem}.{suffix:03d}"
+            suffix += 1
+            if candidate not in self.used_names:
+                self.next_suffix[stem] = suffix
+                self.used_names.add(candidate)
+                return candidate
+
+
+def generated_name_allocator(output_collection):
+    output_objects = set(collect_collection_objects(output_collection)) if output_collection else set()
+    return BlenderNameAllocator(obj.name for obj in bpy.data.objects if obj not in output_objects)
+
+
+class TemporaryCollectionExclusion:
+    """Suspend View Layer evaluation while a large Collection is being changed."""
+
+    def __init__(self, scene, collection):
+        self.collection = collection
+        self.layer_states = []
+        self.hide_viewport = collection.hide_viewport
+        self.used_hide_fallback = False
+        for view_layer in scene.view_layers:
+            layer_collection = find_layer_collection(view_layer.layer_collection, collection)
+            if layer_collection is not None:
+                self.layer_states.append((layer_collection, layer_collection.exclude))
+
+        if self.layer_states and len(self.layer_states) == len(scene.view_layers):
+            for layer_collection, _exclude in self.layer_states:
+                layer_collection.exclude = True
+        else:
+            collection.hide_viewport = True
+            self.used_hide_fallback = True
+
+    def restore(self):
+        if self.collection is None or self.collection.name not in bpy.data.collections:
+            return
+        for layer_collection, exclude in self.layer_states:
+            try:
+                layer_collection.exclude = exclude
+            except (ReferenceError, RuntimeError):
+                pass
+        if self.used_hide_fallback:
+            self.collection.hide_viewport = self.hide_viewport
+        self.collection = None
+
+
 class UpdateTask:
     def __init__(self, scene, cache, output_collection, resolved, missing_names, missing_row_count):
         self.scene = scene
         self.props = scene.csvmi_props
         self.cache = cache
+        self.rows = sorted(cache.rows, key=lambda row: (row[ROW_NAME], row[ROW_LINE]))
         self.output_collection = output_collection
         self.resolved = resolved
         self.missing_names = missing_names
         self.missing_row_count = missing_row_count
-        self.stage = bpy.data.collections.new(STAGING_NAME)
+        self.stage = None
         self.phase = 'CREATE'
         self.index = 0
         self.created_count = 0
         self.stage_objects = []
         self.stage_names = []
+        self.name_allocator = generated_name_allocator(output_collection)
         self.old_objects = []
         self.old_collections = []
         self.cancelled = False
@@ -476,6 +580,7 @@ class UpdateTask:
         self.commit_started = False
         self.started_at = time.perf_counter()
         self.max_step_seconds = 0.0
+        self.visibility_guard = None
 
     def request_cancel(self):
         if self.commit_started:
@@ -490,8 +595,8 @@ class UpdateTask:
         source = self.resolved.get(row[ROW_NAME])
         if source is None:
             return
-        desired_name = f"CSV_{row[ROW_PTNUM]}_{row[ROW_NAME]}"
-        obj = bpy.data.objects.new(f"__CSVMI_STAGE_{self.created_count:08d}", source.data)
+        desired_name = self.name_allocator.reserve(row[ROW_NAME])
+        obj = bpy.data.objects.new(desired_name, source.data)
         obj.location = (row[ROW_TX], row[ROW_TY], row[ROW_TZ])
         obj.rotation_mode = 'XYZ'
         obj.rotation_euler = (row[ROW_RX], row[ROW_RY], row[ROW_RZ])
@@ -502,7 +607,6 @@ class UpdateTask:
         obj["csvmi_ptnum"] = row[ROW_PTNUM]
         obj["csvmi_csv_line"] = row[ROW_LINE]
         obj["csvmi_source_object"] = source.name
-        self.stage.objects.link(obj)
         self.stage_objects.append(obj)
         self.stage_names.append(desired_name)
         self.created_count += 1
@@ -512,6 +616,7 @@ class UpdateTask:
         if self.output_collection is None:
             self.output_collection = bpy.data.collections.new(self.props.output_collection_name.strip())
             self.scene.collection.children.link(self.output_collection)
+        self.visibility_guard = TemporaryCollectionExclusion(self.scene, self.output_collection)
         self.output_collection[OUTPUT_MANAGED_KEY] = True
         self.old_objects = collect_collection_objects(self.output_collection)
         self.old_collections = collect_child_collections_postorder(self.output_collection)
@@ -559,8 +664,8 @@ class UpdateTask:
         while not self.finished and (not did_work or time.perf_counter() < deadline):
             did_work = True
             if self.phase == 'CREATE':
-                if self.index < len(self.cache.rows):
-                    self._create_one(self.cache.rows[self.index])
+                if self.index < len(self.rows):
+                    self._create_one(self.rows[self.index])
                     self.index += 1
                 else:
                     self._prepare_commit()
@@ -588,13 +693,13 @@ class UpdateTask:
             elif self.phase == 'LINK':
                 if self.index < len(self.stage_objects):
                     obj = self.stage_objects[self.index]
-                    obj.name = self.stage_names[self.index]
+                    desired_name = self.stage_names[self.index]
+                    if obj.name != desired_name:
+                        obj.name = desired_name
                     self.output_collection.objects.link(obj)
-                    self.stage.objects.unlink(obj)
                     self.index += 1
                 else:
-                    if self.stage.name in bpy.data.collections:
-                        bpy.data.collections.remove(self.stage)
+                    self.visibility_guard.restore()
                     self.phase = 'DONE'
                     self.finished = True
 
@@ -605,8 +710,6 @@ class UpdateTask:
                     bpy.data.batch_remove(batch)
                     self.index = start - 1
                 else:
-                    if self.stage.name in bpy.data.collections:
-                        bpy.data.collections.remove(self.stage)
                     self.cancelled = True
                     self.finished = True
 
@@ -642,8 +745,8 @@ class UpdateTask:
         live_objects = [obj for obj in self.stage_objects if obj and obj.name in bpy.data.objects]
         if live_objects:
             bpy.data.batch_remove(live_objects)
-        if self.stage and self.stage.name in bpy.data.collections:
-            bpy.data.collections.remove(self.stage)
+        if self.visibility_guard is not None:
+            self.visibility_guard.restore()
 
 
 class InPlaceUpdateTask:
@@ -653,6 +756,7 @@ class InPlaceUpdateTask:
         self.scene = scene
         self.props = scene.csvmi_props
         self.cache = cache
+        self.rows = sorted(cache.rows, key=lambda row: (row[ROW_NAME], row[ROW_LINE]))
         self.output_collection = output_collection
         self.resolved = resolved
         self.missing_names = missing_names
@@ -671,6 +775,7 @@ class InPlaceUpdateTask:
         self.created_objects = []
         self.result_objects = []
         self.desired_names = []
+        self.name_allocator = generated_name_allocator(output_collection)
         self.rename_objects = []
         self.rename_names = []
         self.leftovers = []
@@ -680,6 +785,7 @@ class InPlaceUpdateTask:
         self.started_at = time.perf_counter()
         self.max_step_seconds = 0.0
         self.created_count = 0
+        self.visibility_guard = TemporaryCollectionExclusion(scene, output_collection)
 
     @staticmethod
     def _snapshot(obj):
@@ -777,8 +883,8 @@ class InPlaceUpdateTask:
         while not self.finished and (not did_work or time.perf_counter() < deadline):
             did_work = True
             if self.phase == 'UPDATE':
-                if self.index < len(self.cache.rows):
-                    row = self.cache.rows[self.index]
+                if self.index < len(self.rows):
+                    row = self.rows[self.index]
                     source = self.resolved.get(row[ROW_NAME])
                     if source is not None:
                         obj = self.existing_by_line.pop(row[ROW_LINE], None)
@@ -790,7 +896,7 @@ class InPlaceUpdateTask:
                             self.snapshots.append(self._snapshot(obj))
                         self._apply(obj, row, source)
                         self.result_objects.append(obj)
-                        self.desired_names.append(f"CSV_{row[ROW_PTNUM]}_{row[ROW_NAME]}")
+                        self.desired_names.append(self.name_allocator.reserve(row[ROW_NAME]))
                     self.index += 1
                 else:
                     self.created_count = len(self.result_objects)
@@ -818,6 +924,7 @@ class InPlaceUpdateTask:
                     self.rename_objects[self.index].name = self.rename_names[self.index]
                     self.index += 1
                 else:
+                    self.visibility_guard.restore()
                     self.finished = True
                     self.phase = 'DONE'
 
@@ -835,6 +942,7 @@ class InPlaceUpdateTask:
                     self._restore(self.snapshots[self.index])
                     self.index -= 1
                 else:
+                    self.visibility_guard.restore()
                     self.cancelled = True
                     self.finished = True
 
@@ -874,6 +982,7 @@ class InPlaceUpdateTask:
             obj = snapshot[0]
             if obj and obj.name in bpy.data.objects:
                 self._restore(snapshot)
+        self.visibility_guard.restore()
 
 
 def create_update_task(scene, cache, output_collection, resolved, missing_names, missing_row_count):
@@ -906,6 +1015,8 @@ class RealizeTask:
         self.finished = False
         self.started_at = time.perf_counter()
         self.max_step_seconds = 0.0
+        output = bpy.data.collections.get(scene.csvmi_props.output_collection_name.strip())
+        self.visibility_guard = TemporaryCollectionExclusion(scene, output) if output else None
 
     def request_cancel(self):
         if self.phase == 'REALIZE':
@@ -958,6 +1069,8 @@ class RealizeTask:
         return self.finished
 
     def finish_props(self):
+        if self.visibility_guard is not None:
+            self.visibility_guard.restore()
         props = self.props
         duration = time.perf_counter() - self.started_at
         props.process_seconds = duration
@@ -971,6 +1084,16 @@ class RealizeTask:
             props.status = f"Single-user conversion complete: {len(self.objects):,} objects / {duration:.2f}s"
             props.phase = "Complete"
             props.progress = 1.0
+
+    def cleanup_after_error(self):
+        for obj, old_mesh, new_mesh in reversed(self.changes):
+            if obj and obj.name in bpy.data.objects:
+                obj.data = old_mesh
+                obj["csvmi_linked_mesh"] = True
+            if new_mesh and new_mesh.users == 0:
+                bpy.data.meshes.remove(new_mesh)
+        if self.visibility_guard is not None:
+            self.visibility_guard.restore()
 
 
 class CSVMI_AddonPreferences(AddonPreferences):
@@ -1039,7 +1162,12 @@ class CSVMI_Props(PropertyGroup):
     running: BoolProperty(default=False)
     cancel_requested: BoolProperty(default=False)
     active_operation: EnumProperty(
-        items=[('NONE', "None", ""), ('UPDATE', "Update", ""), ('REALIZE', "Realize", "")],
+        items=[
+            ('NONE', "None", ""),
+            ('FBX_IMPORT', "FBX Import", ""),
+            ('UPDATE', "Update", ""),
+            ('REALIZE', "Realize", ""),
+        ],
         default='NONE',
     )
 
@@ -1102,6 +1230,11 @@ class CSVMI_OT_import_fbx(Operator):
     bl_label = "Import FBX"
     bl_description = "Import FBX into a temporary Collection and replace the old source only after validation"
 
+    _timer = None
+    _path = ""
+    _desired_name = ""
+    _old_managed = None
+
     def execute(self, context):
         scene = context.scene
         props = scene.csvmi_props
@@ -1127,6 +1260,30 @@ class CSVMI_OT_import_fbx(Operator):
             self.report({'ERROR'}, "The current FBX Collection is missing its management marker.")
             return {'CANCELLED'}
 
+        self._path = path
+        self._desired_name = desired_name
+        self._old_managed = old_managed
+        _set_running(props, 'FBX_IMPORT', "Preparing FBX import")
+        props.phase = "FBX import"
+        tag_view3d_redraw(context)
+
+        if bpy.app.background or context.window is None:
+            try:
+                return self._import_fbx(context)
+            finally:
+                _set_idle(props)
+
+        self._timer = context.window_manager.event_timer_add(0.1, window=context.window)
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def _import_fbx(self, context):
+        scene = context.scene
+        props = scene.csvmi_props
+        path = self._path
+        desired_name = self._desired_name
+        old_managed = self._old_managed
+
         before_objects = {obj.as_pointer() for obj in bpy.data.objects}
         before_collections = {collection.as_pointer() for collection in bpy.data.collections}
         temp_collection = bpy.data.collections.new("__CSVMI_FBX_IMPORT__")
@@ -1149,6 +1306,8 @@ class CSVMI_OT_import_fbx(Operator):
                 for collection in bpy.data.collections
                 if collection.as_pointer() not in before_collections and collection != temp_collection
             ]
+            if props.cancel_requested:
+                raise InterruptedError("FBX import cancelled.")
             mesh_objects = [obj for obj in new_objects if obj.type == 'MESH']
             if not mesh_objects:
                 raise RuntimeError("The FBX contains no Mesh objects.")
@@ -1172,23 +1331,66 @@ class CSVMI_OT_import_fbx(Operator):
             temp_collection.name = desired_name
             temp_collection[FBX_MANAGED_KEY] = True
             temp_collection[FBX_PATH_KEY] = path
+            visibility_mode = isolate_fbx_source_collection(scene, temp_collection)
             props.fbx_managed_collection = temp_collection
             props.fbx_total_count = len(new_objects)
             props.fbx_mesh_count = len(mesh_objects)
             props.fbx_unapplied_transform_count = unapplied
             props.source_mesh_count = len(mesh_objects)
             props.status = f"FBX imported: {len(mesh_objects):,} Mesh / {len(new_objects):,} total objects"
+            if visibility_mode == 'VIEW_LAYER_EXCLUDE':
+                props.status += " / source excluded from View Layers"
+            else:
+                props.status += " / source Collection hidden"
             if unapplied:
                 props.status += f" / {unapplied:,} unapplied transforms"
             props.phase = "FBX loaded"
             self.report({'WARNING'} if unapplied else {'INFO'}, props.status)
             return {'FINISHED'}
+        except InterruptedError:
+            _cleanup_new_import_data(new_objects, new_collections, temp_collection)
+            props.status = "FBX import cancelled. The previous source was preserved."
+            props.phase = "Cancelled"
+            self.report({'INFO'}, props.status)
+            return {'CANCELLED'}
         except Exception as exc:
             traceback.print_exc()
             _cleanup_new_import_data(new_objects, new_collections, temp_collection)
             props.status = f"FBX import failed: {exc}"
             self.report({'ERROR'}, props.status)
             return {'CANCELLED'}
+
+    def _finish_modal(self, context):
+        if self._timer is not None:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+        _set_idle(context.scene.csvmi_props)
+        tag_view3d_redraw(context)
+
+    def modal(self, context, event):
+        props = context.scene.csvmi_props
+        if event.type == 'ESC':
+            props.cancel_requested = True
+        if props.cancel_requested:
+            props.status = "FBX import cancelled before the Blender import step."
+            props.phase = "Cancelled"
+            self._finish_modal(context)
+            return {'CANCELLED'}
+        if event.type != 'TIMER':
+            return {'PASS_THROUGH'}
+
+        if self._timer is not None:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+        props.status = "Importing FBX. Cancellation is applied after Blender finishes this step."
+        tag_view3d_redraw(context)
+        try:
+            return self._import_fbx(context)
+        finally:
+            self._finish_modal(context)
+
+    def cancel(self, context):
+        context.scene.csvmi_props.cancel_requested = True
 
 
 class _ModalTaskOperator:
@@ -1393,6 +1595,22 @@ class CSVMI_PT_panel(Panel):
         props = scene.csvmi_props
         cache = get_csv_cache(scene)
         controls_enabled = not props.running
+
+        if props.running:
+            box = layout.box()
+            box.label(text=props.phase, icon='INFO')
+            box.label(text=props.status)
+            if props.active_operation != 'FBX_IMPORT' and (props.progress > 0.0 or hasattr(box, "progress")):
+                if hasattr(box, "progress"):
+                    box.progress(
+                        factor=props.progress,
+                        type='BAR',
+                        text=f"{int(props.progress * 100)}%",
+                    )
+                else:
+                    box.label(text=f"Progress: {int(props.progress * 100)}%")
+            box.operator("csvmi.cancel", text="Cancel", icon='CANCEL')
+            return
 
         if draw_foldout(layout, props, "show_csv", "CSV Data", 'FILE'):
             box = layout.box()

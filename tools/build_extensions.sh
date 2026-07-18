@@ -60,6 +60,7 @@ compatibility_archives=(
   "collection_linked_mesh_replacer-1.0.6.zip"
   "collection_linked_mesh_replacer-1.0.7.zip"
   "collection_linked_mesh_replacer-1.0.8.zip"
+  "csv_mesh_instancer-1.0.0.zip"
   "laid_collection_instance_linker-1.0.0.zip"
   "laid_collection_instance_linker-1.0.1.zip"
   "modular_asset_renamer-1.0.0.zip"

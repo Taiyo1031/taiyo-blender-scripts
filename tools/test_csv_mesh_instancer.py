@@ -78,10 +78,18 @@ def write_csv(path, rows, fieldnames=None):
 
 def drain_task(task, budget=csvmi.TIME_BUDGET_SECONDS):
     ticks = 0
-    while not task.step(budget):
+    phase_seconds = {}
+    while True:
+        phase = task.phase
+        started = time.perf_counter()
+        finished = task.step(budget)
+        phase_seconds[phase] = phase_seconds.get(phase, 0.0) + (time.perf_counter() - started)
+        if finished:
+            break
         ticks += 1
         if ticks > 1_000_000:
             raise RuntimeError("Task did not finish")
+    task.test_phase_seconds = phase_seconds
     task.finish_props()
     return ticks + 1
 
@@ -154,6 +162,8 @@ def test_csv_and_collection_mode(temp_dir):
     output = bpy.data.collections["CSV_Output"]
     check(output.as_pointer() == output_pointer, "Output Collection datablock was replaced")
     check(output.color_tag == 'COLOR_04' and output.hide_render, "Output Collection settings changed")
+    output_layer = csvmi.find_layer_collection(bpy.context.view_layer.layer_collection, output)
+    check(output_layer is not None and not output_layer.exclude, "Output View Layer exclusion was not restored")
     check("OldDummy" not in bpy.data.objects and "OldChild" not in bpy.data.collections, "Old output content remains")
     generated = list(output.objects)
     check(len(generated) == 3, f"Expected 3 generated objects, got {len(generated)}")
@@ -161,15 +171,17 @@ def test_csv_and_collection_mode(temp_dir):
     check(props.missing_name_count == 1 and props.missing_row_count == 1, "Missing mesh stats mismatch")
     check(props.collision_group_count == 1, "Suffix collision group count mismatch")
 
-    exact = bpy.data.objects["CSV_10_Cube.002"]
-    fallback = bpy.data.objects["CSV_3_Cube.100"]
-    sphere = bpy.data.objects["CSV_13_Sphere"]
+    exact = bpy.data.objects["Cube.003"]
+    fallback = bpy.data.objects["Cube.100"]
+    sphere = bpy.data.objects["Sphere.001"]
+    check(all(not obj.name.startswith("CSV_") for obj in generated), "Generated Object names still use the CSV_ prefix")
     check(exact.data == source_objects["Cube.002"].data, "Exact match did not win")
     check(fallback.data == source_objects["Cube"].data, "Suffix fallback priority mismatch")
     check(tuple(round(v, 5) for v in exact.location) == (1.25, -2.0, 3.0), "Location mismatch")
     check(math.isclose(exact.rotation_euler.x, math.pi / 2, abs_tol=1e-6), "Degree conversion mismatch")
     check(tuple(round(v, 5) for v in sphere.scale) == (-1.0, 0.0, 2.0), "Scale mismatch")
     check(bool(exact["csvmi_linked_mesh"]), "Generated linked flag missing")
+    names_by_line = {int(obj["csvmi_csv_line"]): obj.name for obj in generated}
 
     before_cancel = {obj.as_pointer() for obj in output.objects}
     _, existing_output, resolved, missing_names, missing_rows = csvmi.validate_source_and_output(scene, original_cache)
@@ -206,7 +218,11 @@ def test_csv_and_collection_mode(temp_dir):
 
     check(bpy.ops.csvmi.update('EXEC_DEFAULT') == {'FINISHED'}, "Update after realization failed")
     check(all(bool(obj["csvmi_linked_mesh"]) for obj in output.objects), "Update did not restore linked state")
-    check(bpy.data.objects["CSV_10_Cube.002"].data == source_objects["Cube.002"].data, "Update did not re-link source mesh")
+    check(bpy.data.objects["Cube.003"].data == source_objects["Cube.002"].data, "Update did not re-link source mesh")
+    check(
+        {int(obj["csvmi_csv_line"]): obj.name for obj in output.objects} == names_by_line,
+        "Fast re-update changed deterministic Object names",
+    )
 
     output = bpy.data.collections["CSV_Output"]
     before_fast_cancel = {
@@ -222,7 +238,7 @@ def test_csv_and_collection_mode(temp_dir):
     fast_cancel.snapshots.append(fast_cancel._snapshot(first_object))
     fast_cancel._apply(first_object, first_row, first_source)
     fast_cancel.result_objects.append(first_object)
-    fast_cancel.desired_names.append(f"CSV_{first_row[csvmi.ROW_PTNUM]}_{first_row[csvmi.ROW_NAME]}")
+    fast_cancel.desired_names.append(fast_cancel.name_allocator.reserve(first_row[csvmi.ROW_NAME]))
     fast_cancel.index = 1
     fast_cancel.request_cancel()
     drain_task(fast_cancel, 0.001)
@@ -232,6 +248,7 @@ def test_csv_and_collection_mode(temp_dir):
         for obj in output.objects
     }
     check(after_fast_cancel == before_fast_cancel, "Fast update rollback changed output data")
+    check(not output_layer.exclude, "Cancelled update did not restore output visibility")
     print("[PASS] CSV and Collection mode")
 
 
@@ -275,6 +292,16 @@ def test_fbx_mode(temp_dir):
     old_pointer = old_collection.as_pointer()
     check(props.fbx_mesh_count == 2, "FBX mesh count mismatch")
     check(bool(old_collection[csvmi.FBX_MANAGED_KEY]), "FBX management marker missing")
+    for view_layer in scene.view_layers:
+        layer_collection = csvmi.find_layer_collection(view_layer.layer_collection, old_collection)
+        check(layer_collection is not None and layer_collection.exclude, "FBX source was not excluded from a View Layer")
+    check(not old_collection.hide_viewport, "View Layer exclusion unexpectedly used Collection hiding")
+
+    fallback_collection = bpy.data.collections.new("CSVMI_FBX_Fallback")
+    visibility_mode = csvmi.isolate_fbx_source_collection(scene, fallback_collection)
+    check(visibility_mode == 'COLLECTION_HIDE', "Unlinked FBX source did not use the visibility fallback")
+    check(fallback_collection.hide_viewport and fallback_collection.hide_render, "FBX visibility fallback is incomplete")
+    bpy.data.collections.remove(fallback_collection)
 
     invalid_fbx = temp_dir / "invalid.fbx"
     invalid_fbx.write_text("not an fbx", encoding="utf-8")
@@ -291,6 +318,10 @@ def test_fbx_mode(temp_dir):
     check(props.fbx_managed_collection.as_pointer() != old_pointer, "FBX source was not replaced")
     check(props.fbx_mesh_count == 1, "Re-imported FBX mesh count mismatch")
     check(len(csvmi.collect_collection_objects(props.fbx_managed_collection, mesh_only=True)) == 1, "Managed FBX Collection is incorrect")
+    for view_layer in scene.view_layers:
+        layer_collection = csvmi.find_layer_collection(view_layer.layer_collection, props.fbx_managed_collection)
+        check(layer_collection is not None and layer_collection.exclude, "Re-imported FBX source is visible")
+    check(not props.running and props.active_operation == 'NONE', "FBX import did not release the UI lock")
     print("[PASS] FBX mode")
 
 
@@ -381,6 +412,11 @@ def run_scale_test(temp_dir, valid_rows=60568, name_count=1232, reupdate=True):
             f"reupdate={second_seconds:.2f}s/{second_ticks}ticks/max={second_task.max_step_seconds * 1000:.1f}ms"
             if second_task is not None else "reupdate=skipped"
         ),
+        flush=True,
+    )
+    print(
+        "[STRESS PHASES] "
+        + ", ".join(f"{phase}={seconds:.2f}s" for phase, seconds in first_task.test_phase_seconds.items()),
         flush=True,
     )
     check(first_task.max_step_seconds < 0.25, "First update exceeded 250ms max tick")

@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "csv_mesh_instancer"
-version = "1.0.0"
+version = "1.0.1"
 name = "CSV Mesh Instancer"
 tagline = "Place linked meshes from CSV using Collection or FBX sources"
 maintainer = "Taiyo"
