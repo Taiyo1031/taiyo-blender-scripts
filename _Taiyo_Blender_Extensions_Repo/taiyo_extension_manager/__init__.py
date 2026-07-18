@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 11),
+    "version": (1, 0, 12),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -59,6 +59,10 @@ TAG_ALIASES = {
         "asset", "batch", "custom-property", "data", "metadata", "object", "mesh",
         "material", "preset", "property", "search", "tag",
         "一括編集", "検索", "カスタムプロパティ", "メタデータ", "タグ", "素材",
+    ),
+    "csv_mesh_instancer": (
+        "collection", "csv", "fbx", "import", "instance", "mesh", "placement",
+        "transform", "インスタンス", "コレクション", "メッシュ", "配置", "読み込み",
     ),
     "export_selected_names_csv": (
         "csv", "export", "list", "name", "names", "object", "selected", "spreadsheet",
@@ -159,6 +163,10 @@ DESCRIPTION_ALIASES = {
     "custom_properties_batch_editor": {
         "ja": "Object、Mesh、MaterialのCustom Propertiesを一括編集・検索します。",
         "en": "Batch edit and search custom properties on objects, meshes, and materials.",
+    },
+    "csv_mesh_instancer": {
+        "ja": "CSVのTransformを使い、CollectionまたはFBXのMeshを高速にリンク配置します。",
+        "en": "Place linked meshes from a collection or FBX using CSV transforms.",
     },
     "export_selected_names_csv": {
         "ja": "選択オブジェクト名をCSVに書き出します。",

@@ -28,6 +28,7 @@ packages=(
   "collection_linked_mesh_replacer"
   "collection_number_to_mesh_name"
   "collection_mesh_merge_fbx_exporter"
+  "csv_mesh_instancer"
   "custom_properties_batch_editor"
   "export_selected_names_csv"
   "gn_parameter_csv_exporter"

@@ -47,7 +47,7 @@ repo/
 
 このスクリプトは以下を行います。
 
-- 23個の Extensions パッケージを `blender --command extension validate` で検証
+- 24個の Extensions パッケージを `blender --command extension validate` で検証
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `blender --command extension server-generate --repo-dir docs/extensions --html` で `index.json` と `index.html` を生成
 
@@ -64,7 +64,7 @@ repo/
 ## 配布前チェック
 
 - `find . -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store'` で不要物を確認します。
-- `docs/extensions/index.json` の配布パッケージが23個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は23個より多くても問題ありません。
+- `docs/extensions/index.json` の配布パッケージが24個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は24個より多くても問題ありません。
 - `docs/extensions/index.json` と `docs/extensions/index.html` が生成されていることを確認します。
 - 可能ならBlenderのPreferencesからRemote Repositoryに `index.json` URLを追加して確認します。
 
@@ -80,6 +80,7 @@ repo/
 - Blend Reference Graphの統合テストは `blender --background --python tools/test_blend_reference_graph.py` で実行します。
 - Custom Properties Batch Editorの統合テストは `blender --background --python tools/test_custom_properties_batch_editor.py` で実行します。
 - Collection Linked Mesh Replacerの統合テストは `blender --background --python tools/test_collection_linked_mesh_replacer.py` で実行します。
+- CSV Mesh Instancerの統合・負荷テストは `blender --background --python tools/test_csv_mesh_instancer.py` で実行します。
 - Modular Asset Renamerの統合テストは `blender --background --python tools/test_modular_asset_renamer.py` で実行します。
 - Taiyo Extension Managerのフィルター・並び替え統合テストは `blender --background --python tools/test_taiyo_extension_manager.py` で実行します。
 - Laid Collection Instance Linkerの統合テストは `blender --background --python tools/test_laid_collection_instance_linker.py` で実行します。

@@ -103,6 +103,14 @@ def test_release_timestamp_cache(manager):
         assert manager._format_release_date(123)
 
 
+def test_csv_mesh_instancer_metadata(manager):
+    tags = set(manager.TAG_ALIASES["csv_mesh_instancer"])
+    assert {"csv", "import", "instance", "mesh", "配置", "読み込み"}.issubset(tags)
+    descriptions = manager.DESCRIPTION_ALIASES["csv_mesh_instancer"]
+    assert descriptions["en"]
+    assert descriptions["ja"]
+
+
 def test_distributed_index_metadata(manager):
     index_path = os.path.join(ROOT, "docs", "extensions", "index.json")
     with open(index_path, "r", encoding="utf-8") as handle:
@@ -110,7 +118,7 @@ def test_distributed_index_metadata(manager):
 
     errors = []
     items = index_data["data"]
-    assert len(items) == 22
+    assert len(items) == 24
     assert all(item.get(manager.RELEASE_TIMESTAMP_KEY, 0) > 0 for item in items)
     for item in items:
         normalized = PkgManifest_Normalized.from_dict_with_error_fn(
@@ -149,6 +157,7 @@ def main():
     manager = load_manager()
     test_filters_and_sorting(manager)
     test_release_timestamp_cache(manager)
+    test_csv_mesh_instancer_metadata(manager)
     test_distributed_index_metadata(manager)
     test_registration_and_tag_operators(manager)
     print("Taiyo Extension Manager tests passed")

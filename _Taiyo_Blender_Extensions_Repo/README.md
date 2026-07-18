@@ -10,6 +10,7 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 - `collection_linked_mesh_replacer`: Collection Linked Mesh Replacer
 - `collection_number_to_mesh_name`: Collection Number To Mesh Name
 - `collection_mesh_merge_fbx_exporter`: Collection Mesh Merge FBX Exporter
+- `csv_mesh_instancer`: CSV Mesh Instancer
 - `custom_properties_batch_editor`: Custom Properties Batch Editor
 - `gn_parameter_csv_exporter`: GN Parameter CSV Exporter
 - `export_selected_names_csv`: Export Selected Object Names to CSV
