@@ -180,6 +180,8 @@ def test_csv_and_collection_mode(temp_dir):
     check(tuple(round(v, 5) for v in exact.location) == (1.25, -2.0, 3.0), "Location mismatch")
     check(math.isclose(exact.rotation_euler.x, math.pi / 2, abs_tol=1e-6), "Degree conversion mismatch")
     check(tuple(round(v, 5) for v in sphere.scale) == (-1.0, 0.0, 2.0), "Scale mismatch")
+    check(tuple(exact.delta_scale) == (1.0, 1.0, 1.0), "Collection mode received FBX Delta Scale")
+    check(tuple(exact.delta_rotation_euler) == (0.0, 0.0, 0.0), "Collection mode received FBX Delta Rotation")
     check(bool(exact["csvmi_linked_mesh"]), "Generated linked flag missing")
     names_by_line = {int(obj["csvmi_csv_line"]): obj.name for obj in generated}
 
@@ -226,7 +228,15 @@ def test_csv_and_collection_mode(temp_dir):
 
     output = bpy.data.collections["CSV_Output"]
     before_fast_cancel = {
-        obj.as_pointer(): (obj.data.as_pointer(), tuple(obj.location), tuple(obj.rotation_euler), tuple(obj.scale))
+        obj.as_pointer(): (
+            obj.data.as_pointer(),
+            tuple(obj.location),
+            tuple(obj.rotation_euler),
+            tuple(obj.scale),
+            tuple(obj.delta_location),
+            tuple(obj.delta_rotation_euler),
+            tuple(obj.delta_scale),
+        )
         for obj in output.objects
     }
     _, existing_output, resolved, missing_names, missing_rows = csvmi.validate_source_and_output(scene, original_cache)
@@ -244,7 +254,15 @@ def test_csv_and_collection_mode(temp_dir):
     drain_task(fast_cancel, 0.001)
     check(fast_cancel.cancelled, "Fast update cancellation did not roll back")
     after_fast_cancel = {
-        obj.as_pointer(): (obj.data.as_pointer(), tuple(obj.location), tuple(obj.rotation_euler), tuple(obj.scale))
+        obj.as_pointer(): (
+            obj.data.as_pointer(),
+            tuple(obj.location),
+            tuple(obj.rotation_euler),
+            tuple(obj.scale),
+            tuple(obj.delta_location),
+            tuple(obj.delta_rotation_euler),
+            tuple(obj.delta_scale),
+        )
         for obj in output.objects
     }
     check(after_fast_cancel == before_fast_cancel, "Fast update rollback changed output data")
@@ -321,6 +339,80 @@ def test_fbx_mode(temp_dir):
     for view_layer in scene.view_layers:
         layer_collection = csvmi.find_layer_collection(view_layer.layer_collection, props.fbx_managed_collection)
         check(layer_collection is not None and layer_collection.exclude, "Re-imported FBX source is visible")
+
+    imported_source = csvmi.collect_collection_objects(props.fbx_managed_collection, mesh_only=True)[0]
+    csv_path = temp_dir / "fbx_correction.csv"
+    write_csv(csv_path, [{
+        "ptnum": "1",
+        "sx": "2",
+        "sy": "3",
+        "sz": "4",
+        "rx": "10",
+        "ry": "20",
+        "rz": "30",
+        "objname": imported_source.name,
+        "tx": "1",
+        "ty": "2",
+        "tz": "3",
+    }])
+    props.csv_path = str(csv_path)
+    props.output_collection_name = "FBX_Output"
+    props.use_multi_tick = False
+    check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, "FBX correction CSV import failed")
+    check(bpy.ops.csvmi.update('EXEC_DEFAULT') == {'FINISHED'}, "FBX correction update failed")
+    placement = bpy.data.collections["FBX_Output"].objects[0]
+    check(placement.data == imported_source.data, "FBX placement did not share the source Mesh")
+    check(tuple(round(v, 5) for v in placement.scale) == (2.0, 3.0, 4.0), "FBX correction changed CSV Scale")
+    check(
+        tuple(round(v, 5) for v in placement.delta_scale) == (0.01, 0.01, 0.01),
+        "Default FBX Delta Scale correction is missing",
+    )
+    check(
+        math.isclose(placement.delta_rotation_euler.x, math.pi / 2, abs_tol=1e-6),
+        "Default FBX Delta X Rotation correction is missing",
+    )
+
+    props.apply_fbx_correction = False
+    check(bpy.ops.csvmi.update('EXEC_DEFAULT') == {'FINISHED'}, "Disabling FBX correction failed")
+    placement = bpy.data.collections["FBX_Output"].objects[0]
+    check(tuple(placement.delta_scale) == (1.0, 1.0, 1.0), "Disabled FBX correction left Delta Scale behind")
+    check(tuple(placement.delta_rotation_euler) == (0.0, 0.0, 0.0), "Disabled FBX correction left Delta Rotation behind")
+
+    props.apply_fbx_correction = True
+    props.fbx_unit_scale = 0.02
+    props.fbx_rotation_x = math.radians(-90.0)
+    check(bpy.ops.csvmi.update('EXEC_DEFAULT') == {'FINISHED'}, "Custom FBX correction update failed")
+    placement = bpy.data.collections["FBX_Output"].objects[0]
+    check(tuple(round(v, 5) for v in placement.delta_scale) == (0.02, 0.02, 0.02), "Custom FBX Unit Scale failed")
+    check(math.isclose(placement.delta_rotation_euler.x, -math.pi / 2, abs_tol=1e-6), "Custom FBX X Rotation failed")
+
+    fbx_cache = csvmi.get_csv_cache(scene)
+    _, existing_output, resolved, missing_names, missing_rows = csvmi.validate_source_and_output(scene, fbx_cache)
+    correction_cancel = csvmi.create_update_task(
+        scene,
+        fbx_cache,
+        existing_output,
+        resolved,
+        missing_names,
+        missing_rows,
+    )
+    row = fbx_cache.rows[0]
+    source = resolved[row[csvmi.ROW_NAME]]
+    existing = correction_cancel.existing_by_line.pop(row[csvmi.ROW_LINE])
+    correction_cancel.snapshots.append(correction_cancel._snapshot(existing))
+    props.fbx_unit_scale = 0.03
+    props.fbx_rotation_x = math.radians(45.0)
+    correction_cancel._apply(existing, row, source)
+    correction_cancel.result_objects.append(existing)
+    correction_cancel.desired_names.append(correction_cancel.name_allocator.reserve(row[csvmi.ROW_NAME]))
+    correction_cancel.index = 1
+    correction_cancel.request_cancel()
+    drain_task(correction_cancel, 0.001)
+    check(tuple(round(v, 5) for v in existing.delta_scale) == (0.02, 0.02, 0.02), "Cancel did not restore FBX Delta Scale")
+    check(
+        math.isclose(existing.delta_rotation_euler.x, -math.pi / 2, abs_tol=1e-6),
+        "Cancel did not restore FBX Delta Rotation",
+    )
     check(not props.running and props.active_operation == 'NONE', "FBX import did not release the UI lock")
     print("[PASS] FBX mode")
 

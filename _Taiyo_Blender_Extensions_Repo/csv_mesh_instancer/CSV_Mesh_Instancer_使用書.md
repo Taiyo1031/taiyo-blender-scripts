@@ -50,6 +50,15 @@ FBXは一時Collectionへ読み込み、Meshが存在することを確認して
 
 配置Objectが引き継ぐのはMesh datablock側の情報です。ソースObjectのLocation、Rotation、Scale、Parent、Constraint、Animation、Modifierは配置へ引き継ぎません。ソースMeshのTransformが未適用の場合は警告します。
 
+FBXの頂点座標がセンチメートル単位・軸変換前の状態で格納されていても、CSVの通常Transform値を変更しないよう、FBXモードの配置には既定で次のDelta Transform補正を適用します。
+
+```text
+Delta Scale: 0.01, 0.01, 0.01
+Delta Rotation X: 90°
+```
+
+`Apply FBX Unit / Axis Correction`をOFFにすると補正なしになります。異なる単位・軸のFBXでは`Unit Scale`と`X Rotation`を調整してください。Collectionモードにはこの補正を適用しません。
+
 ## 5. 名前照合
 
 通常は完全一致です。`Ignore .001 Numeric Suffixes`がONでも完全一致を最優先します。

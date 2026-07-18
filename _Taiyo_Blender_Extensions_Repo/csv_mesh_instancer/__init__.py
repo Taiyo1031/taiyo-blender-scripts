@@ -1,7 +1,7 @@
 bl_info = {
     "name": "CSV Mesh Instancer",
     "author": "Taiyo",
-    "version": (1, 0, 1),
+    "version": (1, 0, 2),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar(N) > CSV Instancer",
     "description": "Create linked mesh objects from CSV transforms using Collection or FBX sources.",
@@ -66,6 +66,22 @@ ROW_RZ = 8
 ROW_SX = 9
 ROW_SY = 10
 ROW_SZ = 11
+
+
+def apply_csv_transform(obj, row, props):
+    """Apply CSV values and a separate FBX unit/axis correction."""
+    obj.location = (row[ROW_TX], row[ROW_TY], row[ROW_TZ])
+    obj.rotation_mode = 'XYZ'
+    obj.rotation_euler = (row[ROW_RX], row[ROW_RY], row[ROW_RZ])
+    obj.scale = (row[ROW_SX], row[ROW_SY], row[ROW_SZ])
+    obj.delta_location = (0.0, 0.0, 0.0)
+    if props.source_mode == 'FBX' and props.apply_fbx_correction:
+        correction = props.fbx_unit_scale
+        obj.delta_rotation_euler = (props.fbx_rotation_x, 0.0, 0.0)
+        obj.delta_scale = (correction, correction, correction)
+    else:
+        obj.delta_rotation_euler = (0.0, 0.0, 0.0)
+        obj.delta_scale = (1.0, 1.0, 1.0)
 
 
 class CSVData:
@@ -597,10 +613,7 @@ class UpdateTask:
             return
         desired_name = self.name_allocator.reserve(row[ROW_NAME])
         obj = bpy.data.objects.new(desired_name, source.data)
-        obj.location = (row[ROW_TX], row[ROW_TY], row[ROW_TZ])
-        obj.rotation_mode = 'XYZ'
-        obj.rotation_euler = (row[ROW_RX], row[ROW_RY], row[ROW_RZ])
-        obj.scale = (row[ROW_SX], row[ROW_SY], row[ROW_SZ])
+        apply_csv_transform(obj, row, self.props)
         obj["csvmi_generated"] = True
         obj["csvmi_linked_mesh"] = True
         obj["csvmi_objname"] = row[ROW_NAME]
@@ -795,6 +808,9 @@ class InPlaceUpdateTask:
             obj.location.copy(),
             obj.rotation_euler.copy(),
             obj.scale.copy(),
+            obj.delta_location.copy(),
+            obj.delta_rotation_euler.copy(),
+            obj.delta_scale.copy(),
             bool(obj.get("csvmi_linked_mesh", False)),
             obj.get("csvmi_objname", ""),
             obj.get("csvmi_ptnum", ""),
@@ -802,13 +818,9 @@ class InPlaceUpdateTask:
             obj.get("csvmi_source_object", ""),
         )
 
-    @staticmethod
-    def _apply(obj, row, source):
+    def _apply(self, obj, row, source):
         obj.data = source.data
-        obj.location = (row[ROW_TX], row[ROW_TY], row[ROW_TZ])
-        obj.rotation_mode = 'XYZ'
-        obj.rotation_euler = (row[ROW_RX], row[ROW_RY], row[ROW_RZ])
-        obj.scale = (row[ROW_SX], row[ROW_SY], row[ROW_SZ])
+        apply_csv_transform(obj, row, self.props)
         obj["csvmi_generated"] = True
         obj["csvmi_linked_mesh"] = True
         obj["csvmi_objname"] = row[ROW_NAME]
@@ -818,12 +830,29 @@ class InPlaceUpdateTask:
 
     @staticmethod
     def _restore(snapshot):
-        obj, mesh, location, rotation, scale, linked, objname, ptnum, line, source_name = snapshot
+        (
+            obj,
+            mesh,
+            location,
+            rotation,
+            scale,
+            delta_location,
+            delta_rotation,
+            delta_scale,
+            linked,
+            objname,
+            ptnum,
+            line,
+            source_name,
+        ) = snapshot
         obj.data = mesh
         obj.location = location
         obj.rotation_mode = 'XYZ'
         obj.rotation_euler = rotation
         obj.scale = scale
+        obj.delta_location = delta_location
+        obj.delta_rotation_euler = delta_rotation
+        obj.delta_scale = delta_scale
         obj["csvmi_generated"] = True
         obj["csvmi_linked_mesh"] = linked
         obj["csvmi_objname"] = objname
@@ -1124,6 +1153,26 @@ class CSVMI_Props(PropertyGroup):
     fbx_path: StringProperty(name="FBX File", subtype='FILE_PATH', default="")
     fbx_collection_name: StringProperty(name="Managed Collection", default="CSVMI_FBX_Source")
     fbx_managed_collection: PointerProperty(type=bpy.types.Collection)
+    apply_fbx_correction: BoolProperty(
+        name="Apply FBX Unit / Axis Correction",
+        default=True,
+        description="Keep CSV transforms unchanged and correct the linked FBX mesh with Delta Transform",
+    )
+    fbx_unit_scale: FloatProperty(
+        name="Unit Scale",
+        default=0.01,
+        min=0.000001,
+        soft_max=1.0,
+        precision=4,
+        description="Uniform Delta Scale applied to placements that use an FBX source",
+    )
+    fbx_rotation_x: FloatProperty(
+        name="X Rotation",
+        default=math.radians(90.0),
+        subtype='ANGLE',
+        unit='ROTATION',
+        description="Delta X rotation applied to placements that use an FBX source",
+    )
     output_collection_name: StringProperty(name="Collection Name", default="CSV_Output")
     ignore_numeric_suffix: BoolProperty(name="Ignore .001 Numeric Suffixes", default=False)
     use_multi_tick: BoolProperty(
@@ -1669,6 +1718,11 @@ class CSVMI_PT_panel(Panel):
                         )
                 else:
                     box.label(text="Status: Not imported", icon='INFO')
+                correction = column.column(align=True)
+                correction.prop(props, "apply_fbx_correction")
+                if props.apply_fbx_correction:
+                    correction.prop(props, "fbx_unit_scale")
+                    correction.prop(props, "fbx_rotation_x")
 
         if draw_foldout(layout, props, "show_matching", "Name Matching", 'SORTALPHA'):
             box = layout.box()

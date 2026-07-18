@@ -49,6 +49,9 @@ props.output_collection_name = "CSV_Output"
 props.use_multi_tick = True
 props.status = "UI test CSV is ready. Click Import CSV."
 
+if "--ui-fbx" in sys.argv:
+    props.source_mode = 'FBX'
+
 if "--ui-running" in sys.argv:
     props.running = True
     props.active_operation = 'FBX_IMPORT'
