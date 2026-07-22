@@ -1,6 +1,8 @@
 # CSV Mesh Instancer
 
-CSVの`objname`とTransformを読み取り、CollectionまたはFBX内のMeshを共有するリンクObjectとして大量配置するBlender Extensionです。
+Version 2.0.0
+
+CSVの永続IDを使い、CollectionまたはFBX内のMeshを共有するObjectを大量配置・差分更新するBlender Extensionです。Houdini RBDシミュレーション後のBlenderクリーンアップを想定し、前回CSV・新CSV・現在のBlender編集を比較して安全に更新します。
 
 ## 対応環境
 
@@ -8,24 +10,26 @@ CSVの`objname`とTransformを読み取り、CollectionまたはFBX内のMeshを
 - `3D Viewport > Sidebar (N) > CSV Instancer`
 - UIの既定言語は英語
 
-## 主な機能
+## Version 2.0.0の主な機能
 
-- CSVのインポート・安全な再インポート
-- CollectionまたはFBXをMeshソースとして使用
-- FBX配置へ既定でDelta Scale `0.01`・Local X Rotation `90°`の単位／軸補正を適用（`R`→`X`→`X`と同じローカル軸、UIで調整・無効化可能）
-- FBX管理Collectionを全View Layerから除外（不可時はCollectionを非表示）
-- 子Collectionを含むMesh検索
-- 完全一致優先と`.001`等の数値サフィックス無視
-- 位置・XYZ回転（度）・スケールによるリンクMesh配置
-- 生成Object名はCSVの`objname`を使い、重複時だけ`.001`形式の末尾番号を追加
-- 出力Collectionの検証後上書き
-- Scene未接続のCollectionへ先に配置する高速な初回Update
-- 実作業量に基づく進捗率と低負荷な残り時間表示
-- Update完了時に出力をViewport・Renderの両方で自動非表示
-- 生成Collectionの一覧、表示切替、中身の高速削除、Collection全体の高速削除
-- 通常約12ms・大規模時約50msの`Split Across Multiple Ticks`処理とキャンセル
-- 共有Meshの個別Mesh化
-- 不正行、不足Mesh、名前衝突の集計
-- 処理中は状態表示とキャンセルだけにUIをロック
+- 指定可能な永続ID列（既定`id`、負数可、空欄・重複はUpdate停止）
+- 前回CSV、新CSV、現在のBlenderを比較する三方向Update
+- Transform、Mesh、Custom Propertiesごとの独立した採用判断
+- Blenderだけの編集は維持、競合は警告してBlenderを既定採用
+- 変更行だけを表示する検索・絞り込み・ページング付きChange Review
+- ID、Object、Zone、Status、Mesh名、変更Propertyの検索
+- 1クリックのFocus、行別判断、検索結果への一括判断
+- 複数属性の完全一致フィルター（同一属性はOR、異なる属性はAND）
+- 属性別Collection分割（既定属性`Zone`、既定OFF）
+- Blender/CSVから削除されたIDを非表示`Deleted` CollectionのEmptyとして保持し、明示的にRestore
+- CSV追加列を型推定し、チェックした列だけObject Custom Propertyへ保存
+- Collection/FBXソース、`.001`サフィックス照合、FBX Unit/Local X補正
+- 進捗、ETA、キャンセル、`Split Across Multiple Ticks`（既定ON）
+- 管理出力のShow/Hide、Clear Contents、Delete Collection
+- 圧縮した永続ID台帳を`.blend`内のText datablockへ原子的に保存
+
+## 重要な互換性
+
+v2はv1.x出力と後方互換ではありません。v1.xの行番号・`ptnum`照合や自動移行は行いません。同名のv1.x管理Collectionを検出した場合は変更せず停止するため、削除するか別の出力名を指定してください。
 
 詳細は[CSV Mesh Instancer 使用書](CSV_Mesh_Instancer_使用書.md)を参照してください。

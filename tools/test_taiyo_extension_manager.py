@@ -105,7 +105,10 @@ def test_release_timestamp_cache(manager):
 
 def test_csv_mesh_instancer_metadata(manager):
     tags = set(manager.TAG_ALIASES["csv_mesh_instancer"])
-    assert {"csv", "import", "instance", "mesh", "配置", "読み込み"}.issubset(tags)
+    assert {
+        "csv", "diff", "houdini", "id", "import", "instance", "mesh", "review",
+        "stable-id", "zone", "配置", "読み込み", "差分", "検索",
+    }.issubset(tags)
     descriptions = manager.DESCRIPTION_ALIASES["csv_mesh_instancer"]
     assert descriptions["en"]
     assert descriptions["ja"]

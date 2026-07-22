@@ -29,8 +29,8 @@
       "schema_version": "1.0.0",
       "id": "csv_mesh_instancer",
       "name": "CSV Mesh Instancer",
-      "tagline": "Place linked meshes from CSV using Collection or FBX sources",
-      "version": "1.1.0",
+      "tagline": "Review stable-ID CSV changes and update linked meshes safely",
+      "version": "2.0.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -38,10 +38,10 @@
       ],
       "blender_version_min": "4.5.9",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/csv_mesh_instancer/CSV_Mesh_Instancer_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./csv_mesh_instancer-1.1.0.zip",
-      "archive_size": 23559,
-      "archive_hash": "sha256:3c2e2133c7e1ec5706bc8e0a2f3ab1ed16317f979232b30bcd27bdec66905a92",
-      "taiyo_updated_at": 1784689622
+      "archive_url": "./csv_mesh_instancer-2.0.0.zip",
+      "archive_size": 42852,
+      "archive_hash": "sha256:121ceb3eecf451e39e92283de0619346bbe8321abbc95775cac16516fcb7f605",
+      "taiyo_updated_at": 1784699916
     },
     {
       "schema_version": "1.0.0",
@@ -307,7 +307,7 @@
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
       "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.12",
+      "version": "1.0.13",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -315,10 +315,10 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.12.zip",
-      "archive_size": 12895,
-      "archive_hash": "sha256:37c8a51ac58b82bfe33ed04495901a7d5274c7449a234288930f74b10be84acf",
-      "taiyo_updated_at": 1784368973
+      "archive_url": "./taiyo_extension_manager-1.0.13.zip",
+      "archive_size": 13001,
+      "archive_hash": "sha256:39fa4a8de25025b5672856e8456d247092cc212afecdfe71e0a1d3952a33ed73",
+      "taiyo_updated_at": 1784699916
     },
     {
       "schema_version": "1.0.0",

@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 12),
+    "version": (1, 0, 13),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -61,8 +61,10 @@ TAG_ALIASES = {
         "一括編集", "検索", "カスタムプロパティ", "メタデータ", "タグ", "素材",
     ),
     "csv_mesh_instancer": (
-        "collection", "csv", "fbx", "import", "instance", "mesh", "placement",
-        "transform", "インスタンス", "コレクション", "メッシュ", "配置", "読み込み",
+        "collection", "csv", "diff", "fbx", "filter", "houdini", "id", "import",
+        "instance", "mesh", "placement", "review", "rbd", "search", "stable-id",
+        "transform", "update", "zone", "インスタンス", "コレクション", "メッシュ",
+        "配置", "読み込み", "検索", "差分", "更新", "永続id", "確認",
     ),
     "export_selected_names_csv": (
         "csv", "export", "list", "name", "names", "object", "selected", "spreadsheet",
@@ -165,8 +167,8 @@ DESCRIPTION_ALIASES = {
         "en": "Batch edit and search custom properties on objects, meshes, and materials.",
     },
     "csv_mesh_instancer": {
-        "ja": "CSVのTransformを使い、CollectionまたはFBXのMeshを高速にリンク配置します。",
-        "en": "Place linked meshes from a collection or FBX using CSV transforms.",
+        "ja": "永続IDでCSV・Blenderの差分を確認し、Collection/FBXのMeshを安全に高速更新します。",
+        "en": "Review stable-ID CSV and Blender changes, then safely update linked Collection or FBX meshes.",
     },
     "export_selected_names_csv": {
         "ja": "選択オブジェクト名をCSVに書き出します。",

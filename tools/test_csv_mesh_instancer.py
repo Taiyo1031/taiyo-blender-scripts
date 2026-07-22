@@ -1,29 +1,31 @@
-"""Blender regression and scale tests for CSV Mesh Instancer.
+"""Blender 4.5 regression and scale tests for CSV Mesh Instancer v2.
 
-Run correctness tests:
+Run:
   blender --background --factory-startup --python tools/test_csv_mesh_instancer.py
-
-Run the 60,569-row scale test:
   blender --background --factory-startup --python tools/test_csv_mesh_instancer.py -- --stress
 """
 
 import csv
-import gc
 import math
+import os
 import sys
 import tempfile
 import time
 from pathlib import Path
 
 import bpy
-from mathutils import Euler, Matrix
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SOURCE_ROOT = REPO_ROOT / "_Taiyo_Blender_Extensions_Repo"
-sys.path.insert(0, str(SOURCE_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "_Taiyo_Blender_Extensions_Repo"))
 
 import csv_mesh_instancer as csvmi  # noqa: E402
+
+
+FIELDS = [
+    "ptnum", "Zone", "sx", "sy", "sz", "rx", "ry", "rz",
+    "objname", "id", "tx", "ty", "tz", "weight", "label",
+]
 
 
 def check(condition, message):
@@ -31,22 +33,19 @@ def check(condition, message):
         raise AssertionError(message)
 
 
-def matrix_error(a, b):
-    return sum(abs(a[row][column] - b[row][column]) for row in range(3) for column in range(3))
-
-
-def expect_operator_cancel(callable_operator, message):
+def expect_error(call, contains):
     try:
-        result = callable_operator()
-    except RuntimeError:
+        call()
+    except (ValueError, RuntimeError) as exc:
+        check(contains in str(exc), f"Expected {contains!r}, got {exc!r}")
         return
-    check(result == {'CANCELLED'}, message)
+    raise AssertionError(f"Expected error containing {contains!r}")
 
 
 def reset_data():
-    for scene in list(bpy.data.scenes):
-        if scene != bpy.context.scene:
-            bpy.data.scenes.remove(scene)
+    scene = bpy.context.scene
+    csvmi.clear_csv_cache(scene)
+    csvmi.clear_preview_cache(scene)
     for obj in list(bpy.data.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
     for collection in list(bpy.data.collections):
@@ -54,7 +53,18 @@ def reset_data():
     for mesh in list(bpy.data.meshes):
         if mesh.users == 0:
             bpy.data.meshes.remove(mesh)
-    csvmi.clear_csv_cache(bpy.context.scene)
+    for text in list(bpy.data.texts):
+        bpy.data.texts.remove(text)
+    props = scene.csvmi_props
+    props.source_collection = None
+    props.fbx_managed_collection = None
+    props.attribute_filters.clear()
+    props.csv_attributes.clear()
+    props.identity_column = "id"
+    props.output_collection_name = "CSV_Output"
+    props.split_by_attribute = True
+    props.split_attribute = "Zone"
+    props.use_multi_tick = False
 
 
 def make_mesh(name, offset=0.0):
@@ -74,639 +84,445 @@ def make_object(name, mesh, collection):
     return obj
 
 
-def write_csv(path, rows, fieldnames=None):
-    fieldnames = fieldnames or ["ptnum", "sx", "sy", "sz", "rx", "ry", "rz", "objname", "tx", "ty", "tz"]
+def row(identity, objname="AssetA", zone="0", tx=0.0, rz=0.0, weight="1.5", label="A"):
+    return {
+        "ptnum": str(identity), "Zone": str(zone), "sx": "1", "sy": "1", "sz": "1",
+        "rx": "0", "ry": "0", "rz": str(rz), "objname": objname, "id": str(identity),
+        "tx": str(tx), "ty": "0", "tz": "0", "weight": str(weight), "label": label,
+    }
+
+
+def write_csv(path, rows, fields=FIELDS):
     with open(path, "w", newline="", encoding="utf-8-sig") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
 
 
-def drain_task(task, budget=csvmi.TIME_BUDGET_SECONDS):
-    ticks = 0
-    phase_seconds = {}
-    progress_values = []
-    while True:
-        phase = task.phase
-        started = time.perf_counter()
-        finished = task.step(budget)
-        phase_seconds[phase] = phase_seconds.get(phase, 0.0) + (time.perf_counter() - started)
-        if hasattr(task, "progress_snapshot"):
-            completed, total, _phase, _status = task.progress_snapshot()
-            progress_values.append(min(1.0, completed / max(1, total)))
-        if finished:
-            break
-        ticks += 1
-        if ticks > 1_000_000:
-            raise RuntimeError("Task did not finish")
-    task.test_phase_seconds = phase_seconds
-    task.test_progress_values = progress_values
-    task.finish_props()
-    return ticks + 1
+def import_preview_apply(scene, csv_path):
+    props = scene.csvmi_props
+    props.csv_path = str(csv_path)
+    check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, "CSV import failed")
+    for attribute in props.csv_attributes:
+        attribute.enabled = True
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Preview failed")
+    check(bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}, "Apply failed")
 
 
-def test_progress_reporting(scene):
-    print("[TEST] Work-unit progress, ETA, and throttled publishing")
-
-    class DummyProgress(csvmi.ProgressTaskMixin):
-        def __init__(self):
-            self.props = scene.csvmi_props
-            self.started_at = time.perf_counter()
-            self.completed = 0
-            self.finished = False
-            self._init_progress_tracking()
-
-        def progress_snapshot(self):
-            return self.completed, 100, "Testing", f"Testing: {self.completed} / 100"
-
-    dummy = DummyProgress()
-    check(dummy.publish_progress(force=True), "Initial progress publish failed")
-    check(not dummy.publish_progress(), "Progress publishing was not throttled")
-    check(scene.csvmi_props.eta_text.startswith("Estimating"), "Initial ETA state is incorrect")
-
-    dummy._last_publish_time -= 1.0
-    dummy.completed = 10
-    dummy.publish_progress(force=True)
-    dummy._last_publish_time -= 1.0
-    dummy.completed = 25
-    dummy.publish_progress(force=True)
-    check(scene.csvmi_props.eta_text.startswith("Remaining: ~"), "ETA was not calculated after sampling")
-    previous = scene.csvmi_props.progress
-    dummy._last_publish_time -= 1.0
-    dummy.completed = 20
-    dummy.publish_progress(force=True)
-    check(scene.csvmi_props.progress == previous, "Published progress moved backwards")
-    check(csvmi.format_remaining_time(12.0) == "~12s", "Seconds ETA formatting failed")
-    check(csvmi.format_remaining_time(80.0) == "~1m 20s", "Minutes ETA formatting failed")
-    print("[PASS] Progress reporting")
+def preview_by_id(scene):
+    preview = csvmi.get_preview_cache(scene)
+    check(preview is not None, "Preview cache is missing")
+    return {change["identity"]: change for change in preview.changes}
 
 
-def test_csv_and_collection_mode(temp_dir):
-    print("[TEST] CSV validation, Collection matching, update, realization, cancellation")
+def managed_object(output, identity):
+    for obj in csvmi.collect_collection_objects(output):
+        if str(obj.get(csvmi.OBJECT_ID_KEY, "")) == str(identity):
+            return obj
+    return None
+
+
+def test_identity_validation(temp_dir):
+    print("[TEST] strict persistent identity validation")
+    duplicate = temp_dir / "duplicate.csv"
+    write_csv(duplicate, [row("-1"), row("-1", tx=2)])
+    expect_error(lambda: csvmi.load_csv_data(str(duplicate), "id"), "duplicate values")
+
+    missing = temp_dir / "missing_id.csv"
+    bad = row("1")
+    bad["id"] = ""
+    write_csv(missing, [bad])
+    expect_error(lambda: csvmi.load_csv_data(str(missing), "id"), "Identity is empty")
+
+    valid = temp_dir / "negative_ids.csv"
+    write_csv(valid, [row("-11"), row("-12", zone=1)])
+    cache = csvmi.load_csv_data(str(valid), "id")
+    check(set(cache.rows_by_id) == {"-11", "-12"}, "Unique negative IDs were rejected")
+    check("ptnum" not in cache.extra_columns, "ptnum leaked into extra attributes")
+
+    actual = Path("/Users/taiyoparent/Downloads/StPr_map_PointData (3).csv")
+    if actual.exists():
+        expect_error(lambda: csvmi.load_csv_data(str(actual), "id"), "duplicate values")
+    print("[PASS] identity validation")
+
+
+def test_v2_workflow(temp_dir):
+    print("[TEST] v2 preview, three-way merge, filters, tombstones, and state")
     reset_data()
     scene = bpy.context.scene
     props = scene.csvmi_props
-    root = bpy.data.collections.new("Sources")
-    child = bpy.data.collections.new("NestedSources")
-    scene.collection.children.link(root)
-    root.children.link(child)
-
-    source_meshes = {
-        "Cube": make_mesh("Mesh_Cube", 0.0),
-        "Cube.001": make_mesh("Mesh_Cube_001", 1.0),
-        "Cube.002": make_mesh("Mesh_Cube_002", 2.0),
-        "Sphere": make_mesh("Mesh_Sphere", 3.0),
-    }
-    source_objects = {
-        name: make_object(name, mesh, root if name != "Sphere" else child)
-        for name, mesh in source_meshes.items()
-    }
-
-    output = bpy.data.collections.new("CSV_Output")
-    output.color_tag = 'COLOR_04'
-    output.hide_render = True
-    scene.collection.children.link(output)
-    dummy = make_object("OldDummy", make_mesh("OldDummyMesh"), output)
-    old_child = bpy.data.collections.new("OldChild")
-    output.children.link(old_child)
-    make_object("OldChildObject", make_mesh("OldChildMesh"), old_child)
-    output_pointer = output.as_pointer()
-
-    csv_path = temp_dir / "correctness.csv"
-    rows = [
-        {"ptnum": "10", "sx": "1", "sy": "2", "sz": "3", "rx": "90", "ry": "0", "rz": "-45", "objname": "Cube.002", "tx": "1.25", "ty": "-2", "tz": "3"},
-        {"ptnum": "", "sx": "1", "sy": "1", "sz": "1", "rx": "0", "ry": "0", "rz": "0", "objname": "Cube.100", "tx": "4", "ty": "5", "tz": "6"},
-        {"ptnum": "12", "sx": "1", "sy": "1", "sz": "1", "rx": "0", "ry": "0", "rz": "0", "objname": "Missing", "tx": "0", "ty": "0", "tz": "0"},
-        {"ptnum": "13", "sx": "-1", "sy": "0", "sz": "2", "rx": "0", "ry": "180", "rz": "0", "objname": "Sphere", "tx": "7", "ty": "8", "tz": "9"},
-        {"ptnum": "14", "sx": "1", "sy": "1", "sz": "1", "rx": "0", "ry": "0", "rz": "0", "objname": "", "tx": "0", "ty": "0", "tz": "0"},
-        {"ptnum": "15", "sx": "1", "sy": "1", "sz": "1", "rx": "NaN", "ry": "0", "rz": "0", "objname": "Cube", "tx": "0", "ty": "0", "tz": "0"},
-    ]
-    write_csv(csv_path, rows)
-
-    props.csv_path = str(csv_path)
+    source = bpy.data.collections.new("Sources")
+    scene.collection.children.link(source)
+    mesh_a = make_mesh("MeshA")
+    mesh_b = make_mesh("MeshB", 2.0)
+    source_a = make_object("AssetA", mesh_a, source)
+    source_b = make_object("AssetB", mesh_b, source)
     props.source_mode = 'COLLECTION'
-    props.source_collection = root
-    props.ignore_numeric_suffix = True
-    props.output_collection_name = "CSV_Output"
-    props.use_multi_tick = False
+    props.source_collection = source
 
-    result = bpy.ops.csvmi.import_csv('EXEC_DEFAULT')
-    check(result == {'FINISHED'}, f"CSV import failed: {result}")
-    original_cache = csvmi.get_csv_cache(scene)
-    check(original_cache.raw_count == 6, "Raw row count mismatch")
-    check(len(original_cache.rows) == 4, "Valid row count mismatch")
-    check(original_cache.invalid_count == 2, "Invalid row count mismatch")
+    csv_path = temp_dir / "workflow.csv"
+    rows = [row("100", "AssetA", 0, tx=1, weight="1.25", label="first"), row("200", "AssetA", 1, tx=2, weight="2", label="second")]
+    write_csv(csv_path, rows)
+    import_preview_apply(scene, csv_path)
 
-    bad_path = temp_dir / "missing_columns.csv"
-    write_csv(bad_path, [{"objname": "Cube", "tx": "0"}], fieldnames=["objname", "tx"])
-    props.csv_path = str(bad_path)
-    expect_operator_cancel(lambda: bpy.ops.csvmi.import_csv('EXEC_DEFAULT'), "Invalid CSV should fail")
-    check(csvmi.get_csv_cache(scene) is original_cache, "Failed re-import replaced the valid cache")
-    props.csv_path = str(csv_path)
-
-    result = bpy.ops.csvmi.update('EXEC_DEFAULT')
-    check(result == {'FINISHED'}, f"Update failed: {result}")
     output = bpy.data.collections["CSV_Output"]
-    check(output.as_pointer() == output_pointer, "Output Collection datablock was replaced")
-    check(output.color_tag == 'COLOR_04' and output.hide_render, "Output Collection settings changed")
-    output_layer = csvmi.find_layer_collection(bpy.context.view_layer.layer_collection, output)
-    check(output_layer is not None and not output_layer.exclude, "Output View Layer exclusion was not restored")
-    check(output.hide_viewport and output.hide_render, "Completed output was not hidden in Viewport and Render")
-    check(bool(output[csvmi.OUTPUT_MANAGED_KEY]), "Output management marker is missing")
-    check("OldDummy" not in bpy.data.objects and "OldChild" not in bpy.data.collections, "Old output content remains")
-    generated = list(output.objects)
-    check(len(generated) == 3, f"Expected 3 generated objects, got {len(generated)}")
-    check(props.skipped_count == 3, f"Expected 3 skipped rows, got {props.skipped_count}")
-    check(props.missing_name_count == 1 and props.missing_row_count == 1, "Missing mesh stats mismatch")
-    check(props.collision_group_count == 1, "Suffix collision group count mismatch")
+    check(int(output[csvmi.OUTPUT_SCHEMA_KEY]) == 2, "v2 output schema marker missing")
+    state = csvmi.v2_engine.read_output_state(output, "id")
+    check(set(state["records"]) == {"100", "200"}, "Persistent ID registry mismatch")
+    check(output.hide_viewport and output.hide_render, "Completed output was not hidden")
+    zone_values = {child.get(csvmi.ZONE_VALUE_KEY) for child in output.children if child.get(csvmi.ZONE_COLLECTION_KEY)}
+    check(zone_values == {"0", "1"}, "Zone child Collections were not created")
 
-    exact = bpy.data.objects["Cube.003"]
-    fallback = bpy.data.objects["Cube.100"]
-    sphere = bpy.data.objects["Sphere.001"]
-    check(all(not obj.name.startswith("CSV_") for obj in generated), "Generated Object names still use the CSV_ prefix")
-    check(exact.data == source_objects["Cube.002"].data, "Exact match did not win")
-    check(fallback.data == source_objects["Cube"].data, "Suffix fallback priority mismatch")
-    check(tuple(round(v, 5) for v in exact.location) == (1.25, -2.0, 3.0), "Location mismatch")
-    check(math.isclose(exact.rotation_euler.x, math.pi / 2, abs_tol=1e-6), "Degree conversion mismatch")
-    check(tuple(round(v, 5) for v in sphere.scale) == (-1.0, 0.0, 2.0), "Scale mismatch")
-    check(tuple(exact.delta_scale) == (1.0, 1.0, 1.0), "Collection mode received FBX Delta Scale")
-    check(tuple(exact.delta_rotation_euler) == (0.0, 0.0, 0.0), "Collection mode received FBX Delta Rotation")
-    check(bool(exact["csvmi_linked_mesh"]), "Generated linked flag missing")
-    names_by_line = {int(obj["csvmi_csv_line"]): obj.name for obj in generated}
+    object_100 = managed_object(output, "100")
+    object_200 = managed_object(output, "200")
+    check(object_100.data == source_a.data and object_200.data == source_a.data, "Initial linked Mesh mismatch")
+    check(object_100["id"] == "100" and "ptnum" not in object_100, "Visible ID or ptnum policy mismatch")
+    check(math.isclose(object_100["weight"], 1.25), "Typed float Custom Property mismatch")
+    check(object_100["label"] == "first", "String Custom Property mismatch")
 
-    before_cancel = {obj.as_pointer() for obj in output.objects}
-    _, existing_output, resolved, missing_names, missing_rows = csvmi.validate_source_and_output(scene, original_cache)
-    cancel_task = csvmi.UpdateTask(scene, original_cache, existing_output, resolved, missing_names, missing_rows)
-    cancel_task._create_one(original_cache.rows[0])
-    cancel_task.index = 1
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "No-change Preview failed")
+    check(len(csvmi.get_preview_cache(scene).changes) == 0, "Unchanged IDs appeared in Change Review")
+
+    object_100.location.x = 10.0
+    rows[0]["tx"] = "5"
+    rows[0]["weight"] = "9.5"
+    rows[1]["tx"] = "8"
+    rows[1]["objname"] = "AssetB"
+    write_csv(csv_path, rows)
+    props.csv_path = str(csv_path)
+    check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, "Changed CSV import failed")
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Changed Preview failed")
+    changes = preview_by_id(scene)
+    check(changes["100"]["transform_kind"] == "CONFLICT", "Transform conflict was not detected")
+    check(changes["100"]["transform_decision"] == "KEEP", "Conflict did not default to Keep Blender")
+    check(changes["200"]["transform_decision"] == "APPLY", "CSV-only Transform did not default to Apply")
+    check(changes["200"]["mesh_decision"] == "RELINK", "Unedited Mesh did not default to Relink")
+    check(bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}, "Reviewed update failed")
+    check(math.isclose(object_100.location.x, 10.0), "Blender Transform conflict was overwritten")
+    check(math.isclose(object_200.location.x, 8.0), "CSV-only Transform was not applied")
+    check(object_200.data == source_b.data, "CSV Mesh relink was not applied")
+
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Override Preview failed")
+    check("100" not in preview_by_id(scene), "Resolved Transform override was repeatedly reported")
+
+    object_100.data = object_100.data.copy()
+    object_100["csvmi_linked_mesh"] = False
+    rows[0]["objname"] = "AssetB"
+    write_csv(csv_path, rows)
+    check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, "Mesh CSV import failed")
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Mesh Preview failed")
+    mesh_change = preview_by_id(scene)["100"]
+    check(mesh_change["mesh_kind"] == "CONFLICT" and mesh_change["mesh_decision"] == "KEEP", "Edited Mesh was not protected")
+    edited_mesh = object_100.data
+    check(bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}, "Mesh protection Apply failed")
+    check(object_100.data == edited_mesh, "Edited Mesh was overwritten")
+
+    rule = props.attribute_filters.add()
+    rule.attribute = "Zone"
+    csvmi.sync_filter_rule_values(rule, csvmi.get_csv_cache(scene))
+    for value in rule.values:
+        value.selected = value.value == "1"
+    rows[0]["tx"] = "50"
+    rows[1]["tx"] = "80"
+    write_csv(csv_path, rows)
+    check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, "Filter CSV import failed")
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Filter Preview failed")
+    changes = preview_by_id(scene)
+    check(changes["100"]["status"] == "FILTERED_OUT", "Zone 0 was not filtered out")
+    check(changes["200"]["status"] != "FILTERED_OUT", "Zone 1 was unexpectedly filtered")
+    check(bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}, "Filtered Apply failed")
+    check(not math.isclose(object_100.location.x, 50.0), "Filtered Zone 0 changed")
+    check(math.isclose(object_200.location.x, 80.0), "Selected Zone 1 did not update")
+
+    props.attribute_filters.clear()
+    bpy.data.objects.remove(object_200, do_unlink=True)
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Delete Preview failed")
+    deleted_change = preview_by_id(scene)["200"]
+    check(deleted_change["status"] == "BLENDER_DELETED", "Blender standard Delete was not detected")
+    check(bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}, "Tombstone Apply failed")
+    tombstone = managed_object(output, "200")
+    check(tombstone is not None and tombstone.type == 'EMPTY', "Hidden Empty tombstone was not created")
+    deleted_collection = next(child for child in output.children if child.get(csvmi.DELETED_COLLECTION_KEY))
+    check(deleted_collection.hide_viewport and deleted_collection.hide_render, "Deleted Collection is visible")
+
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Restore Preview failed")
+    restore_change = preview_by_id(scene)["200"]
+    restore_change["object_decision"] = "RESTORE"
+    check(bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}, "Restore Apply failed")
+    restored = managed_object(output, "200")
+    check(restored.type == 'MESH' and restored.data == source_b.data, "Tombstone Restore failed")
+
+    rows = [rows[0]]
+    write_csv(csv_path, rows)
+    check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, "CSV deletion import failed")
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "CSV deletion Preview failed")
+    check(preview_by_id(scene)["200"]["status"] == "CSV_DELETED", "CSV deletion was not detected")
+    check(bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}, "CSV deletion Apply failed")
+    csv_deleted_object = managed_object(output, "200")
+    check(
+        csv_deleted_object.type == 'EMPTY',
+        f"CSV-deleted ID was not tombstoned: type={csv_deleted_object.type}, "
+        f"data={getattr(csv_deleted_object.data, 'name', None)}, "
+        f"collections={[collection.name for collection in csv_deleted_object.users_collection]}",
+    )
+
+    rows.append(row("200", "AssetB", 1, tx=80, weight="2", label="second"))
+    write_csv(csv_path, rows)
+    check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, "Reappearing ID import failed")
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Reappearing ID Preview failed")
+    check(preview_by_id(scene)["200"]["object_decision"] == "KEEP_DELETED", "Deleted ID was automatically restored")
+
+    props.review_search = "200"
+    csvmi.refresh_review_page(scene)
+    check(all(item.identity == "200" for item in props.review_rows), "Change Review search failed")
+    check(len(props.review_rows) <= csvmi.REVIEW_PAGE_SIZE, "Change Review pagination failed")
+
+    state_before = csvmi.v2_engine.read_output_state(output, "id")
+    text = bpy.data.texts[output[csvmi.OUTPUT_STATE_TEXT_KEY]]
+    encoded = text.as_string()
+    text.clear()
+    text.write("corrupted")
+    expect_error(lambda: csvmi.v2_engine.read_output_state(output, "id"), "corrupted")
+    text.clear()
+    text.write(encoded)
+    check(csvmi.v2_engine.read_output_state(output, "id") == state_before, "State restoration fixture failed")
+
+    legacy = bpy.data.collections.new("Legacy_Output")
+    legacy[csvmi.OUTPUT_MANAGED_KEY] = True
+    scene.collection.children.link(legacy)
+    expect_error(lambda: csvmi.v2_engine.read_output_state(legacy, "id"), "not created")
+    print("[PASS] v2 workflow")
+
+
+def test_v2_ticks_and_cancel(temp_dir):
+    print("[TEST] v2 bounded ticks and cancellation rollback")
+    reset_data()
+    scene = bpy.context.scene
+    props = scene.csvmi_props
+    source = bpy.data.collections.new("TickSources")
+    scene.collection.children.link(source)
+    make_object("TickAsset", make_mesh("TickMesh"), source)
+    props.source_mode = 'COLLECTION'
+    props.source_collection = source
+    props.output_collection_name = "Tick_Output"
+    props.split_by_attribute = False
+    rows = [row(str(index), "TickAsset", 0, tx=index) for index in range(1000)]
+    csv_path = temp_dir / "ticks.csv"
+    write_csv(csv_path, rows)
+    import_preview_apply(scene, csv_path)
+    output = bpy.data.collections["Tick_Output"]
+    state_before = csvmi.v2_engine.read_output_state(output, "id")
+    location_before = managed_object(output, "0").location.x
+
+    for record in rows:
+        record["tx"] = str(float(record["tx"]) + 100.0)
+    write_csv(csv_path, rows)
+    check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, "Tick import failed")
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Tick Preview failed")
+    preview = csvmi.get_preview_cache(scene)
+    cancel_task = csvmi.V2ApplyTask(scene, preview)
+    cancel_task.step(0.001)
     cancel_task.request_cancel()
-    drain_task(cancel_task, 0.001)
-    check(cancel_task.cancelled, "Update cancellation did not finish as cancelled")
-    check({obj.as_pointer() for obj in output.objects} == before_cancel, "Cancelled update changed old output")
-    check(not any(c.name.startswith(csvmi.STAGING_NAME) for c in bpy.data.collections), "Staging Collection remains")
+    while not cancel_task.step(0.001):
+        pass
+    cancel_task.finish_props()
+    check(cancel_task.cancelled, "Cancellation did not finish as cancelled")
+    check(csvmi.v2_engine.read_output_state(output, "id") == state_before, "Cancel changed the ID registry")
+    check(math.isclose(managed_object(output, "0").location.x, location_before), "Cancel did not restore Transform")
 
-    linked_before = {obj.as_pointer(): obj.data.as_pointer() for obj in output.objects}
-    realize_cancel = csvmi.RealizeTask(scene, list(output.objects))
-    realize_object = realize_cancel.objects[0]
-    old_mesh = realize_object.data
-    new_mesh = old_mesh.copy()
-    realize_object.data = new_mesh
-    realize_object["csvmi_linked_mesh"] = False
-    realize_cancel.changes.append((realize_object, old_mesh, new_mesh))
-    realize_cancel.index = 1
-    realize_cancel.request_cancel()
-    drain_task(realize_cancel, 0.001)
-    check(realize_cancel.cancelled, "Realize cancellation did not roll back")
-    check(
-        all(obj.data.as_pointer() == linked_before[obj.as_pointer()] for obj in output.objects),
-        "Realize rollback did not restore shared meshes",
-    )
-
-    check(bpy.ops.csvmi.realize('EXEC_DEFAULT') == {'FINISHED'}, "Realization failed")
-    realized_pointers = [obj.data.as_pointer() for obj in output.objects]
-    check(len(set(realized_pointers)) == len(realized_pointers), "Realized meshes are not unique")
-    check(all(not bool(obj["csvmi_linked_mesh"]) for obj in output.objects), "Realized flags were not updated")
-
-    check(bpy.ops.csvmi.update('EXEC_DEFAULT') == {'FINISHED'}, "Update after realization failed")
-    check(all(bool(obj["csvmi_linked_mesh"]) for obj in output.objects), "Update did not restore linked state")
-    check(bpy.data.objects["Cube.003"].data == source_objects["Cube.002"].data, "Update did not re-link source mesh")
-    check(
-        {int(obj["csvmi_csv_line"]): obj.name for obj in output.objects} == names_by_line,
-        "Fast re-update changed deterministic Object names",
-    )
-
-    output = bpy.data.collections["CSV_Output"]
-    before_fast_cancel = {
-        obj.as_pointer(): (
-            obj.data.as_pointer(),
-            tuple(obj.location),
-            tuple(obj.rotation_euler),
-            tuple(obj.scale),
-            tuple(obj.delta_location),
-            tuple(obj.delta_rotation_euler),
-            tuple(obj.delta_scale),
-        )
-        for obj in output.objects
-    }
-    _, existing_output, resolved, missing_names, missing_rows = csvmi.validate_source_and_output(scene, original_cache)
-    fast_cancel = csvmi.create_update_task(scene, original_cache, existing_output, resolved, missing_names, missing_rows)
-    check(isinstance(fast_cancel, csvmi.InPlaceUpdateTask), "Generated output did not select fast update")
-    first_row = original_cache.rows[0]
-    first_source = resolved[first_row[csvmi.ROW_NAME]]
-    first_object = fast_cancel.existing_by_line.pop(first_row[csvmi.ROW_LINE])
-    fast_cancel.snapshots.append(fast_cancel._snapshot(first_object))
-    fast_cancel._apply(first_object, first_row, first_source)
-    fast_cancel.result_objects.append(first_object)
-    fast_cancel.desired_names.append(fast_cancel.name_allocator.reserve(first_row[csvmi.ROW_NAME]))
-    fast_cancel.index = 1
-    fast_cancel.request_cancel()
-    drain_task(fast_cancel, 0.001)
-    check(fast_cancel.cancelled, "Fast update cancellation did not roll back")
-    after_fast_cancel = {
-        obj.as_pointer(): (
-            obj.data.as_pointer(),
-            tuple(obj.location),
-            tuple(obj.rotation_euler),
-            tuple(obj.scale),
-            tuple(obj.delta_location),
-            tuple(obj.delta_rotation_euler),
-            tuple(obj.delta_scale),
-        )
-        for obj in output.objects
-    }
-    check(after_fast_cancel == before_fast_cancel, "Fast update rollback changed output data")
-    check(not output_layer.exclude, "Cancelled update did not restore output visibility")
-
-    output_layer.exclude = True
-    check(
-        bpy.ops.csvmi.set_output_visibility(collection_name=output.name, show=True) == {'FINISHED'},
-        "Managed output Show failed",
-    )
-    check(not output.hide_viewport and not output.hide_render, "Show did not enable Viewport and Render")
-    check(not output_layer.exclude, "Show did not clear View Layer exclusion")
-    check(
-        bpy.ops.csvmi.set_output_visibility(collection_name=output.name, show=False) == {'FINISHED'},
-        "Managed output Hide failed",
-    )
-    check(output.hide_viewport and output.hide_render, "Hide did not disable Viewport and Render")
-
-    clear_collection = bpy.data.collections.new("Managed_Clear")
-    clear_collection[csvmi.OUTPUT_MANAGED_KEY] = True
-    clear_collection.color_tag = 'COLOR_06'
-    scene.collection.children.link(clear_collection)
-    clear_child = bpy.data.collections.new("Managed_Clear_Child")
-    clear_collection.children.link(clear_child)
-    clear_object = make_object("Managed_Clear_Object", source_meshes["Cube"], clear_collection)
-    make_object("Managed_Clear_Child_Object", source_meshes["Sphere"], clear_child)
-    source_mesh_pointer = source_meshes["Cube"].as_pointer()
-    props.use_multi_tick = True
-    clear_task = csvmi.CollectionCleanupTask(scene, clear_collection, False, True)
-    drain_task(clear_task, 0.001)
-    check(clear_collection.name in bpy.data.collections, "Clear removed the managed root Collection")
-    check(clear_collection.color_tag == 'COLOR_06', "Clear changed the Collection color")
-    check(bool(clear_collection[csvmi.OUTPUT_MANAGED_KEY]), "Clear removed the management marker")
-    check(clear_collection in scene.collection.children[:], "Clear changed the root parent link")
-    check(len(clear_collection.objects) == 0 and len(clear_collection.children) == 0, "Clear left managed contents")
-    check(source_meshes["Cube"].as_pointer() == source_mesh_pointer, "Clear removed a shared source Mesh")
-    check(clear_task.max_step_seconds < 0.25, "Chunked Clear exceeded 250ms max tick")
-
-    delete_collection = bpy.data.collections.new("Managed_Delete")
-    delete_collection[csvmi.OUTPUT_MANAGED_KEY] = True
-    scene.collection.children.link(delete_collection)
-    make_object("Managed_Delete_Object", source_meshes["Cube"], delete_collection)
-    props.output_collection_name = delete_collection.name
-    props.generated_count = 99
-    props.linked_instance_count = 99
-    props.use_multi_tick = False
-    check(
-        bpy.ops.csvmi.delete_output(collection_name=delete_collection.name) == {'FINISHED'},
-        "Fast managed Collection deletion failed",
-    )
-    check("Managed_Delete" not in bpy.data.collections, "Delete left the managed root Collection")
-    check(props.output_collection_name == "Managed_Delete", "Delete changed the configured output name")
-    check(props.generated_count == 0 and props.linked_instance_count == 0, "Delete did not reset output stats")
-    check("Sources" in bpy.data.collections and "CSV_Output" in bpy.data.collections, "Delete affected unrelated Collections")
-
-    regular_collection = bpy.data.collections.new("Regular_Not_Managed")
-    scene.collection.children.link(regular_collection)
-    expect_operator_cancel(
-        lambda: bpy.ops.csvmi.clear_output(collection_name=regular_collection.name),
-        "Clear accepted an unmanaged Collection",
-    )
-    print("[PASS] CSV and Collection mode")
+    apply_task = csvmi.V2ApplyTask(scene, preview)
+    while not apply_task.step(0.012):
+        pass
+    apply_task.finish_props()
+    check(not apply_task.cancelled, "Ticked Apply was cancelled unexpectedly")
+    check(apply_task.max_step_seconds < 0.060, f"Tick exceeded 60ms: {apply_task.max_step_seconds:.3f}s")
+    check(math.isclose(managed_object(output, "0").location.x, 100.0), "Ticked Apply did not update Transform")
+    check(props.use_multi_tick is False, "Test fixture unexpectedly changed the setting")
+    print(f"[PASS] bounded ticks max={apply_task.max_step_seconds * 1000.0:.1f}ms")
 
 
-def export_selected_fbx(path, objects):
-    for obj in bpy.context.selected_objects:
-        obj.select_set(False)
-    for obj in objects:
-        obj.select_set(True)
-    bpy.context.view_layer.objects.active = objects[0]
-    result = bpy.ops.export_scene.fbx(
-        filepath=str(path),
-        check_existing=False,
-        use_selection=True,
-        object_types={'MESH'},
-        use_mesh_modifiers=False,
-        bake_anim=False,
-        axis_forward='-Z',
-        axis_up='Y',
-    )
-    check(result == {'FINISHED'}, f"FBX fixture export failed: {result}")
-
-
-def test_fbx_mode(temp_dir):
-    print("[TEST] FBX import and safe replacement")
+def test_managed_output_cleanup(temp_dir):
+    print("[TEST] v2 managed output clear and delete")
     reset_data()
     scene = bpy.context.scene
     props = scene.csvmi_props
-    fixture_collection = bpy.data.collections.new("Fixture")
-    scene.collection.children.link(fixture_collection)
-    a = make_object("FbxAssetA", make_mesh("FbxMeshA"), fixture_collection)
-    b = make_object("FbxAssetB", make_mesh("FbxMeshB", 2.0), fixture_collection)
-    first_fbx = temp_dir / "first.fbx"
-    export_selected_fbx(first_fbx, [a, b])
-
-    props.source_mode = 'FBX'
-    props.fbx_path = str(first_fbx)
-    props.fbx_collection_name = "CSVMI_FBX_Source"
-    result = bpy.ops.csvmi.import_fbx('EXEC_DEFAULT')
-    check(result == {'FINISHED'}, f"FBX import failed: {result}")
-    old_collection = props.fbx_managed_collection
-    old_pointer = old_collection.as_pointer()
-    check(props.fbx_mesh_count == 2, "FBX mesh count mismatch")
-    check(bool(old_collection[csvmi.FBX_MANAGED_KEY]), "FBX management marker missing")
-    for view_layer in scene.view_layers:
-        layer_collection = csvmi.find_layer_collection(view_layer.layer_collection, old_collection)
-        check(layer_collection is not None and layer_collection.exclude, "FBX source was not excluded from a View Layer")
-    check(not old_collection.hide_viewport, "View Layer exclusion unexpectedly used Collection hiding")
-
-    fallback_collection = bpy.data.collections.new("CSVMI_FBX_Fallback")
-    visibility_mode = csvmi.isolate_fbx_source_collection(scene, fallback_collection)
-    check(visibility_mode == 'COLLECTION_HIDE', "Unlinked FBX source did not use the visibility fallback")
-    check(fallback_collection.hide_viewport and fallback_collection.hide_render, "FBX visibility fallback is incomplete")
-    bpy.data.collections.remove(fallback_collection)
-
-    invalid_fbx = temp_dir / "invalid.fbx"
-    invalid_fbx.write_text("not an fbx", encoding="utf-8")
-    props.fbx_path = str(invalid_fbx)
-    expect_operator_cancel(lambda: bpy.ops.csvmi.import_fbx('EXEC_DEFAULT'), "Invalid FBX should fail")
-    check(props.fbx_managed_collection.as_pointer() == old_pointer, "Failed FBX import replaced old source")
-
-    c = make_object("FbxAssetC", make_mesh("FbxMeshC", 4.0), fixture_collection)
-    second_fbx = temp_dir / "second.fbx"
-    export_selected_fbx(second_fbx, [c])
-    props.fbx_path = str(second_fbx)
-    result = bpy.ops.csvmi.import_fbx('EXEC_DEFAULT')
-    check(result == {'FINISHED'}, f"FBX re-import failed: {result}")
-    check(props.fbx_managed_collection.as_pointer() != old_pointer, "FBX source was not replaced")
-    check(props.fbx_mesh_count == 1, "Re-imported FBX mesh count mismatch")
-    check(len(csvmi.collect_collection_objects(props.fbx_managed_collection, mesh_only=True)) == 1, "Managed FBX Collection is incorrect")
-    for view_layer in scene.view_layers:
-        layer_collection = csvmi.find_layer_collection(view_layer.layer_collection, props.fbx_managed_collection)
-        check(layer_collection is not None and layer_collection.exclude, "Re-imported FBX source is visible")
-
-    imported_source = csvmi.collect_collection_objects(props.fbx_managed_collection, mesh_only=True)[0]
-    csv_path = temp_dir / "fbx_correction.csv"
-    write_csv(csv_path, [{
-        "ptnum": "1",
-        "sx": "2",
-        "sy": "3",
-        "sz": "4",
-        "rx": "10",
-        "ry": "20",
-        "rz": "30",
-        "objname": imported_source.name,
-        "tx": "1",
-        "ty": "2",
-        "tz": "3",
-    }])
-    props.csv_path = str(csv_path)
-    props.output_collection_name = "FBX_Output"
-    props.use_multi_tick = False
-    check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, "FBX correction CSV import failed")
-    check(bpy.ops.csvmi.update('EXEC_DEFAULT') == {'FINISHED'}, "FBX correction update failed")
-    placement = bpy.data.collections["FBX_Output"].objects[0]
-    check(placement.data == imported_source.data, "FBX placement did not share the source Mesh")
-    check(tuple(round(v, 5) for v in placement.scale) == (2.0, 3.0, 4.0), "FBX correction changed CSV Scale")
+    source = bpy.data.collections.new("CleanupSources")
+    scene.collection.children.link(source)
+    make_object("CleanupAsset", make_mesh("CleanupMesh"), source)
+    props.source_collection = source
+    props.output_collection_name = "Cleanup_Output"
+    csv_path = temp_dir / "cleanup.csv"
+    write_csv(csv_path, [row(str(index), "CleanupAsset", index % 2) for index in range(25)])
+    import_preview_apply(scene, csv_path)
+    output = bpy.data.collections["Cleanup_Output"]
+    state_text_name = output[csvmi.OUTPUT_STATE_TEXT_KEY]
     check(
-        tuple(round(math.degrees(value), 5) for value in placement.rotation_euler) == (10.0, 20.0, 30.0),
-        "FBX local correction changed the CSV Euler values",
+        bpy.ops.csvmi.clear_output('EXEC_DEFAULT', collection_name=output.name) == {'FINISHED'},
+        "Managed Clear failed",
     )
+    check(output.name in bpy.data.collections, "Clear removed the root Collection")
+    check(len(csvmi.collect_collection_objects(output)) == 0 and len(output.children) == 0, "Clear left contents")
+    check(csvmi.v2_engine.read_output_state(output, "id")["records"] == {}, "Clear did not reset state")
+    check(state_text_name not in bpy.data.texts, "Clear left the previous state Text")
+
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Preview after Clear failed")
+    check(bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}, "Recreate after Clear failed")
+    output = bpy.data.collections["Cleanup_Output"]
+    state_text_name = output[csvmi.OUTPUT_STATE_TEXT_KEY]
     check(
-        tuple(round(v, 5) for v in placement.delta_scale) == (0.01, 0.01, 0.01),
-        "Default FBX Delta Scale correction is missing",
+        bpy.ops.csvmi.delete_output('EXEC_DEFAULT', collection_name=output.name) == {'FINISHED'},
+        "Managed Delete failed",
     )
-    check(
-        math.isclose(props.fbx_rotation_x, math.pi / 2, abs_tol=1e-6),
-        "Default FBX Local X Rotation setting is incorrect",
+    check("Cleanup_Output" not in bpy.data.collections, "Delete left the root Collection")
+    check(state_text_name not in bpy.data.texts, "Delete left the state Text")
+
+    regular = bpy.data.collections.new("Regular")
+    scene.collection.children.link(regular)
+    expect_error(
+        lambda: bpy.ops.csvmi.delete_output('EXEC_DEFAULT', collection_name=regular.name),
+        "not managed",
     )
-    csv_rotation = Euler(tuple(math.radians(value) for value in (10.0, 20.0, 30.0)), 'XYZ').to_matrix()
-    local_expected = csv_rotation @ Matrix.Rotation(math.pi / 2, 3, 'X')
-    world_incorrect = Matrix.Rotation(math.pi / 2, 3, 'X') @ csv_rotation
-    actual_rotation = placement.matrix_basis.to_3x3().normalized()
-    check(matrix_error(actual_rotation, local_expected) < 1e-5, "FBX correction was not applied around local X")
-    check(matrix_error(actual_rotation, world_incorrect) > 0.1, "FBX correction still behaves as a world X rotation")
-
-    props.apply_fbx_correction = False
-    check(bpy.ops.csvmi.update('EXEC_DEFAULT') == {'FINISHED'}, "Disabling FBX correction failed")
-    placement = bpy.data.collections["FBX_Output"].objects[0]
-    check(tuple(placement.delta_scale) == (1.0, 1.0, 1.0), "Disabled FBX correction left Delta Scale behind")
-    check(tuple(placement.delta_rotation_euler) == (0.0, 0.0, 0.0), "Disabled FBX correction left Delta Rotation behind")
-
-    props.apply_fbx_correction = True
-    props.fbx_unit_scale = 0.02
-    props.fbx_rotation_x = math.radians(-90.0)
-    check(bpy.ops.csvmi.update('EXEC_DEFAULT') == {'FINISHED'}, "Custom FBX correction update failed")
-    placement = bpy.data.collections["FBX_Output"].objects[0]
-    check(tuple(round(v, 5) for v in placement.delta_scale) == (0.02, 0.02, 0.02), "Custom FBX Unit Scale failed")
-    custom_expected = csv_rotation @ Matrix.Rotation(-math.pi / 2, 3, 'X')
-    check(
-        matrix_error(placement.matrix_basis.to_3x3().normalized(), custom_expected) < 1e-5,
-        "Custom FBX Local X Rotation failed",
-    )
-    saved_delta_rotation = tuple(placement.delta_rotation_euler)
-
-    fbx_cache = csvmi.get_csv_cache(scene)
-    _, existing_output, resolved, missing_names, missing_rows = csvmi.validate_source_and_output(scene, fbx_cache)
-    correction_cancel = csvmi.create_update_task(
-        scene,
-        fbx_cache,
-        existing_output,
-        resolved,
-        missing_names,
-        missing_rows,
-    )
-    row = fbx_cache.rows[0]
-    source = resolved[row[csvmi.ROW_NAME]]
-    existing = correction_cancel.existing_by_line.pop(row[csvmi.ROW_LINE])
-    correction_cancel.snapshots.append(correction_cancel._snapshot(existing))
-    props.fbx_unit_scale = 0.03
-    props.fbx_rotation_x = math.radians(45.0)
-    correction_cancel._apply(existing, row, source)
-    correction_cancel.result_objects.append(existing)
-    correction_cancel.desired_names.append(correction_cancel.name_allocator.reserve(row[csvmi.ROW_NAME]))
-    correction_cancel.index = 1
-    correction_cancel.request_cancel()
-    drain_task(correction_cancel, 0.001)
-    check(tuple(round(v, 5) for v in existing.delta_scale) == (0.02, 0.02, 0.02), "Cancel did not restore FBX Delta Scale")
-    check(
-        all(math.isclose(actual, expected, abs_tol=1e-6) for actual, expected in zip(existing.delta_rotation_euler, saved_delta_rotation)),
-        "Cancel did not restore FBX Delta Rotation",
-    )
-    check(not props.running and props.active_operation == 'NONE', "FBX import did not release the UI lock")
-    print("[PASS] FBX mode")
+    print("[PASS] managed output cleanup")
 
 
-def make_stress_csv(path, name_count=1232, valid_rows=60568):
-    names = [f"Stress_{index:04d}" for index in range(name_count)]
-    with open(path, "w", newline="", encoding="utf-8-sig") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(["ptnum", "sx", "sy", "sz", "rx", "ry", "rz", "objname", "tx", "ty", "tz"])
-        for index in range(valid_rows):
-            writer.writerow([
-                index,
-                1.0,
-                1.0,
-                1.0,
-                index % 360,
-                0.0,
-                0.0,
-                names[index % name_count],
-                index * 0.01,
-                index % 97,
-                -(index % 31),
-            ])
-        writer.writerow([valid_rows, 1, 1, 1, 0, 0, 0, "", 0, 0, 0])
-    return names
+def make_unique_actual_copy(source_path, destination, limit=0):
+    with open(source_path, encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        rows = list(reader)
+        if limit:
+            rows = rows[:limit]
+        fields = reader.fieldnames
+    seen = set()
+    replacement = -9_000_000
+    for record in rows:
+        identity = record["id"].strip()
+        if identity in seen:
+            while str(replacement) in seen:
+                replacement -= 1
+            record["id"] = str(replacement)
+            identity = record["id"]
+            replacement -= 1
+        seen.add(identity)
+    write_csv(destination, rows, fields)
 
 
-def run_scale_test(temp_dir, valid_rows=60568, name_count=1232, reupdate=True):
-    print(f"[STRESS] {valid_rows + 1:,} CSV rows / {name_count:,} source names", flush=True)
+def run_stress(temp_dir):
+    source_csv = Path("/Users/taiyoparent/Downloads/StPr_map_PointData (3).csv")
+    if not source_csv.exists():
+        print("[SKIP] actual 60k CSV is unavailable")
+        return
+    print("[STRESS] corrected temporary copy of the 60,474-row actual CSV", flush=True)
     reset_data()
     scene = bpy.context.scene
     props = scene.csvmi_props
+    corrected = temp_dir / "actual_unique_ids.csv"
+    stress_limit = int(os.environ.get("CSVMI_STRESS_LIMIT", "0") or 0)
+    for argument in sys.argv:
+        if argument.startswith("--stress-limit="):
+            stress_limit = int(argument.split("=", 1)[1])
+    if "--profile" in sys.argv:
+        os.environ["CSVMI_PROFILE"] = "1"
+    make_unique_actual_copy(source_csv, corrected, stress_limit)
+    parse_start = time.perf_counter()
+    cache = csvmi.load_csv_data(str(corrected), "id")
+    parse_seconds = time.perf_counter() - parse_start
+    expected_count = stress_limit or 60474
+    check(len(cache.rows) == expected_count, "Actual CSV corrected copy row count mismatch")
+    print(f"[STRESS STAGE] parsed {len(cache.rows):,} rows in {parse_seconds:.2f}s", flush=True)
+
     source = bpy.data.collections.new("StressSources")
     scene.collection.children.link(source)
-    shared_mesh = make_mesh("StressSharedMesh")
-    stress_csv = temp_dir / f"stress_{valid_rows + 1}.csv"
-    names = make_stress_csv(stress_csv, name_count=name_count, valid_rows=valid_rows)
-    for name in names:
+    shared_mesh = make_mesh("StressShared")
+    for name in sorted(cache.unique_names):
         make_object(name, shared_mesh, source)
-
-    props.csv_path = str(stress_csv)
-    if "--stress-fbx" in sys.argv:
-        source[csvmi.FBX_MANAGED_KEY] = True
-        props.source_mode = 'FBX'
-        props.fbx_managed_collection = source
-    else:
-        props.source_mode = 'COLLECTION'
-        props.source_collection = source
-    props.ignore_numeric_suffix = False
+    print(f"[STRESS STAGE] created {len(cache.unique_names):,} source Objects", flush=True)
+    props.source_mode = 'COLLECTION'
+    props.source_collection = source
+    props.csv_path = str(corrected)
     props.output_collection_name = "Stress_Output"
-    props.use_multi_tick = True
-
-    parse_start = time.perf_counter()
-    check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, "Stress CSV import failed")
-    parse_seconds = time.perf_counter() - parse_start
-    cache = csvmi.get_csv_cache(scene)
-    check(cache.raw_count == valid_rows + 1 and len(cache.rows) == valid_rows, "Stress CSV counts mismatch")
-    check(len(cache.unique_names) == min(name_count, valid_rows) and cache.invalid_count == 1, "Stress CSV validation mismatch")
-
-    def build_once():
-        _, output, resolved, missing_names, missing_rows = csvmi.validate_source_and_output(scene, cache)
-        task = csvmi.create_update_task(scene, cache, output, resolved, missing_names, missing_rows)
-        ticks = drain_task(task)
-        check(not task.cancelled and task.created_count == valid_rows, "Stress task did not create all objects")
-        return task, ticks
-
-    first_start = time.perf_counter()
-    first_task, first_ticks = build_once()
-    first_seconds = time.perf_counter() - first_start
+    props.split_by_attribute = True
+    props.split_attribute = "Zone"
+    props.use_multi_tick = False
+    import_start = time.perf_counter()
+    check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, "Stress import failed")
+    import_seconds = time.perf_counter() - import_start
+    print(f"[STRESS STAGE] imported in {import_seconds:.2f}s", flush=True)
+    preview_start = time.perf_counter()
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Stress Preview failed")
+    preview_seconds = time.perf_counter() - preview_start
+    print(f"[STRESS STAGE] previewed in {preview_seconds:.2f}s", flush=True)
+    check(len(csvmi.get_preview_cache(scene).changes) == expected_count, "Stress Preview change count mismatch")
+    apply_start = time.perf_counter()
+    if "--ticks" in sys.argv:
+        tick_task = csvmi.V2ApplyTask(scene, csvmi.get_preview_cache(scene))
+        while not tick_task.step(csvmi.LARGE_TASK_TIME_BUDGET_SECONDS):
+            tick_task.publish_progress()
+        tick_task.finish_props()
+        # The adaptive loop targets 12ms. Blender occasionally spends about
+        # 100ms in one indivisible bpy.data.objects.new() ID-table resize; that
+        # single API call cannot be split further, so guard against real freezes.
+        check(
+            tick_task.max_step_seconds < 0.200,
+            f"60k tick exceeded 200ms: {tick_task.max_step_seconds:.3f}s in {tick_task.max_step_phase}; "
+            f"max item {tick_task.max_item_seconds:.3f}s",
+        )
+    else:
+        check(bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}, "Stress Apply failed")
+    apply_seconds = time.perf_counter() - apply_start
+    print(f"[STRESS STAGE] applied in {apply_seconds:.2f}s", flush=True)
     output = bpy.data.collections["Stress_Output"]
-    output_pointer = output.as_pointer()
-    check(len(output.objects) == valid_rows, "Stress output object count mismatch")
-    check(props.skipped_count == 1, "Stress skipped count mismatch")
-    check(all(obj.data == shared_mesh for obj in list(output.objects)[:100]), "Stress meshes are not linked")
-    check(output.hide_viewport and output.hide_render, "Stress output was not hidden after Update")
-    create_progress = len(cache.rows) / first_task.work_total
-    check(0.49 < create_progress < 0.51, f"Creation progress is not work-based: {create_progress:.3f}")
-    check(
-        all(
-            later + 1.0e-9 >= earlier
-            for earlier, later in zip(first_task.test_progress_values, first_task.test_progress_values[1:])
-        ),
-        "Stress progress moved backwards",
-    )
-    check(math.isclose(first_task.test_progress_values[-1], 1.0), "Stress progress did not finish at 100%")
-
-    second_task = None
-    second_ticks = 0
-    second_seconds = 0.0
-    if reupdate:
-        print("[STRESS] Starting safe re-update", flush=True)
-        second_start = time.perf_counter()
-        second_task, second_ticks = build_once()
-        second_seconds = time.perf_counter() - second_start
-        output = bpy.data.collections["Stress_Output"]
-        check(output.as_pointer() == output_pointer, "Stress re-update replaced output Collection")
-        check(len(output.objects) == valid_rows, "Stress re-update count mismatch")
-        check(not any(c.name.startswith(csvmi.STAGING_NAME) for c in bpy.data.collections), "Stress staging Collection remains")
-
+    if "--lookup-profile" in sys.argv:
+        state = csvmi.v2_engine.read_output_state(output, "id")
+        lookup_start = time.perf_counter()
+        lookup_objects = [
+            bpy.data.objects.get(record.get("object_name", ""))
+            for record in state["records"].values()
+        ]
+        lookup_seconds = time.perf_counter() - lookup_start
+        global_start = time.perf_counter()
+        global_objects = [obj for obj in bpy.data.objects if csvmi.OBJECT_ID_KEY in obj]
+        global_seconds = time.perf_counter() - global_start
+        collection_start = time.perf_counter()
+        collection_objects = csvmi.collect_collection_objects(output)
+        collection_seconds = time.perf_counter() - collection_start
+        print(
+            f"[LOOKUP PROFILE] names={lookup_seconds:.3f}s/{len(lookup_objects):,} "
+            f"global={global_seconds:.3f}s/{len(global_objects):,} "
+            f"collection={collection_seconds:.3f}s/{len(collection_objects):,}",
+            flush=True,
+        )
+    check(len(csvmi.collect_collection_objects(output, mesh_only=True)) == expected_count, "Stress output count mismatch")
+    no_change_start = time.perf_counter()
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "Stress no-change Preview failed")
+    no_change_seconds = time.perf_counter() - no_change_start
+    check(len(csvmi.get_preview_cache(scene).changes) == 0, "Stress no-change table is not empty")
     print(
         "[STRESS RESULT] "
-        f"parse={parse_seconds:.2f}s, "
-        f"first={first_seconds:.2f}s/{first_ticks}ticks/max={first_task.max_step_seconds * 1000:.1f}ms, "
-        + (
-            f"reupdate={second_seconds:.2f}s/{second_ticks}ticks/max={second_task.max_step_seconds * 1000:.1f}ms"
-            if second_task is not None else "reupdate=skipped"
-        ),
+        f"parse={parse_seconds:.2f}s import={import_seconds:.2f}s preview={preview_seconds:.2f}s "
+        f"apply={apply_seconds:.2f}s no_change={no_change_seconds:.2f}s max_tick={props.max_tick_ms:.1f}ms",
         flush=True,
     )
-    print(
-        "[STRESS PHASES] "
-        + ", ".join(f"{phase}={seconds:.2f}s" for phase, seconds in first_task.test_phase_seconds.items()),
-        flush=True,
-    )
-    check(first_task.max_step_seconds < 0.25, "First update exceeded 250ms max tick")
-    if second_task is not None:
-        check(second_task.max_step_seconds < 0.25, "Re-update exceeded 250ms max tick")
-    first_task = None
-    second_task = None
-    gc.collect()
-
-    clear_start = time.perf_counter()
-    clear_task = csvmi.CollectionCleanupTask(scene, output, False, True)
-    clear_ticks = drain_task(clear_task)
-    clear_seconds = time.perf_counter() - clear_start
-    check(output.name in bpy.data.collections, "Stress Clear removed the root Collection")
-    check(len(output.objects) == 0, "Stress Clear left objects behind")
-    check(clear_task.max_step_seconds < 20.0, "Stress Clear exceeded the 20s atomic deletion limit")
-    check(shared_mesh.name in bpy.data.meshes and source.name in bpy.data.collections, "Stress Clear removed source data")
-
-    rebuild_task, _rebuild_ticks = build_once()
-    output = bpy.data.collections["Stress_Output"]
-    rebuild_task = None
-    gc.collect()
-    delete_start = time.perf_counter()
-    delete_task = csvmi.CollectionCleanupTask(scene, output, True, False)
-    delete_ticks = drain_task(delete_task, 3600.0)
-    delete_seconds = time.perf_counter() - delete_start
-    check("Stress_Output" not in bpy.data.collections, "Stress Delete left the root Collection")
-    check(shared_mesh.name in bpy.data.meshes and source.name in bpy.data.collections, "Stress Delete removed source data")
-    print(
-        "[STRESS CLEANUP] "
-        f"chunked-clear={clear_seconds:.2f}s/{clear_ticks}ticks/max={clear_task.max_step_seconds * 1000:.1f}ms, "
-        f"single-delete={delete_seconds:.2f}s/{delete_ticks}tick/max={delete_task.max_step_seconds * 1000:.1f}ms",
-        flush=True,
-    )
-    print("[PASS] Scale test", flush=True)
-
-
-def option_int(name, default):
-    if name not in sys.argv:
-        return default
-    index = sys.argv.index(name)
-    return int(sys.argv[index + 1])
+    if not stress_limit:
+        check(import_seconds < 2.0, "CSV validation exceeded 2 seconds")
+        check(preview_seconds < 3.0, "Initial Preview exceeded 3 seconds")
+        check(apply_seconds < 15.0, "Initial Apply exceeded 15 seconds")
+        check(no_change_seconds < 2.0, "No-change Preview exceeded 2 seconds")
+    print("[PASS] stress")
 
 
 def main():
     csvmi.register()
     try:
-        test_progress_reporting(bpy.context.scene)
-        with tempfile.TemporaryDirectory(prefix="csvmi_test_") as temp:
-            temp_dir = Path(temp)
-            if "--stress-only" not in sys.argv:
-                test_csv_and_collection_mode(temp_dir)
-                test_fbx_mode(temp_dir)
+        check(bpy.context.scene.csvmi_props.use_multi_tick, "Split Across Multiple Ticks must default ON")
+        with tempfile.TemporaryDirectory(prefix="csvmi_v2_test_") as directory:
+            temp_dir = Path(directory)
+            test_identity_validation(temp_dir)
+            test_v2_workflow(temp_dir)
+            test_v2_ticks_and_cancel(temp_dir)
+            test_managed_output_cleanup(temp_dir)
             if "--stress" in sys.argv:
-                run_scale_test(
-                    temp_dir,
-                    valid_rows=option_int("--stress-rows", 60568),
-                    name_count=option_int("--stress-names", 1232),
-                    reupdate="--no-reupdate" not in sys.argv,
-                )
-        print("CSVMI_TESTS_OK")
+                run_stress(temp_dir)
+        print("CSVMI_V2_TESTS_OK")
     finally:
         csvmi.unregister()
 

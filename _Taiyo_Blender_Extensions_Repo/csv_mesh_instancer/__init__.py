@@ -1,7 +1,7 @@
 bl_info = {
     "name": "CSV Mesh Instancer",
     "author": "Taiyo",
-    "version": (1, 1, 0),
+    "version": (2, 0, 0),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar(N) > CSV Instancer",
     "description": "Create linked mesh objects from CSV transforms using Collection or FBX sources.",
@@ -9,16 +9,21 @@ bl_info = {
 }
 
 import csv
+import base64
+import copy
+import json
 import math
 import os
 import re
 import time
 import traceback
+import zlib
 import bpy
-from mathutils import Quaternion
+from mathutils import Euler, Quaternion
 from bpy.app.handlers import persistent
 from bpy.props import (
     BoolProperty,
+    CollectionProperty,
     EnumProperty,
     FloatProperty,
     IntProperty,
@@ -26,6 +31,8 @@ from bpy.props import (
     StringProperty,
 )
 from bpy.types import AddonPreferences, Operator, Panel, PropertyGroup, UIList
+
+from . import v2_engine
 
 
 DOCUMENTATION_URL = (
@@ -46,8 +53,9 @@ REQUIRED_COLUMNS = (
     "sz",
 )
 NUMERIC_SUFFIX_RE = re.compile(r"\.(\d{3,})$")
+INTEGER_RE = re.compile(r"^[+-]?\d+$")
 TIME_BUDGET_SECONDS = 0.012
-LARGE_TASK_TIME_BUDGET_SECONDS = 0.050
+LARGE_TASK_TIME_BUDGET_SECONDS = 0.012
 LARGE_TASK_WORK_THRESHOLD = 20000
 TIMER_INTERVAL_SECONDS = 0.01
 UI_PUBLISH_INTERVAL_SECONDS = 0.2
@@ -57,11 +65,29 @@ MAX_REMOVE_BATCH_SIZE = 65536
 FBX_MANAGED_KEY = "csvmi_fbx_managed"
 FBX_PATH_KEY = "csvmi_fbx_filepath"
 OUTPUT_MANAGED_KEY = "csvmi_output_managed"
+OUTPUT_SCHEMA_KEY = "csvmi_schema_version"
+OUTPUT_STATE_TEXT_KEY = "csvmi_state_text"
+OUTPUT_SCHEMA_VERSION = 2
+OBJECT_ID_KEY = "csvmi_id"
+OBJECT_SCHEMA_KEY = "csvmi_schema_version"
+CSV_CUSTOM_KEYS_PROP = "csvmi_custom_property_keys"
+RESERVED_CUSTOM_PREFIX = "csvmi_"
 STAGING_NAME = "__CSVMI_OUTPUT_STAGING__"
+DELETED_COLLECTION_NAME = "Deleted"
+ZONE_COLLECTION_KEY = "csvmi_zone_collection"
+ZONE_VALUE_KEY = "csvmi_zone_value"
+DELETED_COLLECTION_KEY = "csvmi_deleted_collection"
+STATE_TEXT_PREFIX = ".CSVMI_State_"
+FILTER_VALUE_LIMIT = 256
+REVIEW_PAGE_SIZE = 100
+LOCATION_SCALE_TOLERANCE = 1.0e-5
+ROTATION_TOLERANCE_RADIANS = 1.0e-4
 
 # Tuple indexes for compact CSV row storage.
 ROW_NAME = 0
-ROW_PTNUM = 1
+ROW_ID = 1
+# Kept as a private alias only so the retired v1 task classes remain importable.
+ROW_PTNUM = ROW_ID
 ROW_LINE = 2
 ROW_TX = 3
 ROW_TY = 4
@@ -72,6 +98,91 @@ ROW_RZ = 8
 ROW_SX = 9
 ROW_SY = 10
 ROW_SZ = 11
+ROW_EXTRA = 12
+
+
+def parse_custom_property_value(raw_value):
+    """Convert an optional CSV cell once, before placement begins."""
+    if raw_value is None:
+        return None, None
+    value = raw_value.strip()
+    if not value:
+        return None, None
+    lowered = value.casefold()
+    if lowered == "true":
+        return True, "Boolean"
+    if lowered == "false":
+        return False, "Boolean"
+    if INTEGER_RE.fullmatch(value):
+        integer = int(value)
+        if -(2**63) <= integer <= (2**63 - 1):
+            return integer, "Integer"
+        return value, "String"
+    try:
+        number = float(value)
+    except ValueError:
+        return value, "String"
+    if math.isfinite(number):
+        return number, "Float"
+    return value, "String"
+
+
+def summarize_custom_property_type(type_names):
+    if not type_names:
+        return "Empty"
+    if len(type_names) == 1:
+        return next(iter(type_names))
+    if type_names <= {"Integer", "Float"}:
+        return "Number"
+    return "Mixed"
+
+
+def managed_csv_property_names(obj):
+    raw_names = obj.get(CSV_CUSTOM_KEYS_PROP, "")
+    if not isinstance(raw_names, str) or not raw_names:
+        return ()
+    try:
+        names = json.loads(raw_names)
+    except (TypeError, ValueError):
+        return ()
+    if not isinstance(names, list):
+        return ()
+    return tuple(
+        name
+        for name in names
+        if isinstance(name, str) and not name.casefold().startswith(RESERVED_CUSTOM_PREFIX)
+    )
+
+
+def selected_csv_attributes(props, cache):
+    enabled_by_name = {item.name: item.enabled and not item.reserved for item in props.csv_attributes}
+    return tuple(
+        (index, name)
+        for index, name in enumerate(cache.extra_columns)
+        if enabled_by_name.get(name, False)
+    )
+
+
+def apply_csv_custom_properties(obj, row, selected_attributes):
+    """Replace only Custom Properties previously managed from extra CSV columns."""
+    names_to_remove = set(managed_csv_property_names(obj))
+    names_to_remove.update(name for _index, name in selected_attributes)
+    for name in names_to_remove:
+        if name in obj:
+            del obj[name]
+    if CSV_CUSTOM_KEYS_PROP in obj:
+        del obj[CSV_CUSTOM_KEYS_PROP]
+
+    assigned_names = []
+    extra_values = row[ROW_EXTRA]
+    for index, name in selected_attributes:
+        value = extra_values[index]
+        if value is None:
+            continue
+        obj[name] = value
+        assigned_names.append(name)
+    if assigned_names:
+        obj[CSV_CUSTOM_KEYS_PROP] = json.dumps(assigned_names, ensure_ascii=False)
 
 
 def apply_csv_transform(obj, row, props):
@@ -99,7 +210,13 @@ class CSVData:
         "mtime_ns",
         "size",
         "rows",
+        "rows_by_id",
         "unique_names",
+        "headers",
+        "identity_column",
+        "extra_columns",
+        "extra_types",
+        "attribute_values",
         "raw_count",
         "empty_name_count",
         "numeric_error_count",
@@ -112,7 +229,13 @@ class CSVData:
         mtime_ns,
         size,
         rows,
+        rows_by_id,
         unique_names,
+        headers,
+        identity_column,
+        extra_columns,
+        extra_types,
+        attribute_values,
         raw_count,
         empty_name_count,
         numeric_error_count,
@@ -122,7 +245,13 @@ class CSVData:
         self.mtime_ns = mtime_ns
         self.size = size
         self.rows = rows
+        self.rows_by_id = rows_by_id
         self.unique_names = unique_names
+        self.headers = headers
+        self.identity_column = identity_column
+        self.extra_columns = extra_columns
+        self.extra_types = extra_types
+        self.attribute_values = attribute_values
         self.raw_count = raw_count
         self.empty_name_count = empty_name_count
         self.numeric_error_count = numeric_error_count
@@ -134,6 +263,8 @@ class CSVData:
 
 
 _CSV_CACHE = {}
+_PREVIEW_CACHE = {}
+_SEARCH_DEBOUNCE_TOKENS = {}
 
 
 def _scene_key(scene):
@@ -150,6 +281,21 @@ def set_csv_cache(scene, data):
 
 def clear_csv_cache(scene):
     _CSV_CACHE.pop(_scene_key(scene), None)
+
+
+def get_preview_cache(scene):
+    return _PREVIEW_CACHE.get(_scene_key(scene))
+
+
+def clear_preview_cache(scene, clear_rows=True):
+    _PREVIEW_CACHE.pop(_scene_key(scene), None)
+    if clear_rows and hasattr(scene, "csvmi_props"):
+        props = scene.csvmi_props
+        if hasattr(props, "review_rows"):
+            props.review_rows.clear()
+            props.review_page = 0
+            props.review_total_pages = 0
+            props.preview_valid = False
 
 
 def absolute_path(path):
@@ -174,7 +320,7 @@ def csv_file_changed(scene):
         return True
 
 
-def load_csv_data(path):
+def load_csv_data(path, identity_column="id"):
     path = absolute_path(path)
     if not path:
         raise ValueError("Select a CSV file.")
@@ -187,6 +333,11 @@ def load_csv_data(path):
     empty_name_count = 0
     numeric_error_count = 0
     error_samples = []
+    extra_columns = ()
+    extra_type_names = []
+    attribute_value_counts = []
+    identity_first_lines = {}
+    duplicate_id_samples = []
 
     try:
         handle = open(path, "r", encoding="utf-8-sig", newline="")
@@ -211,7 +362,16 @@ def load_csv_data(path):
             if missing:
                 raise ValueError("Missing required columns: " + ", ".join(missing))
 
-            ptnum_column = header_map.get("ptnum")
+            identity_column = identity_column.strip()
+            if not identity_column:
+                raise ValueError("Enter an Identity Column.")
+            if identity_column not in header_map:
+                raise ValueError(f"Identity column not found: {identity_column}")
+
+            excluded_columns = set(REQUIRED_COLUMNS) | {"ptnum", identity_column}
+            extra_columns = tuple(name for name in header_map if name not in excluded_columns)
+            extra_type_names = [set() for _name in extra_columns]
+            attribute_value_counts = [dict() for _name in extra_columns]
             for line_number, record in enumerate(reader, start=2):
                 raw_count += 1
                 objname = (record.get(header_map["objname"]) or "").strip()
@@ -220,6 +380,16 @@ def load_csv_data(path):
                     if len(error_samples) < 12:
                         error_samples.append(f"Line {line_number}: objname is empty")
                     continue
+
+                identity = (record.get(header_map[identity_column]) or "").strip()
+                if not identity:
+                    raise ValueError(f"Identity is empty at CSV line {line_number}: {identity_column}")
+                first_line = identity_first_lines.get(identity)
+                if first_line is not None:
+                    if len(duplicate_id_samples) < 20:
+                        duplicate_id_samples.append((identity, first_line, line_number))
+                else:
+                    identity_first_lines[identity] = line_number
 
                 try:
                     values = [float(record.get(header_map[name], "")) for name in REQUIRED_COLUMNS[1:]]
@@ -231,15 +401,21 @@ def load_csv_data(path):
                         error_samples.append(f"Line {line_number}: invalid number ({exc})")
                     continue
 
-                ptnum = (record.get(ptnum_column) or "").strip() if ptnum_column else ""
-                if not ptnum:
-                    ptnum = str(line_number)
+                extra_values = []
+                for index, name in enumerate(extra_columns):
+                    value, type_name = parse_custom_property_value(record.get(header_map[name]))
+                    extra_values.append(value)
+                    if type_name is not None:
+                        extra_type_names[index].add(type_name)
+                    value_key = "" if value is None else str(value)
+                    counts = attribute_value_counts[index]
+                    counts[value_key] = counts.get(value_key, 0) + 1
 
                 tx, ty, tz, rx, ry, rz, sx, sy, sz = values
                 rows.append(
                     (
                         objname,
-                        ptnum,
+                        identity,
                         line_number,
                         tx,
                         ty,
@@ -250,11 +426,21 @@ def load_csv_data(path):
                         sx,
                         sy,
                         sz,
+                        tuple(extra_values),
                     )
                 )
                 unique_names.add(objname)
         except csv.Error as exc:
             raise ValueError(f"CSV format error: {exc}") from exc
+
+    if duplicate_id_samples:
+        details = "; ".join(
+            f"{identity!r} (lines {first_line} and {line_number})"
+            for identity, first_line, line_number in duplicate_id_samples
+        )
+        raise ValueError(
+            f"Identity column '{identity_column}' contains duplicate values: {details}"
+        )
 
     if not rows:
         raise ValueError("CSV contains no valid placement rows.")
@@ -265,7 +451,16 @@ def load_csv_data(path):
         mtime_ns,
         size,
         rows,
+        {row[ROW_ID]: row for row in rows},
         frozenset(unique_names),
+        tuple(header_map),
+        identity_column,
+        extra_columns,
+        tuple(summarize_custom_property_type(names) for names in extra_type_names),
+        {
+            name: tuple(sorted(counts.items(), key=lambda item: item[0]))
+            for name, counts in zip(extra_columns, attribute_value_counts)
+        },
         raw_count,
         empty_name_count,
         numeric_error_count,
@@ -398,6 +593,8 @@ def collection_source_for_scene(scene):
 
 
 def validate_source_and_output(scene, cache):
+    profile_enabled = os.environ.get("CSVMI_PROFILE") == "1"
+    profile_started = time.perf_counter()
     props = scene.csvmi_props
     source_collection = collection_source_for_scene(scene)
     if source_collection is None:
@@ -415,22 +612,28 @@ def validate_source_and_output(scene, cache):
             raise ValueError("The output Collection is inside the source Collection.")
         if collection_contains(output_collection, source_collection):
             raise ValueError("The source Collection is inside the output Collection.")
+    collections_done = time.perf_counter()
 
     source_objects = collect_collection_objects(source_collection, mesh_only=True)
     if not source_objects:
         raise ValueError("No source Mesh objects were found.")
+    sources_done = time.perf_counter()
 
     if output_collection is not None:
-        output_pointers = {obj.as_pointer() for obj in collect_collection_objects(output_collection)}
-        overlap = [obj.name for obj in source_objects if obj.as_pointer() in output_pointers]
+        output_object_pointers = {
+            obj.as_pointer() for obj in collect_collection_objects(output_collection)
+        }
+        overlap = [obj.name for obj in source_objects if obj.as_pointer() in output_object_pointers]
         if overlap:
             raise ValueError("Source Mesh objects are also linked to the output: " + ", ".join(overlap[:5]))
+    overlap_done = time.perf_counter()
 
     resolved, missing_names, collisions = resolve_source_names(
         cache.unique_names,
         source_objects,
         props.ignore_numeric_suffix,
     )
+    resolve_done = time.perf_counter()
     if collisions:
         print("[CSV Mesh Instancer] Numeric suffix collisions:")
         for normalized, candidates in sorted(collisions.items()):
@@ -438,6 +641,7 @@ def validate_source_and_output(scene, cache):
 
     missing_name_set = set(missing_names)
     missing_row_count = sum(1 for row in cache.rows if row[ROW_NAME] in missing_name_set)
+    missing_done = time.perf_counter()
     if missing_names:
         print("[CSV Mesh Instancer] Missing Mesh names:")
         for name in missing_names:
@@ -448,6 +652,16 @@ def validate_source_and_output(scene, cache):
     props.missing_name_count = len(missing_names)
     props.missing_row_count = missing_row_count
     props.missing_name_preview = ", ".join(missing_names[:8])
+    if profile_enabled:
+        finished = time.perf_counter()
+        print(
+            f"[CSVMI VALIDATE PROFILE] collections={collections_done - profile_started:.3f}s "
+            f"sources={sources_done - collections_done:.3f}s "
+            f"overlap={overlap_done - sources_done:.3f}s "
+            f"resolve={resolve_done - overlap_done:.3f}s "
+            f"missing={missing_done - resolve_done:.3f}s props={finished - missing_done:.3f}s",
+            flush=True,
+        )
     return source_collection, output_collection, resolved, missing_names, missing_row_count
 
 
@@ -503,6 +717,7 @@ def _property_update_source_collection(self, context):
         return
     props = context.scene.csvmi_props
     props.source_mesh_count = len(collect_collection_objects(props.source_collection, mesh_only=True))
+    clear_preview_cache(context.scene)
 
 
 def _set_running(props, operation, status):
@@ -700,6 +915,7 @@ class UpdateTask(ProgressTaskMixin):
         self.rows = sorted(cache.rows, key=lambda row: (row[ROW_NAME], row[ROW_LINE]))
         self.output_collection = output_collection
         self.resolved = resolved
+        self.selected_attributes = selected_csv_attributes(self.props, cache)
         self.missing_names = missing_names
         self.missing_row_count = missing_row_count
         self.phase = 'CREATE'
@@ -749,6 +965,7 @@ class UpdateTask(ProgressTaskMixin):
         obj["csvmi_ptnum"] = row[ROW_PTNUM]
         obj["csvmi_csv_line"] = row[ROW_LINE]
         obj["csvmi_source_object"] = source.name
+        apply_csv_custom_properties(obj, row, self.selected_attributes)
         self.stage_objects.append(obj)
         self.stage_names.append(desired_name)
         self.created_count += 1
@@ -913,6 +1130,7 @@ class InPlaceUpdateTask(ProgressTaskMixin):
         self.rows = sorted(cache.rows, key=lambda row: (row[ROW_NAME], row[ROW_LINE]))
         self.output_collection = output_collection
         self.resolved = resolved
+        self.selected_attributes = selected_csv_attributes(self.props, cache)
         self.missing_names = missing_names
         self.missing_row_count = missing_row_count
         self.phase = 'UPDATE'
@@ -927,6 +1145,7 @@ class InPlaceUpdateTask(ProgressTaskMixin):
                 self.existing_by_line[line] = obj
         self.snapshots = []
         self.created_objects = []
+        self.name_allocator = generated_name_allocator(self.output_collection)
         self.result_objects = []
         self.desired_names = []
         self.name_allocator = generated_name_allocator(output_collection)
@@ -963,6 +1182,7 @@ class InPlaceUpdateTask(ProgressTaskMixin):
 
     @staticmethod
     def _snapshot(obj):
+        managed_names = managed_csv_property_names(obj)
         return (
             obj,
             obj.data,
@@ -977,6 +1197,9 @@ class InPlaceUpdateTask(ProgressTaskMixin):
             obj.get("csvmi_ptnum", ""),
             int(obj.get("csvmi_csv_line", -1)),
             obj.get("csvmi_source_object", ""),
+            CSV_CUSTOM_KEYS_PROP in obj,
+            obj.get(CSV_CUSTOM_KEYS_PROP, ""),
+            {name: obj[name] for name in managed_names if name in obj},
         )
 
     def _apply(self, obj, row, source):
@@ -988,6 +1211,7 @@ class InPlaceUpdateTask(ProgressTaskMixin):
         obj["csvmi_ptnum"] = row[ROW_PTNUM]
         obj["csvmi_csv_line"] = row[ROW_LINE]
         obj["csvmi_source_object"] = source.name
+        apply_csv_custom_properties(obj, row, self.selected_attributes)
 
     @staticmethod
     def _restore(snapshot):
@@ -1005,6 +1229,9 @@ class InPlaceUpdateTask(ProgressTaskMixin):
             ptnum,
             line,
             source_name,
+            custom_marker_exists,
+            custom_marker,
+            custom_values,
         ) = snapshot
         obj.data = mesh
         obj.location = location
@@ -1020,6 +1247,15 @@ class InPlaceUpdateTask(ProgressTaskMixin):
         obj["csvmi_ptnum"] = ptnum
         obj["csvmi_csv_line"] = line
         obj["csvmi_source_object"] = source_name
+        for name in managed_csv_property_names(obj):
+            if name in obj:
+                del obj[name]
+        if CSV_CUSTOM_KEYS_PROP in obj:
+            del obj[CSV_CUSTOM_KEYS_PROP]
+        for name, value in custom_values.items():
+            obj[name] = value
+        if custom_marker_exists:
+            obj[CSV_CUSTOM_KEYS_PROP] = custom_marker
 
     def request_cancel(self):
         if self.commit_started:
@@ -1205,6 +1441,542 @@ def create_update_task(scene, cache, output_collection, resolved, missing_names,
     )
 
 
+def _safe_collection_token(value):
+    token = re.sub(r"[^0-9A-Za-z_.-]+", "_", str(value)).strip("_.")
+    return (token or "Empty")[:48]
+
+
+def find_v2_child(root, marker_key, marker_value=True):
+    for child in root.children:
+        if child.get(marker_key) == marker_value:
+            return child
+    return None
+
+
+def ensure_deleted_collection(root):
+    collection = find_v2_child(root, DELETED_COLLECTION_KEY, True)
+    if collection is None:
+        collection = bpy.data.collections.new(DELETED_COLLECTION_NAME)
+        collection[DELETED_COLLECTION_KEY] = True
+        root.children.link(collection)
+    collection.hide_viewport = True
+    collection.hide_render = True
+    return collection
+
+
+def ensure_zone_collection(root, attribute, value):
+    value = "" if value is None else str(value)
+    for child in root.children:
+        if bool(child.get(ZONE_COLLECTION_KEY, False)) and child.get(ZONE_VALUE_KEY, "") == value:
+            return child
+    base_name = f"{_safe_collection_token(attribute)}_{_safe_collection_token(value)}"
+    collection = bpy.data.collections.new(base_name)
+    collection[ZONE_COLLECTION_KEY] = True
+    collection[ZONE_VALUE_KEY] = value
+    root.children.link(collection)
+    return collection
+
+
+def move_object_exclusively(obj, target, managed_root):
+    if target not in obj.users_collection:
+        target.objects.link(obj)
+    managed_collections = {collection.as_pointer() for collection in iter_collection_tree(managed_root)}
+    for collection in list(obj.users_collection):
+        if collection != target and collection.as_pointer() in managed_collections:
+            collection.objects.unlink(obj)
+
+
+def target_collection_for_row(root, props, cache, row):
+    if not props.split_by_attribute or row is None:
+        return root
+    try:
+        index = cache.extra_columns.index(props.split_attribute)
+    except ValueError:
+        return root
+    return ensure_zone_collection(root, props.split_attribute, row[ROW_EXTRA][index])
+
+
+def set_v2_object_metadata(obj, cache, row, source=None, linked=True):
+    identity = row[ROW_ID]
+    obj[OBJECT_ID_KEY] = identity
+    obj[cache.identity_column] = identity
+    for legacy_key in ("csvmi_ptnum", "csvmi_csv_line"):
+        if legacy_key in obj:
+            del obj[legacy_key]
+
+
+class V2ApplyTask(ProgressTaskMixin):
+    """Apply reviewed v2 changes transactionally and swap persistent state last."""
+
+    def __init__(self, scene, preview):
+        self.scene = scene
+        self.props = scene.csvmi_props
+        self.preview = preview
+        self.cache = preview.cache
+        self.output_collection = preview.output
+        self.created_new_output = self.output_collection is None
+        if self.created_new_output:
+            self.output_collection = bpy.data.collections.new(self.props.output_collection_name.strip())
+            self.output_collection[OUTPUT_MANAGED_KEY] = True
+            self.output_collection[OUTPUT_SCHEMA_KEY] = OUTPUT_SCHEMA_VERSION
+            # Link an empty, already hidden Collection, then exclude it before
+            # population. Linking a completed 60k-Object Collection forces one
+            # huge depsgraph rebuild; exclusion keeps both creation and finalize
+            # responsive without paying that cost.
+            self.output_collection.hide_viewport = True
+            self.output_collection.hide_render = True
+            self.scene.collection.children.link(self.output_collection)
+        self.name_allocator = generated_name_allocator(self.output_collection)
+        self.new_state = copy.deepcopy(preview.state)
+        self.new_state["schema"] = OUTPUT_SCHEMA_VERSION
+        self.new_state["id_column"] = self.cache.identity_column
+        self.new_state.setdefault("records", {})
+        self.phase = 'APPLY'
+        self.index = 0
+        self.snapshots = []
+        self.snapshot_pointers = set()
+        self.created_objects = []
+        self.replaced_tombstones = []
+        self.profile_enabled = os.environ.get("CSVMI_PROFILE") == "1"
+        self.profile_times = {}
+        self.cancelled = False
+        self.finished = False
+        self.started_at = time.perf_counter()
+        self.max_step_seconds = 0.0
+        self.max_step_phase = ""
+        self.max_item_seconds = 0.0
+        self.state_record_total = len(
+            set(self.cache.rows_by_id) | set(self.new_state.get("records", {}))
+        )
+        self.work_total = max(1, len(preview.changes) + self.state_record_total + 1)
+        self.state_writer = None
+        self.visibility_guard = TemporaryCollectionExclusion(scene, self.output_collection)
+        self._init_progress_tracking()
+
+    def _snapshot(self, obj):
+        pointer = obj.as_pointer()
+        if pointer in self.snapshot_pointers:
+            return
+        self.snapshot_pointers.add(pointer)
+        self.snapshots.append(
+            (
+                obj,
+                obj.name,
+                obj.data,
+                obj.location.copy(),
+                obj.rotation_euler.copy(),
+                obj.scale.copy(),
+                obj.delta_location.copy(),
+                obj.delta_rotation_euler.copy(),
+                obj.delta_scale.copy(),
+                tuple(obj.users_collection),
+                bool(obj.hide_viewport),
+                bool(obj.hide_render),
+                {key: copy.deepcopy(obj[key]) for key in obj.keys()},
+            )
+        )
+
+    def _restore_snapshot(self, snapshot):
+        (
+            obj, name, mesh, location, rotation, scale, delta_location, delta_rotation,
+            delta_scale, collections, hide_viewport, hide_render, custom_properties,
+        ) = snapshot
+        if obj is None or obj.name not in bpy.data.objects:
+            return
+        obj.name = name
+        obj.data = mesh
+        obj.location = location
+        obj.rotation_mode = 'XYZ'
+        obj.rotation_euler = rotation
+        obj.scale = scale
+        obj.delta_location = delta_location
+        obj.delta_rotation_euler = delta_rotation
+        obj.delta_scale = delta_scale
+        obj.hide_viewport = hide_viewport
+        obj.hide_render = hide_render
+        for collection in list(obj.users_collection):
+            collection.objects.unlink(obj)
+        for collection in collections:
+            if collection and collection.name in bpy.data.collections:
+                collection.objects.link(obj)
+        for key in list(obj.keys()):
+            del obj[key]
+        for key, value in custom_properties.items():
+            obj[key] = value
+
+    def _new_object(self, row, source):
+        name = self.name_allocator.reserve(row[ROW_NAME])
+        obj = bpy.data.objects.new(name, source.data if source is not None else None)
+        self.created_objects.append(obj)
+        return obj
+
+    def _replace_tombstone(self, identity, tombstone, row, source):
+        """Replace an Empty with a Mesh Object while keeping rollback possible."""
+        self._snapshot(tombstone)
+        original_name = tombstone.name
+        for collection in list(tombstone.users_collection):
+            collection.objects.unlink(tombstone)
+        tombstone.name = f"__CSVMI_DELETED_{identity}"
+        obj = self._new_object(row, source)
+        obj.name = original_name
+        self.replaced_tombstones.append(tombstone)
+        return obj
+
+    def _apply_selected_properties(self, obj, row):
+        selected = selected_csv_attributes(self.props, self.cache)
+        apply_csv_custom_properties(obj, row, selected)
+
+    def _make_tombstone(self, identity, obj, record, row=None):
+        if obj is None:
+            name = record.get("objname", identity)
+            obj = bpy.data.objects.new(name, None)
+            self.created_objects.append(obj)
+            transform = record.get("transform_override") or record.get("csv_transform")
+            if transform:
+                obj.location = transform[:3]
+                obj.rotation_mode = 'XYZ'
+                obj.rotation_euler = transform[3:6]
+                obj.scale = transform[6:9]
+        else:
+            # Blender Object types cannot be reliably changed from MESH back to
+            # EMPTY by assigning data=None. Replace it transactionally instead.
+            old_obj = obj
+            self._snapshot(old_obj)
+            original_name = old_obj.name
+            transform = (
+                old_obj.location.copy(), old_obj.rotation_euler.copy(), old_obj.scale.copy(),
+                old_obj.delta_location.copy(), old_obj.delta_rotation_euler.copy(),
+                old_obj.delta_scale.copy(),
+            )
+            for collection in list(old_obj.users_collection):
+                collection.objects.unlink(old_obj)
+            old_obj.name = f"__CSVMI_REPLACED_{identity}"
+            obj = bpy.data.objects.new(original_name, None)
+            self.created_objects.append(obj)
+            self.replaced_tombstones.append(old_obj)
+            (
+                obj.location, obj.rotation_euler, obj.scale,
+                obj.delta_location, obj.delta_rotation_euler, obj.delta_scale,
+            ) = transform
+        deleted = ensure_deleted_collection(self.output_collection)
+        move_object_exclusively(obj, deleted, self.output_collection)
+        obj.empty_display_type = 'PLAIN_AXES'
+        obj.hide_viewport = True
+        obj.hide_render = True
+        obj[OBJECT_ID_KEY] = identity
+        obj[self.cache.identity_column] = identity
+        record["deleted"] = True
+        record["skipped"] = False
+        return obj
+
+    def _fresh_record(self, row, source):
+        selected_props = v2_engine.selected_row_properties(
+            self.cache, row, self.preview.selected_names
+        )
+        source_mesh = source.data.name if source is not None else ""
+        return v2_engine.state_record_from_row(self.cache, row, source_mesh, selected_props)
+
+    def _apply_change(self, change):
+        if change["filtered"]:
+            return
+        identity = change["identity"]
+        row = change["row"]
+        source = change["source"]
+        obj = change["obj"]
+        records = self.new_state["records"]
+        old_record = records.get(identity)
+
+        if change["object_kind"] == "NEW":
+            profile_start = time.perf_counter() if self.profile_enabled else 0.0
+            record = self._fresh_record(row, source)
+            if self.profile_enabled:
+                now = time.perf_counter()
+                self.profile_times["record"] = self.profile_times.get("record", 0.0) + now - profile_start
+                profile_start = now
+            if change["object_decision"] == "CREATE" and source is not None:
+                obj = self._new_object(row, source)
+                if self.profile_enabled:
+                    now = time.perf_counter()
+                    self.profile_times["object_new"] = self.profile_times.get("object_new", 0.0) + now - profile_start
+                    profile_start = now
+                apply_csv_transform(obj, row, self.props)
+                if self.profile_enabled:
+                    now = time.perf_counter()
+                    self.profile_times["transform"] = self.profile_times.get("transform", 0.0) + now - profile_start
+                    profile_start = now
+                set_v2_object_metadata(obj, self.cache, row, source, True)
+                if self.profile_enabled:
+                    now = time.perf_counter()
+                    self.profile_times["metadata"] = self.profile_times.get("metadata", 0.0) + now - profile_start
+                    profile_start = now
+                self._apply_selected_properties(obj, row)
+                if self.profile_enabled:
+                    now = time.perf_counter()
+                    self.profile_times["properties"] = self.profile_times.get("properties", 0.0) + now - profile_start
+                    profile_start = now
+                target = target_collection_for_row(
+                    self.output_collection, self.props, self.cache, row
+                )
+                target.objects.link(obj)
+                record["object_name"] = obj.name
+                if self.profile_enabled:
+                    now = time.perf_counter()
+                    self.profile_times["link"] = self.profile_times.get("link", 0.0) + now - profile_start
+            else:
+                record["skipped"] = True
+            records[identity] = record
+            return
+
+        if change["object_kind"] == "CSV_DELETED":
+            record = copy.deepcopy(old_record)
+            if change["object_decision"] == "MOVE_DELETED":
+                obj = self._make_tombstone(identity, obj, record)
+                record["object_name"] = obj.name
+            else:
+                record["csv_missing_override"] = True
+            records[identity] = record
+            return
+
+        if change["object_kind"] == "BLENDER_DELETED":
+            record = copy.deepcopy(old_record)
+            if change["object_decision"] == "RESTORE" and source is not None:
+                obj = self._new_object(row, source)
+                target_collection_for_row(
+                    self.output_collection, self.props, self.cache, row
+                ).objects.link(obj)
+                apply_csv_transform(obj, row, self.props)
+                set_v2_object_metadata(obj, self.cache, row, source, True)
+                self._apply_selected_properties(obj, row)
+                record = self._fresh_record(row, source)
+                record["object_name"] = obj.name
+            else:
+                obj = self._make_tombstone(identity, None, record, row)
+                record["object_name"] = obj.name
+            records[identity] = record
+            return
+
+        if change["object_kind"] == "DELETED":
+            record = copy.deepcopy(old_record)
+            if change["object_decision"] == "RESTORE" and source is not None:
+                if obj is None:
+                    obj = self._new_object(row, source)
+                else:
+                    obj = self._replace_tombstone(identity, obj, row, source)
+                obj.hide_viewport = False
+                obj.hide_render = False
+                move_object_exclusively(
+                    obj,
+                    target_collection_for_row(self.output_collection, self.props, self.cache, row),
+                    self.output_collection,
+                )
+                apply_csv_transform(obj, row, self.props)
+                set_v2_object_metadata(obj, self.cache, row, source, True)
+                self._apply_selected_properties(obj, row)
+                record = self._fresh_record(row, source)
+                record["object_name"] = obj.name
+            records[identity] = record
+            return
+
+        if obj is None or row is None:
+            return
+        self._snapshot(obj)
+        record = copy.deepcopy(old_record)
+        current_transform = list(v2_engine.object_transform(obj))
+        current_mesh = obj.data.name if obj.type == 'MESH' and obj.data else ""
+        current_props = v2_engine.current_object_properties(
+            obj,
+            set(record.get("csv_props", {})) | set(change["selected_props"]),
+        )
+
+        if change["transform_kind"]:
+            record["csv_transform"] = list(v2_engine.row_transform(row))
+            if change["transform_decision"] == "APPLY":
+                apply_csv_transform(obj, row, self.props)
+                record["transform_override"] = None
+            else:
+                record["transform_override"] = current_transform
+
+        if change["mesh_kind"]:
+            record["objname"] = row[ROW_NAME]
+            record["source_mesh"] = change["new_source_mesh"]
+            if change["mesh_decision"] == "RELINK" and source is not None:
+                obj.data = source.data
+                record["mesh_override"] = None
+            else:
+                record["mesh_override"] = current_mesh
+
+        if change["props_kind"]:
+            record["csv_props"] = dict(change["selected_props"])
+            if change["props_decision"] == "APPLY":
+                self._apply_selected_properties(obj, row)
+                record["props_override"] = None
+            else:
+                record["props_override"] = current_props
+
+        record["attrs"] = dict(change["attributes"])
+        record["objname"] = row[ROW_NAME]
+        record["deleted"] = False
+        record["skipped"] = False
+        record["object_name"] = obj.name
+        set_v2_object_metadata(
+            obj,
+            self.cache,
+            row,
+            source,
+            record.get("mesh_override") is None,
+        )
+        target = target_collection_for_row(self.output_collection, self.props, self.cache, row)
+        move_object_exclusively(obj, target, self.output_collection)
+        records[identity] = record
+
+    def request_cancel(self):
+        if self.phase in {'APPLY', 'STATE_ENCODE'}:
+            self.phase = 'ROLLBACK'
+            self.index = len(self.snapshots) - 1
+            self.props.status = "Cancelling: restoring the previous v2 output"
+
+    def progress_snapshot(self):
+        if self.phase == 'APPLY':
+            return (
+                self.index,
+                self.work_total,
+                "Applying reviewed changes",
+                f"Applying changes: {self.index:,} / {len(self.preview.changes):,}",
+            )
+        if self.phase == 'STATE_ENCODE':
+            encoded = self.state_writer.index if self.state_writer is not None else 0
+            return (
+                len(self.preview.changes) + encoded,
+                self.work_total,
+                "Saving v2 state",
+                f"Encoding stable IDs: {encoded:,} / {self.state_record_total:,}",
+            )
+        if self.phase == 'STATE_COMMIT':
+            return self.work_total - 1, self.work_total, "Saving v2 state", "Committing the stable ID registry"
+        if self.phase == 'DONE':
+            return self.work_total, self.work_total, "Complete", "Reviewed changes applied"
+        return 0, self.work_total, "Cancelling", "Restoring the previous output"
+
+    def step(self, budget_seconds=TIME_BUDGET_SECONDS):
+        if self.finished:
+            return True
+        started = time.perf_counter()
+        started_phase = self.phase
+        deadline = started + max(0.0001, budget_seconds)
+        did_work = False
+        while not self.finished and (not did_work or time.perf_counter() < deadline):
+            did_work = True
+            if self.phase == 'APPLY':
+                if self.index < len(self.preview.changes):
+                    item_started = time.perf_counter()
+                    self._apply_change(self.preview.changes[self.index])
+                    self.max_item_seconds = max(
+                        self.max_item_seconds, time.perf_counter() - item_started
+                    )
+                    self.index += 1
+                else:
+                    self.state_writer = v2_engine.StateTextWriter(
+                        self.output_collection, self.new_state
+                    )
+                    self.phase = 'STATE_ENCODE'
+                    self.index = 0
+            elif self.phase == 'STATE_ENCODE':
+                remaining_budget = max(0.0001, deadline - time.perf_counter())
+                if self.state_writer.step(remaining_budget):
+                    self.phase = 'STATE_COMMIT'
+            elif self.phase == 'STATE_COMMIT':
+                finalize_started = time.perf_counter() if self.profile_enabled else 0.0
+                live_replaced = [
+                    obj for obj in self.replaced_tombstones
+                    if obj and obj.name in bpy.data.objects
+                ]
+                if live_replaced:
+                    bpy.data.batch_remove(live_replaced)
+                if self.profile_enabled:
+                    now = time.perf_counter()
+                    self.profile_times["final_remove"] = now - finalize_started
+                    finalize_started = now
+                self.state_writer.commit()
+                if self.profile_enabled:
+                    now = time.perf_counter()
+                    self.profile_times["state_commit"] = now - finalize_started
+                    finalize_started = now
+                set_managed_collection_visibility(self.scene, self.output_collection, False)
+                if self.profile_enabled:
+                    self.profile_times["final_visibility"] = time.perf_counter() - finalize_started
+                # Keep the successful output excluded/hidden. The managed
+                # output Show button explicitly re-enables its View Layer.
+                self.phase = 'DONE'
+                self.finished = True
+            elif self.phase == 'ROLLBACK':
+                if self.index >= 0:
+                    self._restore_snapshot(self.snapshots[self.index])
+                    self.index -= 1
+                else:
+                    live_created = [
+                        obj for obj in self.created_objects if obj and obj.name in bpy.data.objects
+                    ]
+                    if live_created:
+                        bpy.data.batch_remove(live_created)
+                    # Replacement Objects may temporarily own the original name.
+                    # Restore snapshots once more after removing them so Blender
+                    # can give each tombstone its exact pre-cancel name back.
+                    for snapshot in self.snapshots:
+                        self._restore_snapshot(snapshot)
+                    if self.created_new_output and self.output_collection.name in bpy.data.collections:
+                        remove_collection_with_contents(self.output_collection)
+                    if self.visibility_guard is not None:
+                        self.visibility_guard.restore()
+                    self.cancelled = True
+                    self.finished = True
+            else:
+                self.finished = True
+        elapsed = time.perf_counter() - started
+        if elapsed > self.max_step_seconds:
+            self.max_step_seconds = elapsed
+            self.max_step_phase = started_phase
+        return self.finished
+
+    def finish_props(self):
+        duration = time.perf_counter() - self.started_at
+        self.props.process_seconds = duration
+        self.props.max_tick_ms = self.max_step_seconds * 1000.0
+        self.props.eta_text = ""
+        if self.cancelled:
+            self.props.phase = "Cancelled"
+            self.props.status = "Cancelled and restored the previous v2 output."
+            self.props.progress = 0.0
+            return
+        records = self.new_state.get("records", {})
+        live_records = [
+            record for record in records.values()
+            if not record.get("deleted", False) and not record.get("skipped", False)
+        ]
+        self.props.generated_count = len(live_records)
+        self.props.linked_instance_count = sum(
+            1 for record in live_records if record.get("mesh_override") is None
+        )
+        self.props.phase = "Complete"
+        self.props.status = f"Applied reviewed changes in {duration:.2f}s"
+        self.props.progress = 1.0
+        if self.profile_enabled:
+            print("[CSVMI PROFILE] " + " ".join(
+                f"{name}={seconds:.3f}s" for name, seconds in sorted(self.profile_times.items())
+            ), flush=True)
+        clear_preview_cache(self.scene)
+
+    def cleanup_after_error(self):
+        for snapshot in reversed(self.snapshots):
+            self._restore_snapshot(snapshot)
+        live_created = [obj for obj in self.created_objects if obj and obj.name in bpy.data.objects]
+        if live_created:
+            bpy.data.batch_remove(live_created)
+        if self.created_new_output and self.output_collection.name in bpy.data.collections:
+            remove_collection_with_contents(self.output_collection)
+        if self.visibility_guard is not None:
+            self.visibility_guard.restore()
+
+
 class RealizeTask(ProgressTaskMixin):
     def __init__(self, scene, objects):
         self.scene = scene
@@ -1294,6 +2066,7 @@ class RealizeTask(ProgressTaskMixin):
             props.phase = "Cancelled"
             props.progress = 0.0
         else:
+            clear_preview_cache(self.scene)
             props.linked_instance_count = 0
             props.status = f"Single-user conversion complete: {len(self.objects):,} objects / {duration:.2f}s"
             props.phase = "Complete"
@@ -1320,6 +2093,10 @@ class CollectionCleanupTask(ProgressTaskMixin):
         self.props = scene.csvmi_props
         self.collection = collection
         self.collection_name = collection.name
+        try:
+            self.state_identity_column = v2_engine.read_output_state(collection).get("id_column", "id")
+        except ValueError:
+            self.state_identity_column = "id"
         self.delete_root = delete_root
         self.objects = collect_collection_objects(collection)
         self.child_collections = collect_child_collections_postorder(collection)
@@ -1400,6 +2177,7 @@ class CollectionCleanupTask(ProgressTaskMixin):
         while not self.finished and (not did_work or time.perf_counter() < deadline):
             did_work = True
             if self.phase == 'DETACH':
+                v2_engine.remove_output_state(self.collection)
                 for parent in self.parent_links:
                     if self.collection in parent.children[:]:
                         parent.children.unlink(self.collection)
@@ -1427,6 +2205,16 @@ class CollectionCleanupTask(ProgressTaskMixin):
                 self.phase = 'FINALIZE'
             elif self.phase == 'FINALIZE':
                 if not self.delete_root and self.collection and self.collection.name in bpy.data.collections:
+                    self.collection[OUTPUT_MANAGED_KEY] = True
+                    self.collection[OUTPUT_SCHEMA_KEY] = OUTPUT_SCHEMA_VERSION
+                    v2_engine.write_output_state(
+                        self.collection,
+                        {
+                            "schema": OUTPUT_SCHEMA_VERSION,
+                            "id_column": self.state_identity_column,
+                            "records": {},
+                        },
+                    )
                     for parent in self.parent_links:
                         if self.collection not in parent.children[:]:
                             parent.children.link(self.collection)
@@ -1457,6 +2245,7 @@ class CollectionCleanupTask(ProgressTaskMixin):
             f"{action} {self.collection_name}: {len(self.objects):,} objects / "
             f"{len(self.child_collections):,} child Collections / {duration:.2f}s"
         )
+        clear_preview_cache(self.scene)
 
     def cleanup_after_error(self):
         # Deletion is intentionally non-transactional after the confirmation dialog.
@@ -1482,8 +2271,133 @@ class CSVMI_AddonPreferences(AddonPreferences):
         operator.url = DOCUMENTATION_URL
 
 
+def invalidate_preview_setting(_self, context):
+    if context is not None and context.scene is not None and hasattr(context.scene, "csvmi_props"):
+        if not context.scene.csvmi_props.running:
+            clear_preview_cache(context.scene)
+
+
+def filter_attribute_items(_self, context):
+    if context is None or context.scene is None:
+        return [("", "No CSV", "Import a CSV first")]
+    cache = get_csv_cache(context.scene)
+    if cache is None or not cache.extra_columns:
+        return [("", "No Attributes", "The loaded CSV has no filter attributes")]
+    return [(name, name, f"Filter by exact {name} values") for name in cache.extra_columns]
+
+
+def sync_filter_rule_values(rule, cache):
+    previous = {item.value: item.selected for item in rule.values}
+    rule.values.clear()
+    values = cache.attribute_values.get(rule.attribute, ())
+    for value, count in values[:FILTER_VALUE_LIMIT]:
+        item = rule.values.add()
+        item.value = value
+        item.count = count
+        item.selected = previous.get(value, True)
+
+
+def filter_attribute_changed(self, context):
+    if context is None or context.scene is None:
+        return
+    cache = get_csv_cache(context.scene)
+    if cache is not None:
+        sync_filter_rule_values(self, cache)
+    invalidate_preview_setting(self, context)
+
+
+def _refresh_review_timer(scene_pointer, token):
+    if _SEARCH_DEBOUNCE_TOKENS.get(scene_pointer) != token:
+        return None
+    scene = next((item for item in bpy.data.scenes if item.as_pointer() == scene_pointer), None)
+    if scene is not None and hasattr(scene, "csvmi_props"):
+        refresh_review_page(scene)
+    return None
+
+
+def schedule_review_refresh(_self, context):
+    if context is None or context.scene is None:
+        return
+    scene = context.scene
+    if bpy.app.background:
+        refresh_review_page(scene)
+        return
+    pointer = scene.as_pointer()
+    token = time.time_ns()
+    _SEARCH_DEBOUNCE_TOKENS[pointer] = token
+    bpy.app.timers.register(
+        lambda: _refresh_review_timer(pointer, token),
+        first_interval=0.25,
+    )
+
+
+class CSVMI_CSVAttribute(PropertyGroup):
+    name: StringProperty(name="Attribute")
+    enabled: BoolProperty(
+        name="Write to Objects",
+        default=False,
+        description="Write this CSV column to each generated Object as a Custom Property",
+        update=invalidate_preview_setting,
+    )
+    data_type: StringProperty(name="Detected Type", default="Empty")
+    reserved: BoolProperty(default=False)
+
+
+class CSVMI_FilterValue(PropertyGroup):
+    value: StringProperty()
+    selected: BoolProperty(default=True, update=invalidate_preview_setting)
+    count: IntProperty(default=0, min=0)
+
+
+class CSVMI_FilterRule(PropertyGroup):
+    enabled: BoolProperty(default=True, update=invalidate_preview_setting)
+    attribute: EnumProperty(items=filter_attribute_items, update=filter_attribute_changed)
+    values: CollectionProperty(type=CSVMI_FilterValue)
+    value_index: IntProperty(default=0, min=0)
+    manual_values: StringProperty(
+        name="Additional Exact Values",
+        description="Comma-separated exact values, useful for high-cardinality attributes",
+        update=invalidate_preview_setting,
+    )
+
+
+class CSVMI_PreviewRow(PropertyGroup):
+    change_index: IntProperty(default=-1)
+    status: StringProperty()
+    identity: StringProperty()
+    zone: StringProperty()
+    objname: StringProperty()
+    transform_label: StringProperty()
+    mesh_label: StringProperty()
+    props_label: StringProperty()
+    decision_label: StringProperty()
+
+
+def sync_csv_attributes(props, data):
+    previous = {item.name: item.enabled for item in props.csv_attributes}
+    props.csv_attributes.clear()
+    for name, data_type in zip(data.extra_columns, data.extra_types):
+        item = props.csv_attributes.add()
+        item.name = name
+        item.data_type = data_type
+        item.reserved = name.casefold().startswith(RESERVED_CUSTOM_PREFIX)
+        item.enabled = False if item.reserved else previous.get(name, True)
+    props.csv_attribute_index = min(
+        props.csv_attribute_index,
+        max(0, len(props.csv_attributes) - 1),
+    )
+
+
 class CSVMI_Props(PropertyGroup):
-    csv_path: StringProperty(name="CSV File", subtype='FILE_PATH', default="")
+    csv_path: StringProperty(
+        name="CSV File", subtype='FILE_PATH', default="", update=invalidate_preview_setting
+    )
+    identity_column: StringProperty(
+        name="Identity Column",
+        default="id",
+        description="Required globally unique, persistent CSV identity attribute",
+        update=invalidate_preview_setting,
+    )
     source_mode: EnumProperty(
         name="Source Mode",
         items=[
@@ -1491,6 +2405,7 @@ class CSVMI_Props(PropertyGroup):
             ('FBX', "FBX", "Import and use an external FBX file"),
         ],
         default='COLLECTION',
+        update=invalidate_preview_setting,
     )
     source_collection: PointerProperty(
         name="Mesh Collection",
@@ -1504,6 +2419,7 @@ class CSVMI_Props(PropertyGroup):
         name="Apply FBX Unit / Axis Correction",
         default=True,
         description="Keep CSV transforms unchanged and correct the linked FBX mesh with Delta Transform",
+        update=invalidate_preview_setting,
     )
     fbx_unit_scale: FloatProperty(
         name="Unit Scale",
@@ -1512,6 +2428,7 @@ class CSVMI_Props(PropertyGroup):
         soft_max=1.0,
         precision=4,
         description="Uniform Delta Scale applied to placements that use an FBX source",
+        update=invalidate_preview_setting,
     )
     fbx_rotation_x: FloatProperty(
         name="Local X Rotation",
@@ -1519,9 +2436,25 @@ class CSVMI_Props(PropertyGroup):
         subtype='ANGLE',
         unit='ROTATION',
         description="Local X rotation applied after each CSV rotation, like pressing R, X, X in Blender",
+        update=invalidate_preview_setting,
     )
-    output_collection_name: StringProperty(name="Collection Name", default="CSV_Output")
-    ignore_numeric_suffix: BoolProperty(name="Ignore .001 Numeric Suffixes", default=False)
+    output_collection_name: StringProperty(
+        name="Collection Name", default="CSV_Output", update=invalidate_preview_setting
+    )
+    ignore_numeric_suffix: BoolProperty(
+        name="Ignore .001 Numeric Suffixes", default=False, update=invalidate_preview_setting
+    )
+    split_by_attribute: BoolProperty(
+        name="Split by Attribute",
+        default=False,
+        description="Create one managed child Collection per attribute value",
+        update=invalidate_preview_setting,
+    )
+    split_attribute: StringProperty(
+        name="Split Attribute",
+        default="Zone",
+        update=invalidate_preview_setting,
+    )
     use_multi_tick: BoolProperty(
         name="Split Across Multiple Ticks",
         default=True,
@@ -1529,12 +2462,58 @@ class CSVMI_Props(PropertyGroup):
     )
 
     show_csv: BoolProperty(default=True)
+    show_attributes: BoolProperty(default=True)
     show_source: BoolProperty(default=True)
+    show_rules: BoolProperty(default=True)
+    show_filters: BoolProperty(default=True)
+    show_preview: BoolProperty(default=True)
+    show_advanced: BoolProperty(default=False)
     show_matching: BoolProperty(default=True)
     show_output: BoolProperty(default=True)
     show_managed_outputs: BoolProperty(default=True)
     show_status: BoolProperty(default=True)
     managed_collection_index: IntProperty(default=0, min=0)
+    csv_attributes: CollectionProperty(type=CSVMI_CSVAttribute)
+    csv_attribute_index: IntProperty(default=0, min=0)
+    attribute_filters: CollectionProperty(type=CSVMI_FilterRule)
+    attribute_filter_index: IntProperty(default=0, min=0)
+    review_rows: CollectionProperty(type=CSVMI_PreviewRow)
+    review_row_index: IntProperty(default=0, min=0)
+    review_search: StringProperty(name="Search", update=schedule_review_refresh)
+    review_status_filter: EnumProperty(
+        name="Status",
+        items=[
+            ('ALL', "All Statuses", ""),
+            ('NEW', "New", ""),
+            ('CSV_CHANGED', "CSV Changed", ""),
+            ('BLENDER_EDITED', "Blender Edited", ""),
+            ('CONFLICT', "Conflict", ""),
+            ('MESH_CHANGED', "Mesh Changed", ""),
+            ('CSV_DELETED', "CSV Deleted", ""),
+            ('BLENDER_DELETED', "Blender Deleted", ""),
+            ('DELETED', "Deleted", ""),
+            ('FILTERED_OUT', "Filtered Out", ""),
+            ('MISSING_SOURCE', "Missing Source", ""),
+        ],
+        default='ALL',
+        update=schedule_review_refresh,
+    )
+    review_zone_filter: StringProperty(name="Zone", update=schedule_review_refresh)
+    review_change_filter: EnumProperty(
+        name="Change Type",
+        items=[
+            ('ALL', "All Changes", ""),
+            ('TRANSFORM', "Transform", ""),
+            ('MESH', "Mesh", ""),
+            ('PROPS', "Custom Properties", ""),
+            ('OBJECT', "Create / Delete", ""),
+        ],
+        default='ALL',
+        update=schedule_review_refresh,
+    )
+    review_page: IntProperty(default=0, min=0)
+    review_total_pages: IntProperty(default=0, min=0)
+    preview_valid: BoolProperty(default=False)
 
     csv_row_count: IntProperty(default=0)
     csv_valid_count: IntProperty(default=0)
@@ -1559,6 +2538,15 @@ class CSVMI_Props(PropertyGroup):
     process_seconds: FloatProperty(default=0.0)
     max_tick_ms: FloatProperty(default=0.0)
     ui_publish_count: IntProperty(default=0)
+    preview_change_count: IntProperty(default=0)
+    preview_new_count: IntProperty(default=0)
+    preview_csv_changed_count: IntProperty(default=0)
+    preview_blender_edited_count: IntProperty(default=0)
+    preview_conflict_count: IntProperty(default=0)
+    preview_mesh_changed_count: IntProperty(default=0)
+    preview_csv_deleted_count: IntProperty(default=0)
+    preview_blender_deleted_count: IntProperty(default=0)
+    preview_filtered_count: IntProperty(default=0)
     running: BoolProperty(default=False)
     cancel_requested: BoolProperty(default=False)
     active_operation: EnumProperty(
@@ -1566,6 +2554,8 @@ class CSVMI_Props(PropertyGroup):
             ('NONE', "None", ""),
             ('FBX_IMPORT', "FBX Import", ""),
             ('UPDATE', "Update", ""),
+            ('PREVIEW', "Preview", ""),
+            ('APPLY', "Apply", ""),
             ('REALIZE', "Realize", ""),
             ('CLEAR_OUTPUT', "Clear Output", ""),
             ('DELETE_OUTPUT', "Delete Output", ""),
@@ -1585,13 +2575,18 @@ class CSVMI_OT_import_csv(Operator):
             self.report({'ERROR'}, "An operation is already running.")
             return {'CANCELLED'}
         try:
-            data = load_csv_data(props.csv_path)
+            data = load_csv_data(props.csv_path, props.identity_column)
         except Exception as exc:
             props.status = str(exc)
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
 
         set_csv_cache(context.scene, data)
+        clear_preview_cache(context.scene)
+        sync_csv_attributes(props, data)
+        for rule in props.attribute_filters:
+            if rule.attribute in data.extra_columns:
+                sync_filter_rule_values(rule, data)
         props.csv_row_count = data.raw_count
         props.csv_valid_count = len(data.rows)
         props.csv_unique_name_count = len(data.unique_names)
@@ -1599,10 +2594,315 @@ class CSVMI_OT_import_csv(Operator):
         props.csv_error_preview = " / ".join(data.error_samples)
         props.status = (
             f"CSV loaded: {len(data.rows):,} valid rows / "
-            f"{len(data.unique_names):,} object names / {data.invalid_count:,} errors"
+            f"{len(data.unique_names):,} object names / ID: {data.identity_column} / "
+            f"{len(data.extra_columns):,} extra attributes / "
+            f"{data.invalid_count:,} errors"
         )
         props.phase = "CSV loaded"
         self.report({'INFO'}, props.status)
+        return {'FINISHED'}
+
+
+def review_change_matches(change, props):
+    query = props.review_search.strip().casefold()
+    if query and query not in change["search_blob"]:
+        return False
+    if props.review_status_filter != 'ALL' and change["status"] != props.review_status_filter:
+        return False
+    zone_filter = props.review_zone_filter.strip().casefold()
+    if zone_filter and zone_filter not in change["zone"].casefold():
+        return False
+    change_filter = props.review_change_filter
+    if change_filter == 'TRANSFORM' and not change["transform_kind"]:
+        return False
+    if change_filter == 'MESH' and not change["mesh_kind"]:
+        return False
+    if change_filter == 'PROPS' and not (change["props_kind"] or change["attribute_changed"]):
+        return False
+    if change_filter == 'OBJECT' and not change["object_kind"]:
+        return False
+    return True
+
+
+def review_decision_label(change):
+    if change["object_decision"] != 'NONE':
+        return change["object_decision"].replace('_', ' ').title()
+    labels = []
+    if change["transform_decision"] != 'NONE':
+        labels.append("T:" + change["transform_decision"].title())
+    if change["mesh_decision"] != 'NONE':
+        labels.append("M:" + change["mesh_decision"].title())
+    if change["props_decision"] != 'NONE':
+        labels.append("P:" + change["props_decision"].title())
+    return " ".join(labels) or "Metadata"
+
+
+def refresh_review_page(scene):
+    if not hasattr(scene, "csvmi_props"):
+        return
+    props = scene.csvmi_props
+    preview = get_preview_cache(scene)
+    props.review_rows.clear()
+    if preview is None:
+        props.review_total_pages = 0
+        props.preview_valid = False
+        return
+    indices = [
+        index for index, change in enumerate(preview.changes)
+        if review_change_matches(change, props)
+    ]
+    preview.filtered_indices = indices
+    total_pages = max(1, math.ceil(len(indices) / REVIEW_PAGE_SIZE)) if indices else 0
+    props.review_total_pages = total_pages
+    props.review_page = min(props.review_page, max(0, total_pages - 1))
+    start = props.review_page * REVIEW_PAGE_SIZE
+    for change_index in indices[start:start + REVIEW_PAGE_SIZE]:
+        change = preview.changes[change_index]
+        item = props.review_rows.add()
+        item.change_index = change_index
+        item.status = v2_engine.STATUS_LABELS.get(change["status"], change["status"])
+        item.identity = change["identity"]
+        item.zone = change["zone"]
+        item.objname = change["objname"]
+        item.transform_label = change["transform_kind"].title() if change["transform_kind"] else "—"
+        item.mesh_label = change["mesh_kind"].title() if change["mesh_kind"] else "—"
+        item.props_label = (
+            str(len(change["changed_properties"]))
+            if change["changed_properties"] else "—"
+        )
+        item.decision_label = review_decision_label(change)
+    props.review_row_index = min(props.review_row_index, max(0, len(props.review_rows) - 1))
+
+
+def _set_preview_summary(props, preview):
+    summary = preview.summary
+    props.preview_change_count = len(preview.changes)
+    props.preview_new_count = summary.get("NEW", 0)
+    props.preview_csv_changed_count = summary.get("CSV_CHANGED", 0)
+    props.preview_blender_edited_count = summary.get("BLENDER_EDITED", 0)
+    props.preview_conflict_count = summary.get("CONFLICT", 0)
+    props.preview_mesh_changed_count = summary.get("MESH_CHANGED", 0)
+    props.preview_csv_deleted_count = summary.get("CSV_DELETED", 0)
+    props.preview_blender_deleted_count = summary.get("BLENDER_DELETED", 0)
+    props.preview_filtered_count = summary.get("FILTERED_OUT", 0)
+
+
+class CSVMI_OT_add_filter(Operator):
+    bl_idname = "csvmi.add_filter"
+    bl_label = "Add Attribute Filter"
+
+    def execute(self, context):
+        props = context.scene.csvmi_props
+        cache = get_csv_cache(context.scene)
+        if cache is None or not cache.extra_columns:
+            self.report({'ERROR'}, "Import a CSV with additional attributes first.")
+            return {'CANCELLED'}
+        rule = props.attribute_filters.add()
+        preferred = props.split_attribute if props.split_attribute in cache.extra_columns else cache.extra_columns[0]
+        rule.attribute = preferred
+        rule.enabled = True
+        sync_filter_rule_values(rule, cache)
+        props.attribute_filter_index = len(props.attribute_filters) - 1
+        clear_preview_cache(context.scene)
+        return {'FINISHED'}
+
+
+class CSVMI_OT_remove_filter(Operator):
+    bl_idname = "csvmi.remove_filter"
+    bl_label = "Remove Attribute Filter"
+
+    def execute(self, context):
+        props = context.scene.csvmi_props
+        if not props.attribute_filters:
+            return {'CANCELLED'}
+        index = min(props.attribute_filter_index, len(props.attribute_filters) - 1)
+        props.attribute_filters.remove(index)
+        props.attribute_filter_index = min(index, max(0, len(props.attribute_filters) - 1))
+        clear_preview_cache(context.scene)
+        return {'FINISHED'}
+
+
+class CSVMI_OT_preview_changes(Operator):
+    bl_idname = "csvmi.preview_changes"
+    bl_label = "Preview Changes"
+    bl_description = "Analyze stable-ID changes without modifying the Scene"
+
+    def execute(self, context):
+        scene = context.scene
+        props = scene.csvmi_props
+        if props.running:
+            return {'CANCELLED'}
+        cache = get_csv_cache(scene)
+        if cache is None:
+            self.report({'ERROR'}, "Import a valid CSV first.")
+            return {'CANCELLED'}
+        if csv_file_changed(scene):
+            self.report({'ERROR'}, "The CSV file changed. Re-import it before Preview.")
+            return {'CANCELLED'}
+        if props.split_by_attribute and props.split_attribute not in cache.extra_columns:
+            self.report({'ERROR'}, f"Split attribute not found: {props.split_attribute}")
+            return {'CANCELLED'}
+        started = time.perf_counter()
+        try:
+            _, output, resolved, _missing_names, _missing_rows = validate_source_and_output(scene, cache)
+            validate_done = time.perf_counter()
+            selected_names = tuple(
+                item.name for item in props.csv_attributes if item.enabled and not item.reserved
+            )
+            preview = v2_engine.build_preview(cache, output, resolved, props, selected_names)
+            build_done = time.perf_counter()
+        except Exception as exc:
+            clear_preview_cache(scene)
+            props.phase = "Preview error"
+            props.status = str(exc)
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        _PREVIEW_CACHE[_scene_key(scene)] = preview
+        props.preview_valid = True
+        props.review_page = 0
+        _set_preview_summary(props, preview)
+        refresh_review_page(scene)
+        ui_done = time.perf_counter()
+        duration = time.perf_counter() - started
+        if os.environ.get("CSVMI_PROFILE") == "1":
+            print(
+                f"[CSVMI PREVIEW OP PROFILE] validate={validate_done - started:.3f}s "
+                f"build={build_done - validate_done:.3f}s ui={ui_done - build_done:.3f}s",
+                flush=True,
+            )
+        props.process_seconds = duration
+        props.phase = "Preview ready"
+        props.status = f"Preview: {len(preview.changes):,} changed IDs / {duration:.2f}s"
+        self.report({'INFO'}, props.status)
+        return {'FINISHED'}
+
+
+class CSVMI_OT_review_page(Operator):
+    bl_idname = "csvmi.review_page"
+    bl_label = "Change Review Page"
+
+    delta: IntProperty(default=0, options={'HIDDEN', 'SKIP_SAVE'})
+
+    def execute(self, context):
+        props = context.scene.csvmi_props
+        props.review_page = max(
+            0,
+            min(max(0, props.review_total_pages - 1), props.review_page + self.delta),
+        )
+        refresh_review_page(context.scene)
+        return {'FINISHED'}
+
+
+class CSVMI_OT_set_change_decision(Operator):
+    bl_idname = "csvmi.set_change_decision"
+    bl_label = "Set Change Decision"
+
+    change_index: IntProperty(default=-1, options={'HIDDEN', 'SKIP_SAVE'})
+    domain: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
+    decision: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
+
+    def execute(self, context):
+        preview = get_preview_cache(context.scene)
+        if preview is None or not (0 <= self.change_index < len(preview.changes)):
+            return {'CANCELLED'}
+        change = preview.changes[self.change_index]
+        property_name = f"{self.domain}_decision"
+        if property_name not in change:
+            return {'CANCELLED'}
+        change[property_name] = self.decision
+        refresh_review_page(context.scene)
+        return {'FINISHED'}
+
+
+class CSVMI_OT_bulk_decision(Operator):
+    bl_idname = "csvmi.bulk_decision"
+    bl_label = "Set Filtered Decisions"
+
+    mode: EnumProperty(
+        items=[
+            ('APPLY', "Apply CSV to Filtered", ""),
+            ('KEEP', "Keep Blender for Filtered", ""),
+            ('RELINK', "Relink Unedited Meshes", ""),
+            ('KEEP_CONFLICTS', "Keep All Conflicts", ""),
+        ],
+        default='APPLY',
+        options={'HIDDEN', 'SKIP_SAVE'},
+    )
+
+    def execute(self, context):
+        preview = get_preview_cache(context.scene)
+        if preview is None:
+            return {'CANCELLED'}
+        for index in preview.filtered_indices:
+            change = preview.changes[index]
+            if change["filtered"]:
+                continue
+            if self.mode == 'APPLY':
+                if change["transform_kind"]:
+                    change["transform_decision"] = 'APPLY'
+                if change["props_kind"]:
+                    change["props_decision"] = 'APPLY'
+                if change["mesh_kind"] and change["source"] is not None:
+                    change["mesh_decision"] = 'RELINK'
+            elif self.mode == 'KEEP':
+                if change["transform_kind"]:
+                    change["transform_decision"] = 'KEEP'
+                if change["props_kind"]:
+                    change["props_decision"] = 'KEEP'
+                if change["mesh_kind"]:
+                    change["mesh_decision"] = 'KEEP'
+            elif self.mode == 'RELINK':
+                if change["mesh_kind"] == 'CSV' and change["source"] is not None:
+                    change["mesh_decision"] = 'RELINK'
+            elif self.mode == 'KEEP_CONFLICTS':
+                if change["transform_kind"] == 'CONFLICT':
+                    change["transform_decision"] = 'KEEP'
+                if change["mesh_kind"] == 'CONFLICT':
+                    change["mesh_decision"] = 'KEEP'
+                if change["props_kind"] == 'CONFLICT':
+                    change["props_decision"] = 'KEEP'
+        refresh_review_page(context.scene)
+        return {'FINISHED'}
+
+
+class CSVMI_OT_focus_change(Operator):
+    bl_idname = "csvmi.focus_change"
+    bl_label = "Focus Change"
+    bl_description = "Show and frame this changed Object or its last recorded location"
+
+    change_index: IntProperty(default=-1, options={'HIDDEN', 'SKIP_SAVE'})
+
+    def execute(self, context):
+        preview = get_preview_cache(context.scene)
+        if preview is None or not (0 <= self.change_index < len(preview.changes)):
+            return {'CANCELLED'}
+        change = preview.changes[self.change_index]
+        obj = change["obj"]
+        if obj is not None and obj.name in bpy.data.objects:
+            if preview.output is not None:
+                set_managed_collection_visibility(context.scene, preview.output, True)
+            for collection in obj.users_collection:
+                collection.hide_viewport = False
+            obj.hide_viewport = False
+            obj.hide_set(False)
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            context.view_layer.objects.active = obj
+            try:
+                if context.area and context.area.type == 'VIEW_3D':
+                    window_region = next(r for r in context.area.regions if r.type == 'WINDOW')
+                    with context.temp_override(region=window_region):
+                        bpy.ops.view3d.view_selected(use_all_regions=False)
+            except (StopIteration, RuntimeError):
+                pass
+        else:
+            transform = None
+            if change["row"] is not None:
+                transform = v2_engine.row_transform(change["row"])
+            elif change["old"]:
+                transform = change["old"].get("transform_override") or change["old"].get("csv_transform")
+            if transform and context.space_data and hasattr(context.space_data, "region_3d"):
+                context.space_data.region_3d.view_location = transform[:3]
         return {'FINISHED'}
 
 
@@ -1739,6 +3039,7 @@ class CSVMI_OT_import_fbx(Operator):
             props.fbx_mesh_count = len(mesh_objects)
             props.fbx_unapplied_transform_count = unapplied
             props.source_mesh_count = len(mesh_objects)
+            clear_preview_cache(scene)
             props.status = f"FBX imported: {len(mesh_objects):,} Mesh / {len(new_objects):,} total objects"
             if visibility_mode == 'VIEW_LAYER_EXCLUDE':
                 props.status += " / source excluded from View Layers"
@@ -1883,6 +3184,36 @@ class _ModalTaskOperator:
     def cancel(self, context):
         if self._task is not None and self._task.cancellable:
             self._task.request_cancel()
+
+
+class CSVMI_OT_apply_reviewed(_ModalTaskOperator, Operator):
+    bl_idname = "csvmi.apply_reviewed"
+    bl_label = "Apply Reviewed Changes"
+    bl_description = "Apply the current per-domain decisions and save v2 stable-ID state"
+
+    def execute(self, context):
+        scene = context.scene
+        props = scene.csvmi_props
+        preview = get_preview_cache(scene)
+        if preview is None or not props.preview_valid:
+            self.report({'ERROR'}, "Run Preview Changes first.")
+            return {'CANCELLED'}
+        if csv_file_changed(scene):
+            clear_preview_cache(scene)
+            self.report({'ERROR'}, "The CSV changed. Re-import and Preview again.")
+            return {'CANCELLED'}
+        for change in preview.changes:
+            if v2_engine.object_preview_signature(change["obj"]) != change["object_signature"]:
+                clear_preview_cache(scene)
+                self.report({'ERROR'}, "The Scene changed after Preview. Run Preview Changes again.")
+                return {'CANCELLED'}
+        try:
+            self._task = V2ApplyTask(scene, preview)
+        except Exception as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        _set_running(props, 'APPLY', "Applying reviewed stable-ID changes")
+        return self._start_modal_or_sync(context)
 
 
 class CSVMI_OT_update(_ModalTaskOperator, Operator):
@@ -2092,6 +3423,61 @@ class CSVMI_OT_cancel(Operator):
         return {'FINISHED'}
 
 
+class CSVMI_UL_csv_attributes(UIList):
+    bl_idname = "CSVMI_UL_csv_attributes"
+
+    def draw_item(
+        self,
+        context,
+        layout,
+        data,
+        item,
+        icon,
+        active_data,
+        active_property,
+        index=0,
+        flt_flag=0,
+    ):
+        row = layout.row(align=True)
+        row.enabled = not item.reserved
+        row.prop(item, "enabled", text="")
+        row.label(text=item.name, icon='LOCKED' if item.reserved else 'PROPERTIES')
+        row.label(text=item.data_type)
+
+
+class CSVMI_UL_filter_values(UIList):
+    bl_idname = "CSVMI_UL_filter_values"
+
+    def draw_item(
+        self, context, layout, data, item, icon, active_data, active_property,
+        index=0, flt_flag=0,
+    ):
+        row = layout.row(align=True)
+        row.prop(item, "selected", text="")
+        row.label(text=item.value if item.value else "<empty>")
+        row.label(text=f"{item.count:,}")
+
+
+class CSVMI_UL_review_rows(UIList):
+    bl_idname = "CSVMI_UL_review_rows"
+
+    def draw_item(
+        self, context, layout, data, item, icon, active_data, active_property,
+        index=0, flt_flag=0,
+    ):
+        row = layout.row(align=True)
+        status_icon = 'ERROR' if item.status == "Conflict" else 'INFO'
+        row.label(text=item.status, icon=status_icon)
+        row.label(text=item.identity)
+        if item.zone:
+            row.label(text=item.zone)
+        row.label(text=item.objname)
+        row.label(text=f"T:{item.transform_label} M:{item.mesh_label} P:{item.props_label}")
+        row.label(text=item.decision_label)
+        focus = row.operator("csvmi.focus_change", text="", icon='VIEWZOOM')
+        focus.change_index = item.change_index
+
+
 class CSVMI_UL_managed_outputs(UIList):
     bl_idname = "CSVMI_UL_managed_outputs"
 
@@ -2184,34 +3570,28 @@ class CSVMI_PT_panel(Panel):
                 box.label(text="Fast deletion is finishing safely and cannot be cancelled.", icon='LOCKED')
             return
 
-        if draw_foldout(layout, props, "show_csv", "CSV Data", 'FILE'):
+        if draw_foldout(layout, props, "show_csv", "CSV & Identity", 'FILE'):
             box = layout.box()
-            column = box.column()
-            column.enabled = controls_enabled
-            column.prop(props, "csv_path")
+            box.prop(props, "csv_path")
+            box.prop(props, "identity_column")
             if cache is None:
-                box.label(text="Status: Not imported", icon='INFO')
+                box.label(text="Import a CSV with a globally unique ID column", icon='INFO')
             else:
-                box.label(text="Status: Loaded", icon='CHECKMARK')
-                box.label(text=f"Rows: {props.csv_row_count:,}")
-                box.label(text=f"Valid Rows: {props.csv_valid_count:,}")
+                box.label(text=f"Loaded: {props.csv_valid_count:,} rows / ID: {cache.identity_column}", icon='CHECKMARK')
                 box.label(text=f"Object Names: {props.csv_unique_name_count:,}")
-                if props.csv_error_count:
-                    box.label(text=f"CSV Errors: {props.csv_error_count:,} rows", icon='ERROR')
                 if csv_file_changed(scene):
-                    box.label(text="The CSV file has changed", icon='ERROR')
+                    box.label(text="The CSV file changed; re-import is required", icon='ERROR')
             row = box.row()
-            row.enabled = controls_enabled and bool(props.csv_path.strip())
+            row.enabled = bool(props.csv_path.strip() and props.identity_column.strip())
             row.operator(
                 "csvmi.import_csv",
                 text="Re-import CSV" if cache is not None else "Import CSV",
                 icon='FILE_REFRESH' if cache is not None else 'IMPORT',
             )
 
-        if draw_foldout(layout, props, "show_source", "Mesh Source", 'MESH_DATA'):
+        if draw_foldout(layout, props, "show_source", "Source", 'MESH_DATA'):
             box = layout.box()
             column = box.column()
-            column.enabled = controls_enabled
             column.prop(props, "source_mode", expand=True)
             if props.source_mode == 'COLLECTION':
                 row = column.row(align=True)
@@ -2247,25 +3627,142 @@ class CSVMI_PT_panel(Panel):
                     correction.prop(props, "fbx_unit_scale")
                     correction.prop(props, "fbx_rotation_x")
 
-        if draw_foldout(layout, props, "show_matching", "Name Matching", 'SORTALPHA'):
-            box = layout.box()
-            row = box.row()
-            row.enabled = controls_enabled
-            row.prop(props, "ignore_numeric_suffix")
-            box.label(text="Exact matches take priority")
-            box.label(text=f"Suffix Collisions: {props.collision_group_count:,} groups")
-
-        if draw_foldout(layout, props, "show_output", "Output", 'OUTLINER_COLLECTION'):
+        if draw_foldout(layout, props, "show_rules", "Update Rules", 'OPTIONS'):
             box = layout.box()
             output = bpy.data.collections.get(props.output_collection_name.strip())
             row = box.row(align=True)
-            row.enabled = controls_enabled
             row.label(text="", icon=collection_color_icon(output))
             row.prop(props, "output_collection_name", text="")
-            box.label(text="Update replaces the contents of a same-named Collection", icon='ERROR')
+            box.prop(props, "split_by_attribute")
+            if props.split_by_attribute:
+                box.prop(props, "split_attribute")
+            box.prop(props, "ignore_numeric_suffix")
+            box.label(text="Exact matches take priority")
+            box.separator()
+            box.label(text="Object Custom Properties")
+            if cache is None:
+                box.label(text="Import CSV to detect attributes", icon='INFO')
+            elif props.csv_attributes:
+                box.template_list(
+                    "CSVMI_UL_csv_attributes", "", props, "csv_attributes",
+                    props, "csv_attribute_index", rows=min(6, max(2, len(props.csv_attributes))),
+                )
+                box.label(text=f"Identity '{cache.identity_column}' is always stored")
+            else:
+                box.label(text="No additional attributes")
+
+        if draw_foldout(layout, props, "show_filters", "Attribute Filters", 'FILTER'):
+            box = layout.box()
+            if cache is None:
+                box.label(text="Import CSV to configure exact-value filters", icon='INFO')
+            else:
+                for index, rule in enumerate(props.attribute_filters):
+                    row = box.row(align=True)
+                    row.prop(rule, "enabled", text="")
+                    row.prop(rule, "attribute", text=f"Filter {index + 1}")
+                controls = box.row(align=True)
+                controls.operator("csvmi.add_filter", text="Add Filter", icon='ADD')
+                remove = controls.row(align=True)
+                remove.enabled = bool(props.attribute_filters)
+                remove.operator("csvmi.remove_filter", text="Remove", icon='REMOVE')
+                if props.attribute_filters:
+                    index = min(props.attribute_filter_index, len(props.attribute_filters) - 1)
+                    rule = props.attribute_filters[index]
+                    box.template_list(
+                        "CSVMI_UL_filter_values", "", rule, "values", rule, "value_index",
+                        rows=min(6, max(2, len(rule.values))),
+                    )
+                    if len(cache.attribute_values.get(rule.attribute, ())) > FILTER_VALUE_LIMIT:
+                        box.label(text=f"First {FILTER_VALUE_LIMIT} values shown", icon='INFO')
+                    box.prop(rule, "manual_values")
+                box.label(text="OR within one attribute / AND between filters")
+
+        if draw_foldout(layout, props, "show_preview", "Preview & Apply", 'PREVIEW_RANGE'):
+            box = layout.box()
+            source_valid = collection_source_for_scene(scene) is not None
             row = box.row()
-            row.enabled = controls_enabled
-            row.prop(props, "use_multi_tick")
+            row.enabled = cache is not None and source_valid and bool(props.output_collection_name.strip())
+            row.operator("csvmi.preview_changes", text="Preview Changes", icon='VIEWZOOM')
+            if props.preview_valid:
+                counts = box.column(align=True)
+                counts.label(text=f"Changed IDs: {props.preview_change_count:,}")
+                counts.label(text=f"New {props.preview_new_count:,} / CSV {props.preview_csv_changed_count:,} / Blender {props.preview_blender_edited_count:,}")
+                counts.label(text=f"Conflicts {props.preview_conflict_count:,} / Mesh {props.preview_mesh_changed_count:,}")
+                counts.label(text=f"CSV Deleted {props.preview_csv_deleted_count:,} / Blender Deleted {props.preview_blender_deleted_count:,}")
+                if props.preview_filtered_count:
+                    counts.label(text=f"Filtered Out: {props.preview_filtered_count:,}")
+                search = box.row(align=True)
+                search.prop(props, "review_search", text="", icon='VIEWZOOM')
+                search.prop(props, "review_status_filter", text="")
+                search = box.row(align=True)
+                search.prop(props, "review_zone_filter")
+                search.prop(props, "review_change_filter", text="")
+                if props.review_rows:
+                    box.template_list(
+                        "CSVMI_UL_review_rows", "", props, "review_rows",
+                        props, "review_row_index", rows=min(8, max(3, len(props.review_rows))),
+                    )
+                    pages = box.row(align=True)
+                    previous_page = pages.operator("csvmi.review_page", text="", icon='TRIA_LEFT')
+                    previous_page.delta = -1
+                    pages.label(text=f"Page {props.review_page + 1} / {max(1, props.review_total_pages)}")
+                    next_page = pages.operator("csvmi.review_page", text="", icon='TRIA_RIGHT')
+                    next_page.delta = 1
+                    current = props.review_rows[min(props.review_row_index, len(props.review_rows) - 1)]
+                    preview = get_preview_cache(scene)
+                    change = preview.changes[current.change_index] if preview else None
+                    if change:
+                        detail = box.box()
+                        detail.label(text=f"{current.status} / ID {current.identity} / {current.objname}")
+                        if change["transform_kind"]:
+                            detail.label(text=f"Transform: {change['transform_kind'].title()}")
+                            buttons = detail.row(align=True)
+                            apply_op = buttons.operator("csvmi.set_change_decision", text="Apply CSV")
+                            apply_op.change_index, apply_op.domain, apply_op.decision = current.change_index, 'transform', 'APPLY'
+                            keep_op = buttons.operator("csvmi.set_change_decision", text="Keep Blender")
+                            keep_op.change_index, keep_op.domain, keep_op.decision = current.change_index, 'transform', 'KEEP'
+                        if change["mesh_kind"]:
+                            old_mesh = (change.get("old") or {}).get("source_mesh", "—")
+                            detail.label(text=f"Mesh: {old_mesh} → {change['new_source_mesh'] or 'Missing'}")
+                            buttons = detail.row(align=True)
+                            relink = buttons.operator("csvmi.set_change_decision", text="Relink Mesh")
+                            relink.change_index, relink.domain, relink.decision = current.change_index, 'mesh', 'RELINK'
+                            keep_mesh = buttons.operator("csvmi.set_change_decision", text="Keep Current Mesh")
+                            keep_mesh.change_index, keep_mesh.domain, keep_mesh.decision = current.change_index, 'mesh', 'KEEP'
+                        if change["props_kind"] or change["attribute_changed"]:
+                            names = ", ".join(change["changed_properties"][:8]) or "metadata"
+                            detail.label(text="Properties: " + names)
+                            if change["props_kind"]:
+                                buttons = detail.row(align=True)
+                                apply_props = buttons.operator("csvmi.set_change_decision", text="Apply CSV Properties")
+                                apply_props.change_index, apply_props.domain, apply_props.decision = current.change_index, 'props', 'APPLY'
+                                keep_props = buttons.operator("csvmi.set_change_decision", text="Keep Blender Properties")
+                                keep_props.change_index, keep_props.domain, keep_props.decision = current.change_index, 'props', 'KEEP'
+                        object_actions = {
+                            'NEW': [('Create', 'CREATE'), ('Skip', 'SKIP')],
+                            'CSV_DELETED': [('Move to Deleted', 'MOVE_DELETED'), ('Keep', 'KEEP')],
+                            'BLENDER_DELETED': [('Keep Deleted', 'KEEP_DELETED'), ('Restore', 'RESTORE')],
+                            'DELETED': [('Keep Deleted', 'KEEP_DELETED'), ('Restore', 'RESTORE')],
+                        }.get(change["object_kind"], ())
+                        if object_actions:
+                            buttons = detail.row(align=True)
+                            for label, decision in object_actions:
+                                action = buttons.operator("csvmi.set_change_decision", text=label)
+                                action.change_index, action.domain, action.decision = current.change_index, 'object', decision
+                else:
+                    box.label(text="No changed IDs match the review filters", icon='CHECKMARK')
+                bulk = box.row(align=True)
+                for mode, label in (
+                    ('APPLY', "Apply CSV"), ('KEEP', "Keep Blender"),
+                    ('RELINK', "Relink Meshes"), ('KEEP_CONFLICTS', "Keep Conflicts"),
+                ):
+                    op = bulk.operator("csvmi.bulk_decision", text=label)
+                    op.mode = mode
+                apply_row = box.row()
+                apply_row.enabled = props.preview_valid
+                apply_row.operator("csvmi.apply_reviewed", text="Apply Reviewed Changes", icon='CHECKMARK')
+            else:
+                box.label(text="Preview is required before Apply", icon='INFO')
 
         if draw_foldout(layout, props, "show_managed_outputs", "Managed Outputs", 'OUTLINER_COLLECTION'):
             box = layout.box()
@@ -2286,20 +3783,14 @@ class CSVMI_PT_panel(Panel):
             else:
                 box.label(text="No managed output Collections", icon='INFO')
 
-        action_box = layout.box()
-        if props.running:
-            action_box.operator("csvmi.cancel", icon='CANCEL')
-        else:
-            source_valid = collection_source_for_scene(scene) is not None
-            update_row = action_box.row()
-            update_row.enabled = cache is not None and source_valid and bool(props.output_collection_name.strip())
-            update_row.operator("csvmi.update", text="Update", icon='FILE_REFRESH')
-            realize_row = action_box.row()
+        if draw_foldout(layout, props, "show_advanced", "Advanced", 'PREFERENCES'):
+            box = layout.box()
+            box.prop(props, "use_multi_tick")
+            box.label(text=f"Suffix Collisions: {props.collision_group_count:,} groups")
+            realize_row = box.row()
             realize_row.enabled = props.linked_instance_count > 0
             realize_row.operator("csvmi.realize", text="Make Meshes Single-User", icon='MESH_DATA')
-
-        if draw_foldout(layout, props, "show_status", "Status", 'INFO'):
-            box = layout.box()
+            box.separator()
             box.label(text=props.phase)
             box.label(text=props.status)
             if props.running or props.progress > 0.0:
@@ -2326,6 +3817,7 @@ class CSVMI_PT_panel(Panel):
 @persistent
 def csvmi_load_post(_dummy):
     _CSV_CACHE.clear()
+    _PREVIEW_CACHE.clear()
     for scene in bpy.data.scenes:
         if not hasattr(scene, "csvmi_props"):
             continue
@@ -2341,19 +3833,39 @@ def csvmi_load_post(_dummy):
         props.csv_valid_count = 0
         props.csv_unique_name_count = 0
         props.csv_error_count = 0
+        props.csv_attributes.clear()
+        props.csv_attribute_index = 0
+        props.review_rows.clear()
+        props.preview_valid = False
+        props.review_page = 0
+        props.review_total_pages = 0
 
 
 CLASSES = (
     CSVMI_AddonPreferences,
+    CSVMI_CSVAttribute,
+    CSVMI_FilterValue,
+    CSVMI_FilterRule,
+    CSVMI_PreviewRow,
     CSVMI_Props,
     CSVMI_OT_import_csv,
     CSVMI_OT_import_fbx,
-    CSVMI_OT_update,
+    CSVMI_OT_add_filter,
+    CSVMI_OT_remove_filter,
+    CSVMI_OT_preview_changes,
+    CSVMI_OT_review_page,
+    CSVMI_OT_set_change_decision,
+    CSVMI_OT_bulk_decision,
+    CSVMI_OT_focus_change,
+    CSVMI_OT_apply_reviewed,
     CSVMI_OT_realize,
     CSVMI_OT_set_output_visibility,
     CSVMI_OT_clear_output,
     CSVMI_OT_delete_output,
     CSVMI_OT_cancel,
+    CSVMI_UL_csv_attributes,
+    CSVMI_UL_filter_values,
+    CSVMI_UL_review_rows,
     CSVMI_UL_managed_outputs,
     CSVMI_PT_panel,
 )
@@ -2371,6 +3883,7 @@ def unregister():
     if csvmi_load_post in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.remove(csvmi_load_post)
     _CSV_CACHE.clear()
+    _PREVIEW_CACHE.clear()
     if hasattr(bpy.types.Scene, "csvmi_props"):
         del bpy.types.Scene.csvmi_props
     for cls in reversed(CLASSES):

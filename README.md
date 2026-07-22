@@ -68,7 +68,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 | `collection_linked_mesh_replacer` | Collection Linked Mesh Replacer | 同形状Meshを正規アセットへ差し替え |
 | `collection_number_to_mesh_name` | Collection Number To Mesh Name | コレクション番号でMeshデータ名を整理 |
 | `collection_mesh_merge_fbx_exporter` | Collection Mesh Merge FBX Exporter | コレクションごとに統合FBXを書き出し |
-| `csv_mesh_instancer` | CSV Mesh Instancer | CSV TransformからリンクMeshを大量配置 |
+| `csv_mesh_instancer` | CSV Mesh Instancer | 永続IDでCSV差分を確認しリンクMeshを安全に更新 |
 | `custom_properties_batch_editor` | Custom Properties Batch Editor | Custom Propertiesを一括編集・検索 |
 | `export_selected_names_csv` | Export Selected Object Names to CSV | 選択名をCSV化 |
 | `gn_parameter_csv_exporter` | GN Parameter CSV Exporter | Geometry Nodes入力値をCSV化 |

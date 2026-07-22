@@ -1,5 +1,7 @@
 # Taiyo Extension Manager
 
+Version 1.0.13
+
 Taiyo Blender Scripts repositoryに含まれる各Extensionを、Blenderの3D Viewサイドバーから検索、インストール、更新、アンインストールするための管理アドオンです。
 
 This add-on searches, installs, updates, and uninstalls Taiyo Blender Scripts extensions from the Blender 3D View sidebar.
