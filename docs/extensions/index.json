@@ -30,7 +30,7 @@
       "id": "csv_mesh_instancer",
       "name": "CSV Mesh Instancer",
       "tagline": "Place linked meshes from CSV using Collection or FBX sources",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -38,10 +38,10 @@
       ],
       "blender_version_min": "4.5.9",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/csv_mesh_instancer/CSV_Mesh_Instancer_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./csv_mesh_instancer-1.0.3.zip",
-      "archive_size": 18614,
-      "archive_hash": "sha256:0f5dee01bf51d7b08d53a106dd6ea0fb8af86843855c6830897ee6ef91aa1556",
-      "taiyo_updated_at": 1784368972
+      "archive_url": "./csv_mesh_instancer-1.1.0.zip",
+      "archive_size": 23559,
+      "archive_hash": "sha256:3c2e2133c7e1ec5706bc8e0a2f3ab1ed16317f979232b30bcd27bdec66905a92",
+      "taiyo_updated_at": 1784689622
     },
     {
       "schema_version": "1.0.0",

@@ -19,7 +19,11 @@ CSVの`objname`とTransformを読み取り、CollectionまたはFBX内のMeshを
 - 位置・XYZ回転（度）・スケールによるリンクMesh配置
 - 生成Object名はCSVの`objname`を使い、重複時だけ`.001`形式の末尾番号を追加
 - 出力Collectionの検証後上書き
-- 約12ms単位の`Split Across Multiple Ticks`処理とキャンセル
+- Scene未接続のCollectionへ先に配置する高速な初回Update
+- 実作業量に基づく進捗率と低負荷な残り時間表示
+- Update完了時に出力をViewport・Renderの両方で自動非表示
+- 生成Collectionの一覧、表示切替、中身の高速削除、Collection全体の高速削除
+- 通常約12ms・大規模時約50msの`Split Across Multiple Ticks`処理とキャンセル
 - 共有Meshの個別Mesh化
 - 不正行、不足Mesh、名前衝突の集計
 - 処理中は状態表示とキャンセルだけにUIをロック

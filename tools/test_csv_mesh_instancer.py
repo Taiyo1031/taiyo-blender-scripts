@@ -8,6 +8,7 @@ Run the 60,569-row scale test:
 """
 
 import csv
+import gc
 import math
 import sys
 import tempfile
@@ -84,19 +85,60 @@ def write_csv(path, rows, fieldnames=None):
 def drain_task(task, budget=csvmi.TIME_BUDGET_SECONDS):
     ticks = 0
     phase_seconds = {}
+    progress_values = []
     while True:
         phase = task.phase
         started = time.perf_counter()
         finished = task.step(budget)
         phase_seconds[phase] = phase_seconds.get(phase, 0.0) + (time.perf_counter() - started)
+        if hasattr(task, "progress_snapshot"):
+            completed, total, _phase, _status = task.progress_snapshot()
+            progress_values.append(min(1.0, completed / max(1, total)))
         if finished:
             break
         ticks += 1
         if ticks > 1_000_000:
             raise RuntimeError("Task did not finish")
     task.test_phase_seconds = phase_seconds
+    task.test_progress_values = progress_values
     task.finish_props()
     return ticks + 1
+
+
+def test_progress_reporting(scene):
+    print("[TEST] Work-unit progress, ETA, and throttled publishing")
+
+    class DummyProgress(csvmi.ProgressTaskMixin):
+        def __init__(self):
+            self.props = scene.csvmi_props
+            self.started_at = time.perf_counter()
+            self.completed = 0
+            self.finished = False
+            self._init_progress_tracking()
+
+        def progress_snapshot(self):
+            return self.completed, 100, "Testing", f"Testing: {self.completed} / 100"
+
+    dummy = DummyProgress()
+    check(dummy.publish_progress(force=True), "Initial progress publish failed")
+    check(not dummy.publish_progress(), "Progress publishing was not throttled")
+    check(scene.csvmi_props.eta_text.startswith("Estimating"), "Initial ETA state is incorrect")
+
+    dummy._last_publish_time -= 1.0
+    dummy.completed = 10
+    dummy.publish_progress(force=True)
+    dummy._last_publish_time -= 1.0
+    dummy.completed = 25
+    dummy.publish_progress(force=True)
+    check(scene.csvmi_props.eta_text.startswith("Remaining: ~"), "ETA was not calculated after sampling")
+    previous = scene.csvmi_props.progress
+    dummy._last_publish_time -= 1.0
+    dummy.completed = 20
+    dummy.publish_progress(force=True)
+    check(scene.csvmi_props.progress == previous, "Published progress moved backwards")
+    check(csvmi.format_remaining_time(12.0) == "~12s", "Seconds ETA formatting failed")
+    check(csvmi.format_remaining_time(80.0) == "~1m 20s", "Minutes ETA formatting failed")
+    print("[PASS] Progress reporting")
 
 
 def test_csv_and_collection_mode(temp_dir):
@@ -169,6 +211,8 @@ def test_csv_and_collection_mode(temp_dir):
     check(output.color_tag == 'COLOR_04' and output.hide_render, "Output Collection settings changed")
     output_layer = csvmi.find_layer_collection(bpy.context.view_layer.layer_collection, output)
     check(output_layer is not None and not output_layer.exclude, "Output View Layer exclusion was not restored")
+    check(output.hide_viewport and output.hide_render, "Completed output was not hidden in Viewport and Render")
+    check(bool(output[csvmi.OUTPUT_MANAGED_KEY]), "Output management marker is missing")
     check("OldDummy" not in bpy.data.objects and "OldChild" not in bpy.data.collections, "Old output content remains")
     generated = list(output.objects)
     check(len(generated) == 3, f"Expected 3 generated objects, got {len(generated)}")
@@ -272,6 +316,63 @@ def test_csv_and_collection_mode(temp_dir):
     }
     check(after_fast_cancel == before_fast_cancel, "Fast update rollback changed output data")
     check(not output_layer.exclude, "Cancelled update did not restore output visibility")
+
+    output_layer.exclude = True
+    check(
+        bpy.ops.csvmi.set_output_visibility(collection_name=output.name, show=True) == {'FINISHED'},
+        "Managed output Show failed",
+    )
+    check(not output.hide_viewport and not output.hide_render, "Show did not enable Viewport and Render")
+    check(not output_layer.exclude, "Show did not clear View Layer exclusion")
+    check(
+        bpy.ops.csvmi.set_output_visibility(collection_name=output.name, show=False) == {'FINISHED'},
+        "Managed output Hide failed",
+    )
+    check(output.hide_viewport and output.hide_render, "Hide did not disable Viewport and Render")
+
+    clear_collection = bpy.data.collections.new("Managed_Clear")
+    clear_collection[csvmi.OUTPUT_MANAGED_KEY] = True
+    clear_collection.color_tag = 'COLOR_06'
+    scene.collection.children.link(clear_collection)
+    clear_child = bpy.data.collections.new("Managed_Clear_Child")
+    clear_collection.children.link(clear_child)
+    clear_object = make_object("Managed_Clear_Object", source_meshes["Cube"], clear_collection)
+    make_object("Managed_Clear_Child_Object", source_meshes["Sphere"], clear_child)
+    source_mesh_pointer = source_meshes["Cube"].as_pointer()
+    props.use_multi_tick = True
+    clear_task = csvmi.CollectionCleanupTask(scene, clear_collection, False, True)
+    drain_task(clear_task, 0.001)
+    check(clear_collection.name in bpy.data.collections, "Clear removed the managed root Collection")
+    check(clear_collection.color_tag == 'COLOR_06', "Clear changed the Collection color")
+    check(bool(clear_collection[csvmi.OUTPUT_MANAGED_KEY]), "Clear removed the management marker")
+    check(clear_collection in scene.collection.children[:], "Clear changed the root parent link")
+    check(len(clear_collection.objects) == 0 and len(clear_collection.children) == 0, "Clear left managed contents")
+    check(source_meshes["Cube"].as_pointer() == source_mesh_pointer, "Clear removed a shared source Mesh")
+    check(clear_task.max_step_seconds < 0.25, "Chunked Clear exceeded 250ms max tick")
+
+    delete_collection = bpy.data.collections.new("Managed_Delete")
+    delete_collection[csvmi.OUTPUT_MANAGED_KEY] = True
+    scene.collection.children.link(delete_collection)
+    make_object("Managed_Delete_Object", source_meshes["Cube"], delete_collection)
+    props.output_collection_name = delete_collection.name
+    props.generated_count = 99
+    props.linked_instance_count = 99
+    props.use_multi_tick = False
+    check(
+        bpy.ops.csvmi.delete_output(collection_name=delete_collection.name) == {'FINISHED'},
+        "Fast managed Collection deletion failed",
+    )
+    check("Managed_Delete" not in bpy.data.collections, "Delete left the managed root Collection")
+    check(props.output_collection_name == "Managed_Delete", "Delete changed the configured output name")
+    check(props.generated_count == 0 and props.linked_instance_count == 0, "Delete did not reset output stats")
+    check("Sources" in bpy.data.collections and "CSV_Output" in bpy.data.collections, "Delete affected unrelated Collections")
+
+    regular_collection = bpy.data.collections.new("Regular_Not_Managed")
+    scene.collection.children.link(regular_collection)
+    expect_operator_cancel(
+        lambda: bpy.ops.csvmi.clear_output(collection_name=regular_collection.name),
+        "Clear accepted an unmanaged Collection",
+    )
     print("[PASS] CSV and Collection mode")
 
 
@@ -507,6 +608,17 @@ def run_scale_test(temp_dir, valid_rows=60568, name_count=1232, reupdate=True):
     check(len(output.objects) == valid_rows, "Stress output object count mismatch")
     check(props.skipped_count == 1, "Stress skipped count mismatch")
     check(all(obj.data == shared_mesh for obj in list(output.objects)[:100]), "Stress meshes are not linked")
+    check(output.hide_viewport and output.hide_render, "Stress output was not hidden after Update")
+    create_progress = len(cache.rows) / first_task.work_total
+    check(0.49 < create_progress < 0.51, f"Creation progress is not work-based: {create_progress:.3f}")
+    check(
+        all(
+            later + 1.0e-9 >= earlier
+            for earlier, later in zip(first_task.test_progress_values, first_task.test_progress_values[1:])
+        ),
+        "Stress progress moved backwards",
+    )
+    check(math.isclose(first_task.test_progress_values[-1], 1.0), "Stress progress did not finish at 100%")
 
     second_task = None
     second_ticks = 0
@@ -539,6 +651,35 @@ def run_scale_test(temp_dir, valid_rows=60568, name_count=1232, reupdate=True):
     check(first_task.max_step_seconds < 0.25, "First update exceeded 250ms max tick")
     if second_task is not None:
         check(second_task.max_step_seconds < 0.25, "Re-update exceeded 250ms max tick")
+    first_task = None
+    second_task = None
+    gc.collect()
+
+    clear_start = time.perf_counter()
+    clear_task = csvmi.CollectionCleanupTask(scene, output, False, True)
+    clear_ticks = drain_task(clear_task)
+    clear_seconds = time.perf_counter() - clear_start
+    check(output.name in bpy.data.collections, "Stress Clear removed the root Collection")
+    check(len(output.objects) == 0, "Stress Clear left objects behind")
+    check(clear_task.max_step_seconds < 20.0, "Stress Clear exceeded the 20s atomic deletion limit")
+    check(shared_mesh.name in bpy.data.meshes and source.name in bpy.data.collections, "Stress Clear removed source data")
+
+    rebuild_task, _rebuild_ticks = build_once()
+    output = bpy.data.collections["Stress_Output"]
+    rebuild_task = None
+    gc.collect()
+    delete_start = time.perf_counter()
+    delete_task = csvmi.CollectionCleanupTask(scene, output, True, False)
+    delete_ticks = drain_task(delete_task, 3600.0)
+    delete_seconds = time.perf_counter() - delete_start
+    check("Stress_Output" not in bpy.data.collections, "Stress Delete left the root Collection")
+    check(shared_mesh.name in bpy.data.meshes and source.name in bpy.data.collections, "Stress Delete removed source data")
+    print(
+        "[STRESS CLEANUP] "
+        f"chunked-clear={clear_seconds:.2f}s/{clear_ticks}ticks/max={clear_task.max_step_seconds * 1000:.1f}ms, "
+        f"single-delete={delete_seconds:.2f}s/{delete_ticks}tick/max={delete_task.max_step_seconds * 1000:.1f}ms",
+        flush=True,
+    )
     print("[PASS] Scale test", flush=True)
 
 
@@ -552,6 +693,7 @@ def option_int(name, default):
 def main():
     csvmi.register()
     try:
+        test_progress_reporting(bpy.context.scene)
         with tempfile.TemporaryDirectory(prefix="csvmi_test_") as temp:
             temp_dir = Path(temp)
             if "--stress-only" not in sys.argv:

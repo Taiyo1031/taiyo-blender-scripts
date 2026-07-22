@@ -1,7 +1,7 @@
 bl_info = {
     "name": "CSV Mesh Instancer",
     "author": "Taiyo",
-    "version": (1, 0, 3),
+    "version": (1, 1, 0),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar(N) > CSV Instancer",
     "description": "Create linked mesh objects from CSV transforms using Collection or FBX sources.",
@@ -25,7 +25,7 @@ from bpy.props import (
     PointerProperty,
     StringProperty,
 )
-from bpy.types import AddonPreferences, Operator, Panel, PropertyGroup
+from bpy.types import AddonPreferences, Operator, Panel, PropertyGroup, UIList
 
 
 DOCUMENTATION_URL = (
@@ -47,8 +47,13 @@ REQUIRED_COLUMNS = (
 )
 NUMERIC_SUFFIX_RE = re.compile(r"\.(\d{3,})$")
 TIME_BUDGET_SECONDS = 0.012
+LARGE_TASK_TIME_BUDGET_SECONDS = 0.050
+LARGE_TASK_WORK_THRESHOLD = 20000
 TIMER_INTERVAL_SECONDS = 0.01
+UI_PUBLISH_INTERVAL_SECONDS = 0.2
 REMOVE_BATCH_SIZE = 4096
+MIN_REMOVE_BATCH_SIZE = 64
+MAX_REMOVE_BATCH_SIZE = 65536
 FBX_MANAGED_KEY = "csvmi_fbx_managed"
 FBX_PATH_KEY = "csvmi_fbx_filepath"
 OUTPUT_MANAGED_KEY = "csvmi_output_managed"
@@ -316,6 +321,21 @@ def collect_child_collections_postorder(root):
     return children
 
 
+def collect_collection_parent_links(collection):
+    parents = []
+    seen = set()
+    candidates = [scene.collection for scene in bpy.data.scenes]
+    candidates.extend(bpy.data.collections)
+    for parent in candidates:
+        pointer = parent.as_pointer()
+        if pointer in seen:
+            continue
+        seen.add(pointer)
+        if collection in parent.children[:]:
+            parents.append(parent)
+    return parents
+
+
 def strip_numeric_suffix(name):
     return NUMERIC_SUFFIX_RE.sub("", name)
 
@@ -491,12 +511,15 @@ def _set_running(props, operation, status):
     props.active_operation = operation
     props.status = status
     props.progress = 0.0
+    props.eta_text = "Estimating remaining time…"
+    props.ui_publish_count = 0
 
 
 def _set_idle(props):
     props.running = False
     props.cancel_requested = False
     props.active_operation = 'NONE'
+    props.eta_text = ""
 
 
 def tag_view3d_redraw(context):
@@ -506,6 +529,99 @@ def tag_view3d_redraw(context):
     for area in screen.areas:
         if area.type == 'VIEW_3D':
             area.tag_redraw()
+
+
+def format_remaining_time(seconds):
+    seconds = max(0, int(round(seconds)))
+    if seconds < 60:
+        return f"~{seconds}s"
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"~{minutes}m {seconds:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"~{hours}h {minutes:02d}m"
+
+
+def reset_output_stats(props):
+    props.generated_count = 0
+    props.skipped_count = 0
+    props.missing_name_count = 0
+    props.missing_row_count = 0
+    props.linked_instance_count = 0
+    props.missing_name_preview = ""
+    props.process_seconds = 0.0
+    props.max_tick_ms = 0.0
+
+
+def set_managed_collection_visibility(scene, collection, show):
+    collection.hide_viewport = not show
+    collection.hide_render = not show
+    if show:
+        for view_layer in scene.view_layers:
+            layer_collection = find_layer_collection(view_layer.layer_collection, collection)
+            if layer_collection is not None:
+                try:
+                    layer_collection.exclude = False
+                except (AttributeError, ReferenceError, RuntimeError):
+                    pass
+
+
+class ProgressTaskMixin:
+    """Publish task progress at a low frequency to avoid GUI notifier overhead."""
+
+    cancellable = True
+
+    def _init_progress_tracking(self):
+        self._last_publish_time = self.started_at
+        self._last_published_units = 0
+        self._published_progress = 0.0
+        self._ema_units_per_second = 0.0
+        self._rate_sample_count = 0
+        self.ui_publish_count = 0
+
+    def progress_snapshot(self):
+        raise NotImplementedError
+
+    def publish_progress(self, force=False):
+        now = time.perf_counter()
+        if not force and now - self._last_publish_time < UI_PUBLISH_INTERVAL_SECONDS:
+            return False
+
+        completed, total, phase, status = self.progress_snapshot()
+        completed = max(0, completed)
+        total = max(1, total)
+        factor = min(1.0, completed / total)
+        if not self.finished:
+            factor = min(factor, 0.999)
+        factor = max(self._published_progress, factor)
+
+        elapsed = max(0.0, now - self._last_publish_time)
+        unit_delta = max(0, completed - self._last_published_units)
+        if elapsed > 0.0 and unit_delta > 0:
+            current_rate = unit_delta / elapsed
+            if self._rate_sample_count == 0:
+                self._ema_units_per_second = current_rate
+            else:
+                self._ema_units_per_second = 0.25 * current_rate + 0.75 * self._ema_units_per_second
+            self._rate_sample_count += 1
+
+        remaining = max(0, total - completed)
+        if self.finished or remaining == 0:
+            eta_text = ""
+        elif self._rate_sample_count < 2 or self._ema_units_per_second <= 0.0:
+            eta_text = "Estimating remaining time…"
+        else:
+            eta_text = "Remaining: " + format_remaining_time(remaining / self._ema_units_per_second)
+
+        self.props.progress = factor
+        self.props.phase = phase
+        self.props.status = status
+        self.props.eta_text = eta_text
+        self._published_progress = factor
+        self._last_publish_time = now
+        self._last_published_units = completed
+        self.ui_publish_count += 1
+        return True
 
 
 class BlenderNameAllocator:
@@ -576,7 +692,7 @@ class TemporaryCollectionExclusion:
         self.collection = None
 
 
-class UpdateTask:
+class UpdateTask(ProgressTaskMixin):
     def __init__(self, scene, cache, output_collection, resolved, missing_names, missing_row_count):
         self.scene = scene
         self.props = scene.csvmi_props
@@ -586,21 +702,30 @@ class UpdateTask:
         self.resolved = resolved
         self.missing_names = missing_names
         self.missing_row_count = missing_row_count
-        self.stage = None
         self.phase = 'CREATE'
         self.index = 0
         self.created_count = 0
         self.stage_objects = []
         self.stage_names = []
         self.name_allocator = generated_name_allocator(output_collection)
-        self.old_objects = []
-        self.old_collections = []
+        self.old_objects = collect_collection_objects(output_collection) if output_collection else []
+        self.old_collections = collect_child_collections_postorder(output_collection) if output_collection else []
+        self.expected_created_count = len(self.rows) - missing_row_count
+        self.work_total = (
+            len(self.rows)
+            + len(self.old_objects)
+            + len(self.old_collections)
+            + self.expected_created_count
+            + 1
+        )
         self.cancelled = False
         self.finished = False
         self.commit_started = False
+        self.created_new_output = False
         self.started_at = time.perf_counter()
         self.max_step_seconds = 0.0
         self.visibility_guard = None
+        self._init_progress_tracking()
 
     def request_cancel(self):
         if self.commit_started:
@@ -632,44 +757,46 @@ class UpdateTask:
         self.commit_started = True
         if self.output_collection is None:
             self.output_collection = bpy.data.collections.new(self.props.output_collection_name.strip())
-            self.scene.collection.children.link(self.output_collection)
-        self.visibility_guard = TemporaryCollectionExclusion(self.scene, self.output_collection)
+            self.created_new_output = True
+        else:
+            self.visibility_guard = TemporaryCollectionExclusion(self.scene, self.output_collection)
         self.output_collection[OUTPUT_MANAGED_KEY] = True
-        self.old_objects = collect_collection_objects(self.output_collection)
-        self.old_collections = collect_child_collections_postorder(self.output_collection)
         self.phase = 'CLEAR_OBJECTS'
         self.index = 0
 
-    def _progress_factor(self):
-        row_total = max(1, len(self.cache.rows))
+    def progress_snapshot(self):
+        row_total = len(self.rows)
+        old_object_total = len(self.old_objects)
+        old_collection_total = len(self.old_collections)
         if self.phase == 'CREATE':
-            return 0.82 * (self.index / row_total)
-        if self.phase == 'CLEAR_OBJECTS':
-            return 0.82 + 0.06 * (self.index / max(1, len(self.old_objects)))
-        if self.phase == 'CLEAR_COLLECTIONS':
-            return 0.88 + 0.02 * (self.index / max(1, len(self.old_collections)))
-        if self.phase == 'LINK':
-            return 0.90 + 0.10 * (self.index / max(1, len(self.stage_objects)))
-        if self.phase == 'CANCEL_CLEANUP':
-            remaining = max(0, self.index + 1)
-            return 1.0 - remaining / max(1, len(self.stage_objects))
-        return 1.0
-
-    def _update_status(self):
-        props = self.props
-        props.progress = min(1.0, max(0.0, self._progress_factor()))
-        if self.phase == 'CREATE':
-            props.phase = "Creating placements"
-            props.status = f"Creating placements: {self.index:,} / {len(self.cache.rows):,}"
+            completed = self.index
+            phase = "Creating placements"
+            status = f"Creating placements: {self.index:,} / {row_total:,}"
         elif self.phase == 'CLEAR_OBJECTS':
-            props.phase = "Clearing old output"
-            props.status = f"Removing old objects: {self.index:,} / {len(self.old_objects):,}"
+            completed = row_total + self.index
+            phase = "Clearing old output"
+            status = f"Removing old objects: {self.index:,} / {old_object_total:,}"
         elif self.phase == 'CLEAR_COLLECTIONS':
-            props.phase = "Removing child Collections"
-            props.status = f"Removing child Collections: {self.index:,} / {len(self.old_collections):,}"
+            completed = row_total + old_object_total + self.index
+            phase = "Removing child Collections"
+            status = f"Removing child Collections: {self.index:,} / {old_collection_total:,}"
         elif self.phase == 'LINK':
-            props.phase = "Committing new placements"
-            props.status = f"Committing placements: {self.index:,} / {len(self.stage_objects):,}"
+            completed = row_total + old_object_total + old_collection_total + self.index
+            phase = "Committing new placements"
+            status = f"Committing placements: {self.index:,} / {len(self.stage_objects):,}"
+        elif self.phase == 'FINALIZE':
+            completed = self.work_total - 1
+            phase = "Finalizing output"
+            status = "Linking and hiding the completed output Collection"
+        elif self.phase == 'DONE':
+            completed = self.work_total
+            phase = "Complete"
+            status = "Placement update complete"
+        else:
+            completed = int(self._published_progress * self.work_total)
+            phase = "Cancelling"
+            status = "Removing temporary objects"
+        return completed, self.work_total, phase, status
 
     def step(self, budget_seconds=TIME_BUDGET_SECONDS):
         if self.finished:
@@ -716,9 +843,17 @@ class UpdateTask:
                     self.output_collection.objects.link(obj)
                     self.index += 1
                 else:
+                    self.phase = 'FINALIZE'
+                    self.index = 0
+
+            elif self.phase == 'FINALIZE':
+                set_managed_collection_visibility(self.scene, self.output_collection, False)
+                if self.created_new_output:
+                    self.scene.collection.children.link(self.output_collection)
+                if self.visibility_guard is not None:
                     self.visibility_guard.restore()
-                    self.phase = 'DONE'
-                    self.finished = True
+                self.phase = 'DONE'
+                self.finished = True
 
             elif self.phase == 'CANCEL_CLEANUP':
                 if self.index >= 0:
@@ -735,7 +870,6 @@ class UpdateTask:
 
         elapsed = time.perf_counter() - started
         self.max_step_seconds = max(self.max_step_seconds, elapsed)
-        self._update_status()
         return self.finished
 
     def finish_props(self):
@@ -743,6 +877,7 @@ class UpdateTask:
         duration = time.perf_counter() - self.started_at
         props.process_seconds = duration
         props.max_tick_ms = self.max_step_seconds * 1000.0
+        props.eta_text = ""
         if self.cancelled:
             props.status = "Cancelled. The previous output was preserved."
             props.phase = "Cancelled"
@@ -764,9 +899,11 @@ class UpdateTask:
             bpy.data.batch_remove(live_objects)
         if self.visibility_guard is not None:
             self.visibility_guard.restore()
+        if self.created_new_output and self.output_collection and self.output_collection.name in bpy.data.collections:
+            bpy.data.collections.remove(self.output_collection)
 
 
-class InPlaceUpdateTask:
+class InPlaceUpdateTask(ProgressTaskMixin):
     """Fast transactional update for an output made entirely by this add-on."""
 
     def __init__(self, scene, cache, output_collection, resolved, missing_names, missing_row_count):
@@ -793,6 +930,24 @@ class InPlaceUpdateTask:
         self.result_objects = []
         self.desired_names = []
         self.name_allocator = generated_name_allocator(output_collection)
+        self.planned_names_by_line = {}
+        expected_lines = set()
+        predicted_rename_count = 0
+        for row in self.rows:
+            if self.resolved.get(row[ROW_NAME]) is None:
+                continue
+            line = row[ROW_LINE]
+            desired_name = self.name_allocator.reserve(row[ROW_NAME])
+            self.planned_names_by_line[line] = desired_name
+            expected_lines.add(line)
+            existing = self.existing_by_line.get(line)
+            if existing is None or existing.name != desired_name:
+                predicted_rename_count += 1
+        predicted_leftover_count = len(self.extra_existing) + sum(
+            1 for line in self.existing_by_line if line not in expected_lines
+        )
+        self.predicted_rename_count = predicted_rename_count
+        self.predicted_leftover_count = predicted_leftover_count
         self.rename_objects = []
         self.rename_names = []
         self.leftovers = []
@@ -802,7 +957,9 @@ class InPlaceUpdateTask:
         self.started_at = time.perf_counter()
         self.max_step_seconds = 0.0
         self.created_count = 0
+        self.work_total = len(self.rows) + predicted_leftover_count + 2 * predicted_rename_count + 1
         self.visibility_guard = TemporaryCollectionExclusion(scene, output_collection)
+        self._init_progress_tracking()
 
     @staticmethod
     def _snapshot(obj):
@@ -883,28 +1040,35 @@ class InPlaceUpdateTask:
         self.phase = 'DELETE_LEFTOVERS'
         self.index = 0
 
-    def _progress_factor(self):
+    def progress_snapshot(self):
+        row_total = len(self.rows)
+        leftover_total = len(self.leftovers) if self.commit_started else self.predicted_leftover_count
         if self.phase == 'UPDATE':
-            return 0.80 * self.index / max(1, len(self.cache.rows))
-        if self.phase == 'DELETE_LEFTOVERS':
-            return 0.80 + 0.04 * self.index / max(1, len(self.leftovers))
-        if self.phase == 'RENAME_TEMP':
-            return 0.84 + 0.08 * self.index / max(1, len(self.rename_objects))
-        if self.phase == 'RENAME_FINAL':
-            return 0.92 + 0.08 * self.index / max(1, len(self.rename_objects))
-        return 0.0
-
-    def _update_status(self):
-        self.props.progress = min(1.0, max(0.0, self._progress_factor()))
-        if self.phase == 'UPDATE':
-            self.props.phase = "Fast updating existing placements"
-            self.props.status = f"Updating placements: {self.index:,} / {len(self.cache.rows):,}"
+            completed = self.index
+            phase = "Fast updating existing placements"
+            status = f"Updating placements: {self.index:,} / {row_total:,}"
         elif self.phase == 'DELETE_LEFTOVERS':
-            self.props.phase = "Removing obsolete objects"
-            self.props.status = f"Removing obsolete objects: {self.index:,} / {len(self.leftovers):,}"
+            completed = row_total + self.index
+            phase = "Removing obsolete objects"
+            status = f"Removing obsolete objects: {self.index:,} / {len(self.leftovers):,}"
         elif self.phase in {'RENAME_TEMP', 'RENAME_FINAL'}:
-            self.props.phase = "Finalizing object names"
-            self.props.status = f"Finalizing object names: {self.index:,} / {len(self.rename_objects):,}"
+            rename_offset = len(self.rename_objects) if self.phase == 'RENAME_FINAL' else 0
+            completed = row_total + leftover_total + rename_offset + self.index
+            phase = "Finalizing object names"
+            status = f"Finalizing object names: {self.index:,} / {len(self.rename_objects):,}"
+        elif self.phase == 'FINALIZE':
+            completed = self.work_total - 1
+            phase = "Finalizing output"
+            status = "Hiding the completed output Collection"
+        elif self.phase == 'DONE':
+            completed = self.work_total
+            phase = "Complete"
+            status = "Placement update complete"
+        else:
+            completed = int(self._published_progress * self.work_total)
+            phase = "Cancelling"
+            status = "Restoring the previous output"
+        return completed, self.work_total, phase, status
 
     def step(self, budget_seconds=TIME_BUDGET_SECONDS):
         if self.finished:
@@ -929,7 +1093,7 @@ class InPlaceUpdateTask:
                             self.snapshots.append(self._snapshot(obj))
                         self._apply(obj, row, source)
                         self.result_objects.append(obj)
-                        self.desired_names.append(self.name_allocator.reserve(row[ROW_NAME]))
+                        self.desired_names.append(self.planned_names_by_line[row[ROW_LINE]])
                     self.index += 1
                 else:
                     self.created_count = len(self.result_objects)
@@ -957,9 +1121,14 @@ class InPlaceUpdateTask:
                     self.rename_objects[self.index].name = self.rename_names[self.index]
                     self.index += 1
                 else:
-                    self.visibility_guard.restore()
-                    self.finished = True
-                    self.phase = 'DONE'
+                    self.phase = 'FINALIZE'
+                    self.index = 0
+
+            elif self.phase == 'FINALIZE':
+                set_managed_collection_visibility(self.scene, self.output_collection, False)
+                self.visibility_guard.restore()
+                self.finished = True
+                self.phase = 'DONE'
 
             elif self.phase == 'CANCEL_CREATED':
                 if self.index >= 0:
@@ -984,7 +1153,6 @@ class InPlaceUpdateTask:
 
         elapsed = time.perf_counter() - started
         self.max_step_seconds = max(self.max_step_seconds, elapsed)
-        self._update_status()
         return self.finished
 
     def finish_props(self):
@@ -992,6 +1160,7 @@ class InPlaceUpdateTask:
         duration = time.perf_counter() - self.started_at
         props.process_seconds = duration
         props.max_tick_ms = self.max_step_seconds * 1000.0
+        props.eta_text = ""
         if self.cancelled:
             props.status = "Cancelled and restored the previous placements."
             props.phase = "Cancelled"
@@ -1036,7 +1205,7 @@ def create_update_task(scene, cache, output_collection, resolved, missing_names,
     )
 
 
-class RealizeTask:
+class RealizeTask(ProgressTaskMixin):
     def __init__(self, scene, objects):
         self.scene = scene
         self.props = scene.csvmi_props
@@ -1048,14 +1217,32 @@ class RealizeTask:
         self.finished = False
         self.started_at = time.perf_counter()
         self.max_step_seconds = 0.0
+        self.work_total = max(1, len(objects))
         output = bpy.data.collections.get(scene.csvmi_props.output_collection_name.strip())
         self.visibility_guard = TemporaryCollectionExclusion(scene, output) if output else None
+        self._init_progress_tracking()
 
     def request_cancel(self):
         if self.phase == 'REALIZE':
             self.phase = 'ROLLBACK'
             self.index = len(self.changes) - 1
             self.props.status = "Cancelling: restoring shared Mesh data"
+
+    def progress_snapshot(self):
+        if self.phase == 'REALIZE':
+            return (
+                self.index,
+                self.work_total,
+                "Making Mesh data single-user",
+                f"Making Mesh data single-user: {self.index:,} / {len(self.objects):,}",
+            )
+        restored = len(self.changes) - max(0, self.index + 1)
+        return (
+            max(self._last_published_units, restored),
+            self.work_total,
+            "Cancelling",
+            "Restoring shared Mesh data",
+        )
 
     def step(self, budget_seconds=TIME_BUDGET_SECONDS):
         if self.finished:
@@ -1092,13 +1279,6 @@ class RealizeTask:
 
         elapsed = time.perf_counter() - started
         self.max_step_seconds = max(self.max_step_seconds, elapsed)
-        if self.phase == 'REALIZE':
-            self.props.progress = self.index / max(1, len(self.objects))
-            self.props.phase = "Making Mesh data single-user"
-            self.props.status = f"Making Mesh data single-user: {self.index:,} / {len(self.objects):,}"
-        else:
-            restored = len(self.changes) - max(0, self.index + 1)
-            self.props.progress = restored / max(1, len(self.changes))
         return self.finished
 
     def finish_props(self):
@@ -1108,6 +1288,7 @@ class RealizeTask:
         duration = time.perf_counter() - self.started_at
         props.process_seconds = duration
         props.max_tick_ms = self.max_step_seconds * 1000.0
+        props.eta_text = ""
         if self.cancelled:
             props.status = "Cancelled and restored shared Mesh data."
             props.phase = "Cancelled"
@@ -1127,6 +1308,168 @@ class RealizeTask:
                 bpy.data.meshes.remove(new_mesh)
         if self.visibility_guard is not None:
             self.visibility_guard.restore()
+
+
+class CollectionCleanupTask(ProgressTaskMixin):
+    """Fast, non-undo cleanup for Collections owned by this add-on."""
+
+    cancellable = False
+
+    def __init__(self, scene, collection, delete_root, split_across_ticks):
+        self.scene = scene
+        self.props = scene.csvmi_props
+        self.collection = collection
+        self.collection_name = collection.name
+        self.delete_root = delete_root
+        self.objects = collect_collection_objects(collection)
+        self.child_collections = collect_child_collections_postorder(collection)
+        self.parent_links = collect_collection_parent_links(collection)
+        self.phase = 'DETACH'
+        self.index = 0
+        self.finished = False
+        self.cancelled = False
+        self.started_at = time.perf_counter()
+        self.max_step_seconds = 0.0
+        self.batch_size = REMOVE_BATCH_SIZE if split_across_ticks else max(1, len(self.objects))
+        self.single_batch = not split_across_ticks
+        self.work_total = len(self.objects) + len(self.child_collections) + (1 if delete_root else 0) + 2
+        self.detached = False
+        self._init_progress_tracking()
+
+    def request_cancel(self):
+        self.props.status = "Deletion cannot be cancelled after confirmation."
+
+    def progress_snapshot(self):
+        object_total = len(self.objects)
+        child_total = len(self.child_collections)
+        if self.phase == 'DETACH':
+            completed = 0
+            phase = "Preparing fast deletion"
+            status = "Temporarily detaching the managed Collection from the Scene"
+        elif self.phase == 'REMOVE_OBJECTS':
+            completed = 1 + self.index
+            phase = "Deleting generated objects"
+            status = f"Deleting objects: {self.index:,} / {object_total:,}"
+        elif self.phase == 'REMOVE_CHILDREN':
+            completed = 1 + object_total + self.index
+            phase = "Deleting child Collections"
+            status = f"Deleting child Collections: {self.index:,} / {child_total:,}"
+        elif self.phase == 'DELETE_ROOT':
+            completed = 1 + object_total + child_total
+            phase = "Deleting output Collection"
+            status = f"Deleting Collection: {self.collection_name}"
+        elif self.phase == 'DONE':
+            completed = self.work_total
+            phase = "Complete"
+            status = "Collection deletion complete" if self.delete_root else "Collection contents cleared"
+        else:
+            completed = self.work_total - 1
+            phase = "Finalizing"
+            status = "Finalizing Collection cleanup"
+        return completed, self.work_total, phase, status
+
+    def _remove_ids(self, ids, budget_seconds, force_single_batch=False):
+        if self.index >= len(ids):
+            return
+        if self.single_batch or force_single_batch:
+            end = len(ids)
+        else:
+            end = min(len(ids), self.index + self.batch_size)
+        batch = ids[self.index:end]
+        started = time.perf_counter()
+        if batch:
+            bpy.data.batch_remove(batch)
+        elapsed = max(0.000001, time.perf_counter() - started)
+        self.index = end
+        if not self.single_batch and not force_single_batch:
+            target = max(0.001, budget_seconds * 0.7)
+            adjusted = int(self.batch_size * target / elapsed)
+            adjusted = max(MIN_REMOVE_BATCH_SIZE, min(MAX_REMOVE_BATCH_SIZE, adjusted))
+            self.batch_size = max(
+                MIN_REMOVE_BATCH_SIZE,
+                min(MAX_REMOVE_BATCH_SIZE, (self.batch_size + adjusted) // 2),
+            )
+
+    def step(self, budget_seconds=TIME_BUDGET_SECONDS):
+        if self.finished:
+            return True
+        started = time.perf_counter()
+        deadline = started + max(0.0001, budget_seconds)
+        did_work = False
+
+        while not self.finished and (not did_work or time.perf_counter() < deadline):
+            did_work = True
+            if self.phase == 'DETACH':
+                for parent in self.parent_links:
+                    if self.collection in parent.children[:]:
+                        parent.children.unlink(self.collection)
+                self.detached = True
+                self.phase = 'REMOVE_OBJECTS'
+                self.index = 0
+            elif self.phase == 'REMOVE_OBJECTS':
+                if self.index < len(self.objects):
+                    # Splitting Object ID removal makes Blender rescan all remaining IDs for every
+                    # batch and is dramatically slower (60k: seconds vs. over a minute). Keep this
+                    # one operation atomic after detaching the Collection from the Scene.
+                    self._remove_ids(self.objects, budget_seconds, force_single_batch=True)
+                else:
+                    self.phase = 'REMOVE_CHILDREN'
+                    self.index = 0
+            elif self.phase == 'REMOVE_CHILDREN':
+                if self.index < len(self.child_collections):
+                    self._remove_ids(self.child_collections, budget_seconds)
+                else:
+                    self.phase = 'DELETE_ROOT' if self.delete_root else 'FINALIZE'
+                    self.index = 0
+            elif self.phase == 'DELETE_ROOT':
+                if self.collection and self.collection.name in bpy.data.collections:
+                    bpy.data.batch_remove([self.collection])
+                self.phase = 'FINALIZE'
+            elif self.phase == 'FINALIZE':
+                if not self.delete_root and self.collection and self.collection.name in bpy.data.collections:
+                    for parent in self.parent_links:
+                        if self.collection not in parent.children[:]:
+                            parent.children.link(self.collection)
+                self.detached = False
+                self.phase = 'DONE'
+                self.finished = True
+
+        elapsed = time.perf_counter() - started
+        self.max_step_seconds = max(self.max_step_seconds, elapsed)
+        return self.finished
+
+    def finish_props(self):
+        props = self.props
+        duration = time.perf_counter() - self.started_at
+        if props.output_collection_name.strip() == self.collection_name:
+            reset_output_stats(props)
+        props.process_seconds = duration
+        props.max_tick_ms = self.max_step_seconds * 1000.0
+        props.managed_collection_index = min(
+            props.managed_collection_index,
+            max(0, len(bpy.data.collections) - 1),
+        )
+        props.progress = 1.0
+        props.eta_text = ""
+        props.phase = "Complete"
+        action = "Deleted Collection" if self.delete_root else "Cleared Collection"
+        props.status = (
+            f"{action} {self.collection_name}: {len(self.objects):,} objects / "
+            f"{len(self.child_collections):,} child Collections / {duration:.2f}s"
+        )
+
+    def cleanup_after_error(self):
+        # Deletion is intentionally non-transactional after the confirmation dialog.
+        if (
+            self.detached
+            and not self.delete_root
+            and self.collection
+            and self.collection.name in bpy.data.collections
+        ):
+            for parent in self.parent_links:
+                if self.collection not in parent.children[:]:
+                    parent.children.link(self.collection)
+            self.detached = False
 
 
 class CSVMI_AddonPreferences(AddonPreferences):
@@ -1189,7 +1532,9 @@ class CSVMI_Props(PropertyGroup):
     show_source: BoolProperty(default=True)
     show_matching: BoolProperty(default=True)
     show_output: BoolProperty(default=True)
+    show_managed_outputs: BoolProperty(default=True)
     show_status: BoolProperty(default=True)
+    managed_collection_index: IntProperty(default=0, min=0)
 
     csv_row_count: IntProperty(default=0)
     csv_valid_count: IntProperty(default=0)
@@ -1209,9 +1554,11 @@ class CSVMI_Props(PropertyGroup):
     csv_error_preview: StringProperty(default="")
     status: StringProperty(default="Ready")
     phase: StringProperty(default="Idle")
+    eta_text: StringProperty(default="")
     progress: FloatProperty(default=0.0, min=0.0, max=1.0)
     process_seconds: FloatProperty(default=0.0)
     max_tick_ms: FloatProperty(default=0.0)
+    ui_publish_count: IntProperty(default=0)
     running: BoolProperty(default=False)
     cancel_requested: BoolProperty(default=False)
     active_operation: EnumProperty(
@@ -1220,6 +1567,8 @@ class CSVMI_Props(PropertyGroup):
             ('FBX_IMPORT', "FBX Import", ""),
             ('UPDATE', "Update", ""),
             ('REALIZE', "Realize", ""),
+            ('CLEAR_OUTPUT', "Clear Output", ""),
+            ('DELETE_OUTPUT', "Delete Output", ""),
         ],
         default='NONE',
     )
@@ -1450,18 +1799,28 @@ class _ModalTaskOperator:
     _timer = None
     _task = None
 
+    def _modal_time_budget(self):
+        if getattr(self._task, "work_total", 0) >= LARGE_TASK_WORK_THRESHOLD:
+            return LARGE_TASK_TIME_BUDGET_SECONDS
+        return TIME_BUDGET_SECONDS
+
     def _start_modal_or_sync(self, context):
         props = context.scene.csvmi_props
         if props.use_multi_tick and context.window is not None:
             context.window_manager.progress_begin(0, 1000)
+            self._task.publish_progress(force=True)
+            context.window_manager.progress_update(int(props.progress * 1000))
+            tag_view3d_redraw(context)
             self._timer = context.window_manager.event_timer_add(TIMER_INTERVAL_SECONDS, window=context.window)
             context.window_manager.modal_handler_add(self)
             return {'RUNNING_MODAL'}
 
         try:
+            self._task.publish_progress(force=True)
             while not self._task.step(3600.0):
                 pass
             self._task.finish_props()
+            props.ui_publish_count = self._task.ui_publish_count
             _set_idle(props)
             return {'CANCELLED'} if self._task.cancelled else {'FINISHED'}
         except Exception as exc:
@@ -1469,33 +1828,37 @@ class _ModalTaskOperator:
             return {'CANCELLED'}
 
     def modal(self, context, event):
-        if event.type == 'ESC':
+        if event.type == 'ESC' and self._task.cancellable:
             context.scene.csvmi_props.cancel_requested = True
         if event.type != 'TIMER':
             return {'PASS_THROUGH'}
 
         props = context.scene.csvmi_props
-        if props.cancel_requested:
+        if props.cancel_requested and self._task.cancellable:
             self._task.request_cancel()
 
         try:
-            finished = self._task.step(TIME_BUDGET_SECONDS)
+            finished = self._task.step(self._modal_time_budget())
         except Exception as exc:
             self._handle_error(context, exc)
             return {'CANCELLED'}
 
-        context.window_manager.progress_update(int(props.progress * 1000))
-        tag_view3d_redraw(context)
+        if self._task.publish_progress(force=finished):
+            context.window_manager.progress_update(int(props.progress * 1000))
+            tag_view3d_redraw(context)
         if not finished:
             return {'RUNNING_MODAL'}
 
         self._task.finish_props()
+        context.window_manager.progress_update(int(props.progress * 1000))
         cancelled = self._task.cancelled
         self._finish_modal(context)
         return {'CANCELLED'} if cancelled else {'FINISHED'}
 
     def _finish_modal(self, context):
         props = context.scene.csvmi_props
+        if self._task is not None:
+            props.ui_publish_count = self._task.ui_publish_count
         if self._timer is not None:
             context.window_manager.event_timer_remove(self._timer)
             self._timer = None
@@ -1510,6 +1873,7 @@ class _ModalTaskOperator:
             self._task.cleanup_after_error()
         props.status = f"Operation failed: {exc}"
         props.phase = "Error"
+        props.eta_text = ""
         if self._timer is not None:
             self._finish_modal(context)
         else:
@@ -1517,7 +1881,7 @@ class _ModalTaskOperator:
         self.report({'ERROR'}, props.status)
 
     def cancel(self, context):
-        if self._task is not None:
+        if self._task is not None and self._task.cancellable:
             self._task.request_cancel()
 
 
@@ -1606,6 +1970,111 @@ class CSVMI_OT_realize(_ModalTaskOperator, Operator):
         return self._start_modal_or_sync(context)
 
 
+def require_managed_output(collection_name):
+    collection = bpy.data.collections.get(collection_name)
+    if collection is None:
+        raise ValueError(f"Collection not found: {collection_name}")
+    if not bool(collection.get(OUTPUT_MANAGED_KEY, False)):
+        raise ValueError("The Collection is not managed by CSV Mesh Instancer.")
+    return collection
+
+
+class CSVMI_OT_set_output_visibility(Operator):
+    bl_idname = "csvmi.set_output_visibility"
+    bl_label = "Show or Hide Output"
+    bl_description = "Show or hide this managed output in both the viewport and render"
+
+    collection_name: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
+    show: BoolProperty(options={'HIDDEN', 'SKIP_SAVE'})
+
+    @classmethod
+    def poll(cls, context):
+        return not context.scene.csvmi_props.running
+
+    def execute(self, context):
+        try:
+            collection = require_managed_output(self.collection_name)
+        except ValueError as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        set_managed_collection_visibility(context.scene, collection, self.show)
+        state = "Shown" if self.show else "Hidden"
+        context.scene.csvmi_props.status = f"{state}: {collection.name} (Viewport and Render)"
+        tag_view3d_redraw(context)
+        return {'FINISHED'}
+
+
+class _CollectionCleanupOperator(_ModalTaskOperator):
+    delete_root = False
+    _confirm_object_count = 0
+    _confirm_child_count = 0
+
+    @classmethod
+    def poll(cls, context):
+        return not context.scene.csvmi_props.running
+
+    def _resolve(self):
+        return require_managed_output(self.collection_name)
+
+    def invoke(self, context, event):
+        try:
+            collection = self._resolve()
+        except ValueError as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        self._confirm_object_count = len(collect_collection_objects(collection))
+        self._confirm_child_count = len(collect_child_collections_postorder(collection))
+        return context.window_manager.invoke_props_dialog(self, width=470)
+
+    def draw(self, context):
+        layout = self.layout
+        action = "Delete Collection" if self.delete_root else "Clear Contents"
+        layout.label(text=f"{action}: {self.collection_name}?", icon='ERROR')
+        layout.label(text=f"Objects: {self._confirm_object_count:,}")
+        layout.label(text=f"Child Collections: {self._confirm_child_count:,}")
+        layout.separator()
+        layout.label(text="This operation is not undoable and cannot be cancelled after it starts.")
+
+    def execute(self, context):
+        props = context.scene.csvmi_props
+        if props.running:
+            self.report({'ERROR'}, "An operation is already running.")
+            return {'CANCELLED'}
+        try:
+            collection = self._resolve()
+            self._task = CollectionCleanupTask(
+                context.scene,
+                collection,
+                self.delete_root,
+                props.use_multi_tick,
+            )
+        except Exception as exc:
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+        operation = 'DELETE_OUTPUT' if self.delete_root else 'CLEAR_OUTPUT'
+        status = "Deleting managed Collection" if self.delete_root else "Clearing managed Collection contents"
+        _set_running(props, operation, status)
+        return self._start_modal_or_sync(context)
+
+
+class CSVMI_OT_clear_output(_CollectionCleanupOperator, Operator):
+    bl_idname = "csvmi.clear_output"
+    bl_label = "Clear Contents"
+    bl_description = "Quickly delete all objects and child Collections while preserving the managed Collection"
+    delete_root = False
+
+    collection_name: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
+
+
+class CSVMI_OT_delete_output(_CollectionCleanupOperator, Operator):
+    bl_idname = "csvmi.delete_output"
+    bl_label = "Delete Collection"
+    bl_description = "Quickly delete all contents and the managed Collection itself"
+    delete_root = True
+
+    collection_name: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
+
+
 class CSVMI_OT_cancel(Operator):
     bl_idname = "csvmi.cancel"
     bl_label = "Cancel Operation"
@@ -1615,9 +2084,54 @@ class CSVMI_OT_cancel(Operator):
         props = context.scene.csvmi_props
         if not props.running:
             return {'CANCELLED'}
+        if props.active_operation in {'CLEAR_OUTPUT', 'DELETE_OUTPUT'}:
+            self.report({'WARNING'}, "Fast deletion cannot be cancelled after confirmation.")
+            return {'CANCELLED'}
         props.cancel_requested = True
         props.status = "Cancellation requested. The current tick will finish first."
         return {'FINISHED'}
+
+
+class CSVMI_UL_managed_outputs(UIList):
+    bl_idname = "CSVMI_UL_managed_outputs"
+
+    def filter_items(self, context, data, property_name):
+        items = getattr(data, property_name)
+        flags = [
+            self.bitflag_filter_item if bool(collection.get(OUTPUT_MANAGED_KEY, False)) else 0
+            for collection in items
+        ]
+        return flags, []
+
+    def draw_item(
+        self,
+        context,
+        layout,
+        data,
+        item,
+        icon,
+        active_data,
+        active_property,
+        index=0,
+        flt_flag=0,
+    ):
+        if not bool(item.get(OUTPUT_MANAGED_KEY, False)):
+            return
+        row = layout.row(align=True)
+        row.label(text=item.name, icon=collection_color_icon(item))
+        row.label(text=f"{len(item.objects):,} O / {len(item.children):,} C")
+        is_hidden = item.hide_viewport or item.hide_render
+        visibility = row.operator(
+            "csvmi.set_output_visibility",
+            text="",
+            icon='HIDE_OFF' if is_hidden else 'HIDE_ON',
+        )
+        visibility.collection_name = item.name
+        visibility.show = is_hidden
+        clear = row.operator("csvmi.clear_output", text="", icon='X')
+        clear.collection_name = item.name
+        delete = row.operator("csvmi.delete_output", text="", icon='TRASH')
+        delete.collection_name = item.name
 
 
 def draw_foldout(layout, props, property_name, label, icon='NONE'):
@@ -1662,7 +2176,12 @@ class CSVMI_PT_panel(Panel):
                     )
                 else:
                     box.label(text=f"Progress: {int(props.progress * 100)}%")
-            box.operator("csvmi.cancel", text="Cancel", icon='CANCEL')
+                if props.eta_text:
+                    box.label(text=props.eta_text, icon='TIME')
+            if props.active_operation not in {'CLEAR_OUTPUT', 'DELETE_OUTPUT'}:
+                box.operator("csvmi.cancel", text="Cancel", icon='CANCEL')
+            else:
+                box.label(text="Fast deletion is finishing safely and cannot be cancelled.", icon='LOCKED')
             return
 
         if draw_foldout(layout, props, "show_csv", "CSV Data", 'FILE'):
@@ -1748,6 +2267,25 @@ class CSVMI_PT_panel(Panel):
             row.enabled = controls_enabled
             row.prop(props, "use_multi_tick")
 
+        if draw_foldout(layout, props, "show_managed_outputs", "Managed Outputs", 'OUTLINER_COLLECTION'):
+            box = layout.box()
+            managed_count = sum(
+                1 for collection in bpy.data.collections if bool(collection.get(OUTPUT_MANAGED_KEY, False))
+            )
+            if managed_count:
+                box.template_list(
+                    "CSVMI_UL_managed_outputs",
+                    "",
+                    bpy.data,
+                    "collections",
+                    props,
+                    "managed_collection_index",
+                    rows=min(5, max(2, managed_count)),
+                )
+                box.label(text="Eye: Viewport + Render / X: Clear / Trash: Delete")
+            else:
+                box.label(text="No managed output Collections", icon='INFO')
+
         action_box = layout.box()
         if props.running:
             action_box.operator("csvmi.cancel", icon='CANCEL')
@@ -1773,6 +2311,8 @@ class CSVMI_PT_panel(Panel):
                     )
                 else:
                     box.label(text=f"Progress: {int(props.progress * 100)}%")
+                if props.eta_text:
+                    box.label(text=props.eta_text, icon='TIME')
             box.label(text=f"Created: {props.generated_count:,}")
             box.label(text=f"Skipped: {props.skipped_count:,}")
             box.label(text=f"Missing Meshes: {props.missing_name_count:,} names / {props.missing_row_count:,} rows")
@@ -1796,6 +2336,7 @@ def csvmi_load_post(_dummy):
         props.status = "Re-import the CSV to restore runtime data."
         props.phase = "Idle"
         props.progress = 0.0
+        props.eta_text = ""
         props.csv_row_count = 0
         props.csv_valid_count = 0
         props.csv_unique_name_count = 0
@@ -1809,7 +2350,11 @@ CLASSES = (
     CSVMI_OT_import_fbx,
     CSVMI_OT_update,
     CSVMI_OT_realize,
+    CSVMI_OT_set_output_visibility,
+    CSVMI_OT_clear_output,
+    CSVMI_OT_delete_output,
     CSVMI_OT_cancel,
+    CSVMI_UL_managed_outputs,
     CSVMI_PT_panel,
 )
 
