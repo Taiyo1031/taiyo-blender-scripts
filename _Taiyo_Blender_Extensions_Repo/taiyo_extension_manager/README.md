@@ -1,6 +1,6 @@
 # Taiyo Extension Manager
 
-Version 1.0.13
+Version 1.0.14
 
 Taiyo Blender Scripts repositoryに含まれる各Extensionを、Blenderの3D Viewサイドバーから検索、インストール、更新、アンインストールするための管理アドオンです。
 
@@ -19,7 +19,7 @@ View3D > Sidebar(N) > Taiyo > Taiyo Add-on Manager
 - Remote RepositoryのmanifestからExtension一覧を動的に取得
 - 名前、ID、説明、推定タグで検索
 - 検索ポップアップから複数タグを選び、AND条件で絞り込み
-- `csv`、`export`、`import`、`instance`、`uv`、`unreal`、`custom-property`、`mesh`、`配置`、`名前整理`、`差し替え`、`衝突` などのタグに対応
+- `csv`、`export`、`import`、`instance`、`uv`、`unreal`、`custom-property`、`mesh`、`remove`、`属性`、`配置`、`名前整理`、`差し替え`、`衝突` などのタグに対応
 - `All`、`Installed`、`Enabled`、`Disabled`、`Available`、`Updates` で状態フィルター
 - 名前順、名前逆順、更新順、状態順で並び替え
 - 配布indexに記録された最終更新日をExtensionごとに表示
@@ -59,8 +59,10 @@ scale
 viewport
 custom-property
 mesh
+remove
 timeline
 animation
+属性
 配置
 読み込み
 メタデータ

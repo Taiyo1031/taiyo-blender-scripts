@@ -35,6 +35,7 @@ packages=(
   "instance_name_fixer"
   "laid_collection_instance_linker"
   "map_link_tools"
+  "mesh_attribute_batch_remover"
   "modular_asset_renamer"
   "move_selected_to_own_collections"
   "object_preview_sequencer"

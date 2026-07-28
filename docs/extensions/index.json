@@ -307,7 +307,7 @@
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
       "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.13",
+      "version": "1.0.14",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -315,10 +315,10 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.13.zip",
-      "archive_size": 13001,
-      "archive_hash": "sha256:39fa4a8de25025b5672856e8456d247092cc212afecdfe71e0a1d3952a33ed73",
-      "taiyo_updated_at": 1784699916
+      "archive_url": "./taiyo_extension_manager-1.0.14.zip",
+      "archive_size": 13116,
+      "archive_hash": "sha256:aa48a8b39db2594f90b26ee37430c65fcf0deea0d77060ec141888727e80e7d0",
+      "taiyo_updated_at": 1785256629
     },
     {
       "schema_version": "1.0.0",
@@ -468,6 +468,24 @@
       "archive_size": 8721,
       "archive_hash": "sha256:a96e3446389e3173c4034aad555f3ea40a7888b6c29c0591b0f7b04efbef6238",
       "taiyo_updated_at": 1779596198
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "mesh_attribute_batch_remover",
+      "name": "Mesh Attribute Batch Remover",
+      "tagline": "Remove one named mesh attribute from many objects",
+      "version": "1.0.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.9",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/mesh_attribute_batch_remover/README.md",
+      "archive_url": "./mesh_attribute_batch_remover-1.0.0.zip",
+      "archive_size": 5000,
+      "archive_hash": "sha256:f80a83120034d687d10bffdb18ec639c1a0ab99d3ca87303c0214390a0e5c1ba",
+      "taiyo_updated_at": 1785256629
     }
   ]
 }

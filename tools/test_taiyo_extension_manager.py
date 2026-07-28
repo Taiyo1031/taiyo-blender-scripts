@@ -114,6 +114,16 @@ def test_csv_mesh_instancer_metadata(manager):
     assert descriptions["ja"]
 
 
+def test_mesh_attribute_batch_remover_metadata(manager):
+    tags = set(manager.TAG_ALIASES["mesh_attribute_batch_remover"])
+    assert {
+        "attribute", "mesh", "remove", "cleanup", "一括削除", "属性", "整理",
+    }.issubset(tags)
+    descriptions = manager.DESCRIPTION_ALIASES["mesh_attribute_batch_remover"]
+    assert descriptions["en"]
+    assert descriptions["ja"]
+
+
 def test_distributed_index_metadata(manager):
     index_path = os.path.join(ROOT, "docs", "extensions", "index.json")
     with open(index_path, "r", encoding="utf-8") as handle:
@@ -121,7 +131,7 @@ def test_distributed_index_metadata(manager):
 
     errors = []
     items = index_data["data"]
-    assert len(items) == 24
+    assert len(items) == 25
     assert all(item.get(manager.RELEASE_TIMESTAMP_KEY, 0) > 0 for item in items)
     for item in items:
         normalized = PkgManifest_Normalized.from_dict_with_error_fn(
@@ -161,6 +171,7 @@ def main():
     test_filters_and_sorting(manager)
     test_release_timestamp_cache(manager)
     test_csv_mesh_instancer_metadata(manager)
+    test_mesh_attribute_batch_remover_metadata(manager)
     test_distributed_index_metadata(manager)
     test_registration_and_tag_operators(manager)
     print("Taiyo Extension Manager tests passed")

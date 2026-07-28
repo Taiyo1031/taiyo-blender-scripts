@@ -1,0 +1,18 @@
+schema_version = "1.0.0"
+
+id = "mesh_attribute_batch_remover"
+version = "1.0.0"
+name = "Mesh Attribute Batch Remover"
+tagline = "Remove one named mesh attribute from many objects"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.5.9"
+website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/mesh_attribute_batch_remover/README.md"
+license = ["SPDX:GPL-3.0-or-later"]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "*.zip",
+]

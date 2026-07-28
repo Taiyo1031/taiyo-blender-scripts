@@ -17,6 +17,7 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 - `instance_name_fixer`: Instance Name Fixer
 - `laid_collection_instance_linker`: CW_Laid Collection Instance Linker
 - `map_link_tools`: Map Link Tools
+- `mesh_attribute_batch_remover`: Mesh Attribute Batch Remover
 - `modular_asset_renamer`: Modular Asset Renamer
 - `move_selected_to_own_collections`: Move Objects to Own Collections
 - `object_preview_sequencer`: Object Preview Sequencer
