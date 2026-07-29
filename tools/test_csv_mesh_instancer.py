@@ -122,6 +122,185 @@ def managed_object(output, identity):
     return None
 
 
+def write_test_fbx(path):
+    bpy.ops.preferences.addon_enable(module="io_scene_fbx")
+    export_collection = bpy.data.collections.new("FBX_Export_Fixture")
+    bpy.context.scene.collection.children.link(export_collection)
+    first = make_object("Piece", make_mesh("Piece"), export_collection)
+    legitimate_suffix = make_object(
+        "Piece.001",
+        make_mesh("Piece.001", 3.0),
+        export_collection,
+    )
+    bpy.ops.object.select_all(action='DESELECT')
+    first.select_set(True)
+    legitimate_suffix.select_set(True)
+    bpy.context.view_layer.objects.active = first
+    result = bpy.ops.export_scene.fbx(
+        filepath=str(path),
+        use_selection=True,
+        object_types={'MESH'},
+        use_mesh_modifiers=False,
+        bake_anim=False,
+        add_leaf_bones=False,
+    )
+    check(result == {'FINISHED'}, "Synthetic FBX export failed")
+
+
+def test_fbx_reimport_names_and_revisions(temp_dir):
+    print("[TEST] FBX re-import canonical names and source revisions")
+    reset_data()
+    fbx_path = temp_dir / "reimport_names.fbx"
+    write_test_fbx(fbx_path)
+    reset_data()
+
+    scene = bpy.context.scene
+    props = scene.csvmi_props
+    props.source_mode = 'FBX'
+    props.fbx_path = str(fbx_path)
+    props.fbx_collection_name = "CSVMI_FBX_Test"
+    props.output_collection_name = "FBX_Output"
+    props.split_by_attribute = False
+    check(bpy.ops.csvmi.import_fbx('EXEC_DEFAULT') == {'FINISHED'}, "Initial FBX import failed")
+    first_source = props.fbx_managed_collection
+    first_sources = {
+        csvmi.source_object_name(obj): obj
+        for obj in csvmi.collect_collection_objects(first_source, mesh_only=True)
+    }
+    check(set(first_sources) == {"Piece", "Piece.001"}, "Initial FBX Object names changed")
+    check(
+        {csvmi.v2_engine.mesh_display_name(obj.data) for obj in first_sources.values()}
+        == {"Piece", "Piece.001"},
+        "Initial FBX Mesh names changed",
+    )
+    first_revision = first_source[csvmi.FBX_SOURCE_REVISION_KEY]
+
+    csv_path = temp_dir / "fbx_reimport.csv"
+    write_csv(
+        csv_path,
+        [
+            row("fbx-a", "Piece", 0),
+            row("fbx-b", "Piece.001", 0),
+        ],
+    )
+    import_preview_apply(scene, csv_path)
+    output = bpy.data.collections["FBX_Output"]
+    normal_output = managed_object(output, "fbx-a")
+    edited_output = managed_object(output, "fbx-b")
+    edited_output.data = edited_output.data.copy()
+    edited_mesh = edited_output.data
+    unrelated_orphan = bpy.data.meshes.new("Unrelated_Orphan")
+
+    # Reproduce a v2.0.0-managed source where Blender added an artificial
+    # suffix while preserving the FBX's legitimate Piece.001 name.
+    legacy_piece = first_sources["Piece"]
+    legacy_piece.name = "Piece.002"
+    legacy_piece.data.name = "Piece.002"
+    for data_block in (legacy_piece, legacy_piece.data):
+        for key in (
+            csvmi.FBX_CANONICAL_OBJECT_NAME_KEY,
+            csvmi.FBX_CANONICAL_MESH_NAME_KEY,
+            csvmi.FBX_SOURCE_REVISION_KEY,
+        ):
+            if key in data_block:
+                del data_block[key]
+
+    legacy_state = csvmi.v2_engine.read_output_state(output, "id")
+    for record in legacy_state["records"].values():
+        record.pop("source_revision", None)
+        record.pop("mesh_override_revision", None)
+    legacy_state["records"]["fbx-a"]["source_mesh"] = "Piece.002"
+    csvmi.v2_engine.write_output_state(output, legacy_state)
+
+    old_source_names = {
+        obj.as_pointer(): (obj.name, obj.data.name if obj.data else "")
+        for obj in csvmi.collect_collection_objects(first_source)
+    }
+    invalid_fbx = temp_dir / "invalid.fbx"
+    invalid_fbx.write_bytes(b"not an fbx")
+    props.fbx_path = str(invalid_fbx)
+    expect_error(
+        lambda: bpy.ops.csvmi.import_fbx('EXEC_DEFAULT'),
+        "FBX import failed",
+    )
+    check(props.fbx_managed_collection == first_source, "Failed import replaced the old FBX source")
+    check(
+        {
+            obj.as_pointer(): (obj.name, obj.data.name if obj.data else "")
+            for obj in csvmi.collect_collection_objects(first_source)
+        }
+        == old_source_names,
+        "Failed import did not restore old FBX names",
+    )
+    check(
+        first_source[csvmi.FBX_SOURCE_REVISION_KEY] == first_revision,
+        "Failed import changed the FBX revision",
+    )
+
+    props.fbx_path = str(fbx_path)
+    check(bpy.ops.csvmi.import_fbx('EXEC_DEFAULT') == {'FINISHED'}, "FBX re-import failed")
+    second_source = props.fbx_managed_collection
+    second_revision = second_source[csvmi.FBX_SOURCE_REVISION_KEY]
+    check(second_revision != first_revision, "FBX re-import did not create a new revision")
+    second_sources = {
+        csvmi.source_object_name(obj): obj
+        for obj in csvmi.collect_collection_objects(second_source, mesh_only=True)
+    }
+    check(set(second_sources) == {"Piece", "Piece.001"}, "Re-import added Object suffixes")
+    check(
+        {obj.name for obj in second_sources.values()} == {"Piece", "Piece.001"},
+        "Re-imported source Objects are not using canonical names",
+    )
+    reimported_mesh_names = {obj.data.name for obj in second_sources.values()}
+    check(
+        reimported_mesh_names == {"Piece", "Piece.001"},
+        "Re-imported source Meshes have artificial numeric suffixes: "
+        f"{reimported_mesh_names}; all Meshes: "
+        f"{[(mesh.name, mesh.get(csvmi.FBX_CANONICAL_MESH_NAME_KEY, ''), mesh.users) for mesh in bpy.data.meshes]}",
+    )
+    check(
+        "[Previous FBX" in normal_output.data.name,
+        "Old linked Mesh was not moved to a Previous FBX name",
+    )
+    check(edited_output.data == edited_mesh, "Re-import changed a Single-User Mesh immediately")
+    check(unrelated_orphan.name in bpy.data.meshes, "Re-import removed an unrelated orphan Mesh")
+
+    check(bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}, "FBX revision Preview failed")
+    changes = preview_by_id(scene)
+    check(
+        changes["fbx-a"]["mesh_kind"] == "CSV"
+        and changes["fbx-a"]["mesh_decision"] == "RELINK"
+        and changes["fbx-a"]["mesh_revision_changed"],
+        "Unedited FBX revision did not default to Relink",
+    )
+    check(
+        changes["fbx-b"]["mesh_kind"] == "CONFLICT"
+        and changes["fbx-b"]["mesh_decision"] == "KEEP",
+        "Single-User Mesh was not protected during FBX revision review",
+    )
+    previous_name = normal_output.data.name
+    check(bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}, "FBX revision Apply failed")
+    check(normal_output.data == second_sources["Piece"].data, "Reviewed FBX Mesh was not relinked")
+    check(edited_output.data == edited_mesh, "Reviewed Single-User Mesh was overwritten")
+    check(previous_name not in bpy.data.meshes, "Unused Previous FBX Mesh was not removed")
+    upgraded_state = csvmi.v2_engine.read_output_state(output, "id")
+    check(
+        upgraded_state["records"]["fbx-a"]["source_revision"] == second_revision,
+        "v2.0.0 state was not upgraded with the accepted FBX revision",
+    )
+
+    props.fbx_path = str(fbx_path)
+    check(bpy.ops.csvmi.import_fbx('EXEC_DEFAULT') == {'FINISHED'}, "Repeated FBX re-import failed")
+    repeated_source = props.fbx_managed_collection
+    repeated_sources = csvmi.collect_collection_objects(repeated_source, mesh_only=True)
+    check(
+        {obj.name for obj in repeated_sources} == {"Piece", "Piece.001"}
+        and {obj.data.name for obj in repeated_sources} == {"Piece", "Piece.001"},
+        "Repeated FBX re-import accumulated numeric suffixes",
+    )
+    print("[PASS] FBX re-import names and revisions")
+
+
 def test_identity_validation(temp_dir):
     print("[TEST] strict persistent identity validation")
     duplicate = temp_dir / "duplicate.csv"
@@ -517,6 +696,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix="csvmi_v2_test_") as directory:
             temp_dir = Path(directory)
             test_identity_validation(temp_dir)
+            test_fbx_reimport_names_and_revisions(temp_dir)
             test_v2_workflow(temp_dir)
             test_v2_ticks_and_cancel(temp_dir)
             test_managed_output_cleanup(temp_dir)

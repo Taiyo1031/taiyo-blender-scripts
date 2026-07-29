@@ -1,6 +1,6 @@
 # CSV Mesh Instancer 仕様書・使用書
 
-Version 2.0.0
+Version 2.0.1
 
 ## 1. 概要
 
@@ -26,7 +26,7 @@ Advanced
 
 ## 2. Version 2の互換性
 
-Version 2.0.0はv1.xと後方互換ではありません。v1.xの出力、CSV物理行番号、`ptnum`による照合・移行・フォールバックは行いません。v1.xマーカーまたは非対応schemaの同名Collectionは上書きせず停止します。v1.x出力を削除するか、新しい出力名を指定してください。
+Version 2.0.1はv1.xと後方互換ではありません。v1.xの出力、CSV物理行番号、`ptnum`による照合・移行・フォールバックは行いません。v1.xマーカーまたは非対応schemaの同名Collectionは上書きせず停止します。v1.x出力を削除するか、新しい出力名を指定してください。v2.0.0の出力とID台帳はそのまま継続利用できます。
 
 ## 3. CSV形式と永続ID
 
@@ -59,6 +59,10 @@ Mesh Collectionとその子Collectionを再帰検索します。完全一致を�
 
 FBXは一時Collectionへ読み込み、Meshがあることを確認してから旧管理Collectionと差し替えます。失敗時は旧FBXソースと出力を維持します。読込後は全View LayerでExcludeし、利用できない場合はCollectionをViewport/Renderで非表示にします。
 
+Re-importでは、前回FBXのObjectとMeshを衝突しない内部名へ一時退避してから読み込みます。新FBXのObject・MeshはFBX内の正規名を即座に使用するため、再インポートのたびに人工的な`.001`が増えません。FBX内にもともと存在する`Piece.001`のような名前は変更しません。
+
+生成Objectがまだ使用している旧Meshは`MeshName [Previous FBX xxxxxxxx]`として残ります。Re-importだけでは生成Objectを変更しません。続けて`Preview Changes`を実行し、`Reason: New FBX revision`を確認してから`Apply Reviewed Changes`を実行してください。未編集Meshは既定でRelink、Single-Userまたは手動差し替えMeshはConflictとして現在Meshを維持します。Apply後、使用者が0になった管理対象Previous Meshだけを削除します。
+
 FBX補正の既定値:
 
 ```text
@@ -85,7 +89,7 @@ Transform、Mesh、Custom Propertiesは独立して判定します。
 | CSVだけ変更 | CSVを適用 |
 | Blenderだけ変更 | Blenderを維持 |
 | CSVとBlenderの両方を変更 | Conflictとして警告し、Blenderを維持 |
-| 未編集Meshの`objname`/FBXソース変更 | 新しい共有Meshへ再リンク |
+| 未編集Meshの`objname`/FBX世代変更 | 新しい共有Meshへ再リンク |
 | Single-Userまたは別Meshへ手編集 | 現在Meshを維持して警告 |
 
 TransformはLocation・Rotation・Scaleを1ドメインとして扱います。固定許容値はLocation/Scale `1e-5`、Quaternion角度 `1e-4 rad`です。決定したOverrideはCSV側が再度変わるまでChange Reviewへ繰り返し表示しません。
@@ -127,11 +131,11 @@ Blender標準Deleteで消したID、または新CSVから消えたIDは、出力
 
 ## 9. Apply、進捗、安定性
 
-ApplyはPreview済み判断だけを反映し、最後に圧縮したschema v2 ID台帳を内部Text datablockへ原子的に差し替えます。失敗・キャンセル時は旧台帳を維持します。台帳には前回CSV値、Transform、objname、属性、Override、削除状態を保存するため、`.blend`を閉じて開き直しても差分判定できます。
+ApplyはPreview済み判断だけを反映し、最後に圧縮したschema v2 ID台帳を内部Text datablockへ原子的に差し替えます。失敗・キャンセル時は旧台帳を維持します。台帳には前回CSV値、Transform、objname、属性、Mesh名とFBX世代ID、Override、削除状態を保存するため、`.blend`を閉じて開き直しても差分判定できます。
 
 `Split Across Multiple Ticks`は既定ONです。大量のObject変更を適応チャンクへ分割し、進捗率、段階、ETAを約0.2秒間隔で更新します。処理中は設定・管理操作をロックし、Cancelだけを表示します。OFFでは同じ処理を一括実行して速度を優先します。
 
-出力は空のうちにSceneへ接続・View LayerからExcludeし、大量Object生成中のdepsgraph/Outliner再評価を抑えます。成功後はViewportとRenderの両方で非表示のままです。60,474行の実CSV一時修正版によるBlender 4.5.9負荷試験では、CSV Import 0.43秒、初回Preview 0.53秒、初回Apply 14.81秒、無変更Preview 1.30秒を確認しています。環境や選択Custom Property数で時間は変わります。
+出力は空のうちにSceneへ接続・View LayerからExcludeし、大量Object生成中のdepsgraph/Outliner再評価を抑えます。成功後はViewportとRenderの両方で非表示のままです。Version 2.0.1で60,474行の実CSV一時修正版を使ったBlender 4.5.9負荷試験では、CSV Import 0.43秒、初回Preview 0.61秒、初回Apply 13.78秒、無変更Preview 1.60秒を確認しています。環境や選択Custom Property数で時間は変わります。
 
 ## 10. Managed Outputs
 
@@ -150,9 +154,10 @@ Clear/Deleteは対象数を示す確認後、`batch_remove`で高速削除しま
 - v1.xまたは状態schema不一致: 出力を変更せず停止
 - 内部Text破損: 出力を変更せず停止
 - Preview後のScene変更: Applyを拒否して再Previewを要求
-- FBX失敗: 旧ソースと旧出力を維持
+- FBX失敗: 退避したObject・Mesh名と管理情報を復旧し、旧ソースと旧出力を維持
 - Cancel: 変更済みObjectを復旧し、旧ID台帳を維持
 
 ## 過去バージョン
 
+- [Version 2.0.0 ZIP](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/csv_mesh_instancer-2.0.0.zip)
 - [Version 1.1.0 ZIP](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/csv_mesh_instancer-1.1.0.zip)

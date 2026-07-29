@@ -1,7 +1,7 @@
 bl_info = {
     "name": "CSV Mesh Instancer",
     "author": "Taiyo",
-    "version": (2, 0, 0),
+    "version": (2, 0, 1),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar(N) > CSV Instancer",
     "description": "Create linked mesh objects from CSV transforms using Collection or FBX sources.",
@@ -17,6 +17,7 @@ import os
 import re
 import time
 import traceback
+import uuid
 import zlib
 import bpy
 from mathutils import Euler, Quaternion
@@ -64,6 +65,10 @@ MIN_REMOVE_BATCH_SIZE = 64
 MAX_REMOVE_BATCH_SIZE = 65536
 FBX_MANAGED_KEY = "csvmi_fbx_managed"
 FBX_PATH_KEY = "csvmi_fbx_filepath"
+FBX_CANONICAL_OBJECT_NAME_KEY = "csvmi_fbx_canonical_object_name"
+FBX_CANONICAL_MESH_NAME_KEY = v2_engine.FBX_CANONICAL_MESH_NAME_KEY
+FBX_SOURCE_REVISION_KEY = v2_engine.FBX_SOURCE_REVISION_KEY
+FBX_PREVIOUS_MESH_KEY = v2_engine.FBX_PREVIOUS_MESH_KEY
 OUTPUT_MANAGED_KEY = "csvmi_output_managed"
 OUTPUT_SCHEMA_KEY = "csvmi_schema_version"
 OUTPUT_STATE_TEXT_KEY = "csvmi_state_text"
@@ -535,24 +540,32 @@ def strip_numeric_suffix(name):
     return NUMERIC_SUFFIX_RE.sub("", name)
 
 
+def source_object_name(obj):
+    canonical = obj.get(FBX_CANONICAL_OBJECT_NAME_KEY, "")
+    return canonical if isinstance(canonical, str) and canonical else obj.name
+
+
 def source_choice_key(obj):
-    match = NUMERIC_SUFFIX_RE.search(obj.name)
+    name = source_object_name(obj)
+    match = NUMERIC_SUFFIX_RE.search(name)
     if match is None:
-        return (0, -1, obj.name)
-    return (1, int(match.group(1)), obj.name)
+        return (0, -1, name, obj.name)
+    return (1, int(match.group(1)), name, obj.name)
 
 
 def build_source_index(objects, ignore_suffix):
-    exact = {obj.name: obj for obj in objects}
+    exact = {}
+    for obj in sorted(objects, key=source_choice_key):
+        exact.setdefault(source_object_name(obj), obj)
     normalized = {}
     collisions = {}
     if ignore_suffix:
         for obj in objects:
-            normalized.setdefault(strip_numeric_suffix(obj.name), []).append(obj)
+            normalized.setdefault(strip_numeric_suffix(source_object_name(obj)), []).append(obj)
         for name, candidates in normalized.items():
             candidates.sort(key=source_choice_key)
             if len(candidates) > 1:
-                collisions[name] = tuple(obj.name for obj in candidates)
+                collisions[name] = tuple(source_object_name(obj) for obj in candidates)
     return exact, normalized, collisions
 
 
@@ -676,6 +689,18 @@ def remove_collection_with_contents(collection):
             bpy.data.collections.remove(child)
     if collection.name in bpy.data.collections:
         bpy.data.collections.remove(collection)
+
+
+def remove_unused_previous_fbx_meshes():
+    stale = [
+        mesh
+        for mesh in bpy.data.meshes
+        if bool(mesh.get(FBX_PREVIOUS_MESH_KEY, False)) and mesh.users == 0
+    ]
+    for mesh in stale:
+        if mesh.name in bpy.data.meshes and mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+    return len(stale)
 
 
 def find_layer_collection(layer_collection, collection):
@@ -1673,8 +1698,16 @@ class V2ApplyTask(ProgressTaskMixin):
         selected_props = v2_engine.selected_row_properties(
             self.cache, row, self.preview.selected_names
         )
-        source_mesh = source.data.name if source is not None else ""
-        return v2_engine.state_record_from_row(self.cache, row, source_mesh, selected_props)
+        source_mesh, source_revision = (
+            v2_engine.mesh_descriptor(source.data) if source is not None else ("", "")
+        )
+        return v2_engine.state_record_from_row(
+            self.cache,
+            row,
+            source_mesh,
+            selected_props,
+            source_revision=source_revision,
+        )
 
     def _apply_change(self, change):
         if change["filtered"]:
@@ -1782,7 +1815,11 @@ class V2ApplyTask(ProgressTaskMixin):
         self._snapshot(obj)
         record = copy.deepcopy(old_record)
         current_transform = list(v2_engine.object_transform(obj))
-        current_mesh = obj.data.name if obj.type == 'MESH' and obj.data else ""
+        current_mesh, current_mesh_revision = (
+            v2_engine.mesh_descriptor(obj.data)
+            if obj.type == 'MESH' and obj.data
+            else ("", "")
+        )
         current_props = v2_engine.current_object_properties(
             obj,
             set(record.get("csv_props", {})) | set(change["selected_props"]),
@@ -1799,11 +1836,14 @@ class V2ApplyTask(ProgressTaskMixin):
         if change["mesh_kind"]:
             record["objname"] = row[ROW_NAME]
             record["source_mesh"] = change["new_source_mesh"]
+            record["source_revision"] = change["new_source_revision"]
             if change["mesh_decision"] == "RELINK" and source is not None:
                 obj.data = source.data
                 record["mesh_override"] = None
+                record["mesh_override_revision"] = ""
             else:
                 record["mesh_override"] = current_mesh
+                record["mesh_override_revision"] = current_mesh_revision
 
         if change["props_kind"]:
             record["csv_props"] = dict(change["selected_props"])
@@ -1900,6 +1940,11 @@ class V2ApplyTask(ProgressTaskMixin):
                 if self.profile_enabled:
                     now = time.perf_counter()
                     self.profile_times["state_commit"] = now - finalize_started
+                    finalize_started = now
+                removed_previous = remove_unused_previous_fbx_meshes()
+                if self.profile_enabled and removed_previous:
+                    now = time.perf_counter()
+                    self.profile_times["previous_mesh_cleanup"] = now - finalize_started
                     finalize_started = now
                 set_managed_collection_visibility(self.scene, self.output_collection, False)
                 if self.profile_enabled:
@@ -2906,7 +2951,237 @@ class CSVMI_OT_focus_change(Operator):
         return {'FINISHED'}
 
 
-def _cleanup_new_import_data(new_objects, new_collections, temp_collection):
+_FBX_TRANSACTION_KEYS = (
+    FBX_MANAGED_KEY,
+    FBX_CANONICAL_OBJECT_NAME_KEY,
+    FBX_CANONICAL_MESH_NAME_KEY,
+    FBX_SOURCE_REVISION_KEY,
+    FBX_PREVIOUS_MESH_KEY,
+)
+
+
+def _snapshot_id_properties(data_block, keys):
+    return {
+        key: (True, copy.deepcopy(data_block[key])) if key in data_block else (False, None)
+        for key in keys
+    }
+
+
+def _restore_id_properties(data_block, snapshot):
+    for key, (existed, value) in snapshot.items():
+        if existed:
+            data_block[key] = value
+        elif key in data_block:
+            del data_block[key]
+
+
+class FbxReimportTransaction:
+    """Reserve canonical FBX names while keeping the previous source recoverable."""
+
+    def __init__(self, scene, old_collection):
+        self.scene = scene
+        self.old_collection = old_collection
+        self.revision = uuid.uuid4().hex
+        self.old_revision = (
+            str(old_collection.get(FBX_SOURCE_REVISION_KEY, ""))
+            if old_collection is not None
+            else ""
+        ) or uuid.uuid4().hex
+        self.name_snapshots = []
+        self.property_snapshots = []
+        self.snapshot_pointers = set()
+        self.expected_object_names = set()
+        self.expected_mesh_by_object = {}
+        self.collection_name_snapshot = old_collection.name if old_collection is not None else ""
+        self.prepared = False
+        self.committed = False
+        self.collision_names = []
+
+    def _snapshot(self, data_block):
+        pointer = data_block.as_pointer()
+        if pointer in self.snapshot_pointers:
+            return
+        self.snapshot_pointers.add(pointer)
+        self.name_snapshots.append((data_block, data_block.name))
+        self.property_snapshots.append(
+            (data_block, _snapshot_id_properties(data_block, _FBX_TRANSACTION_KEYS))
+        )
+
+    def _known_csv_names(self):
+        cache = get_csv_cache(self.scene)
+        return set(cache.unique_names) if cache is not None else set()
+
+    @staticmethod
+    def _state_for_output(scene):
+        props = scene.csvmi_props
+        output = bpy.data.collections.get(props.output_collection_name.strip())
+        if (
+            output is None
+            or not bool(output.get(OUTPUT_MANAGED_KEY, False))
+            or int(output.get(OUTPUT_SCHEMA_KEY, 0)) != OUTPUT_SCHEMA_VERSION
+        ):
+            return None, {}, {}
+        cache = get_csv_cache(scene)
+        identity_column = cache.identity_column if cache is not None else props.identity_column.strip()
+        try:
+            state = v2_engine.read_output_state(output, identity_column)
+            objects, _transforms = v2_engine.managed_scene_index(output)
+            return state, objects, {
+                record.get("objname", ""): record
+                for record in state.get("records", {}).values()
+                if record.get("objname")
+            }
+        except Exception:
+            return None, {}, {}
+
+    def _canonical_object_name(self, obj, known_names):
+        stored = obj.get(FBX_CANONICAL_OBJECT_NAME_KEY, "")
+        if isinstance(stored, str) and stored:
+            return stored
+        if obj.name in known_names:
+            return obj.name
+        normalized = strip_numeric_suffix(obj.name)
+        if normalized in known_names:
+            return normalized
+        return obj.name
+
+    def _stage_mesh(self, mesh, canonical, revision):
+        self._snapshot(mesh)
+        canonical = canonical or v2_engine.mesh_display_name(mesh) or mesh.name
+        revision = revision or v2_engine.mesh_revision(mesh) or self.old_revision
+        mesh[FBX_CANONICAL_MESH_NAME_KEY] = canonical
+        mesh[FBX_SOURCE_REVISION_KEY] = revision
+        if bool(mesh.get(FBX_PREVIOUS_MESH_KEY, False)):
+            return
+        mesh[FBX_PREVIOUS_MESH_KEY] = True
+        mesh.name = f"{canonical} [Previous FBX {revision[:8]}]"
+
+    def prepare(self):
+        if self.old_collection is None:
+            self.prepared = True
+            return
+
+        known_names = self._known_csv_names()
+        state, output_objects, records_by_objname = self._state_for_output(self.scene)
+        source_objects = collect_collection_objects(self.old_collection)
+
+        for index, obj in enumerate(source_objects):
+            self._snapshot(obj)
+            previous_object_name = obj.name
+            canonical_object = self._canonical_object_name(obj, known_names)
+            self.expected_object_names.add(canonical_object)
+            obj[FBX_CANONICAL_OBJECT_NAME_KEY] = canonical_object
+            obj[FBX_SOURCE_REVISION_KEY] = self.old_revision
+            obj.name = f"__CSVMI_PREVIOUS_OBJECT__{self.old_revision[:8]}__{index:06d}"
+            if obj.type != 'MESH' or obj.data is None:
+                continue
+            record = records_by_objname.get(canonical_object, {})
+            stored_mesh_name = obj.data.get(FBX_CANONICAL_MESH_NAME_KEY, "")
+            canonical_mesh = stored_mesh_name or record.get("source_mesh", "") or obj.data.name
+            if (
+                not stored_mesh_name
+                and previous_object_name != canonical_object
+                and strip_numeric_suffix(previous_object_name) == canonical_object
+                and strip_numeric_suffix(canonical_mesh) == canonical_object
+            ):
+                # v2.0.0 could give both the imported Object and Mesh an
+                # artificial numeric suffix. Only repair it when the CSV/ID
+                # ledger confirms the unsuffixed Object name; a legitimate
+                # Piece.001 therefore remains Piece.001.
+                canonical_mesh = canonical_object
+            mesh_revision = (
+                obj.data.get(FBX_SOURCE_REVISION_KEY, "")
+                or record.get("source_revision", "")
+                or self.old_revision
+            )
+            self.expected_mesh_by_object.setdefault(canonical_object, canonical_mesh)
+            self._stage_mesh(obj.data, canonical_mesh, mesh_revision)
+
+        if state is not None:
+            for identity, record in state.get("records", {}).items():
+                if record.get("mesh_override") is not None:
+                    continue
+                obj = output_objects.get(identity)
+                if obj is None or obj.type != 'MESH' or obj.data is None:
+                    continue
+                canonical_mesh = record.get("source_mesh", "") or obj.data.name
+                if v2_engine.mesh_display_name(obj.data) != canonical_mesh:
+                    # A Single-User or manually assigned Mesh is a Blender edit,
+                    # not an old FBX source datablock that may be renamed.
+                    continue
+                mesh_revision = record.get("source_revision", "") or self.old_revision
+                self._stage_mesh(obj.data, canonical_mesh, mesh_revision)
+
+        self._snapshot(self.old_collection)
+        self.old_collection[FBX_SOURCE_REVISION_KEY] = self.old_revision
+        self.prepared = True
+
+    def normalize_new_source(self, new_objects):
+        mesh_metadata = {}
+        for obj in new_objects:
+            canonical_object = obj.name
+            if canonical_object not in self.expected_object_names:
+                normalized = strip_numeric_suffix(canonical_object)
+                if normalized in self.expected_object_names:
+                    canonical_object = normalized
+            if obj.name != canonical_object:
+                obj.name = canonical_object
+                if obj.name != canonical_object:
+                    self.collision_names.append(canonical_object)
+            obj[FBX_MANAGED_KEY] = True
+            obj[FBX_CANONICAL_OBJECT_NAME_KEY] = canonical_object
+            obj[FBX_SOURCE_REVISION_KEY] = self.revision
+            if obj.type != 'MESH' or obj.data is None:
+                continue
+
+            mesh = obj.data
+            pointer = mesh.as_pointer()
+            canonical_mesh = self.expected_mesh_by_object.get(canonical_object, mesh.name)
+            previous = mesh_metadata.get(pointer)
+            if previous is not None:
+                canonical_mesh = previous
+            else:
+                mesh.name = canonical_mesh
+                if mesh.name != canonical_mesh:
+                    self.collision_names.append(canonical_mesh)
+                mesh_metadata[pointer] = canonical_mesh
+            mesh[FBX_CANONICAL_MESH_NAME_KEY] = canonical_mesh
+            mesh[FBX_SOURCE_REVISION_KEY] = self.revision
+            if FBX_PREVIOUS_MESH_KEY in mesh:
+                del mesh[FBX_PREVIOUS_MESH_KEY]
+
+    def reserve_collection_name(self):
+        if self.old_collection is None:
+            return
+        self.old_collection.name = (
+            f"__CSVMI_PREVIOUS_COLLECTION__{self.old_revision[:8]}"
+        )
+
+    def commit(self):
+        self.committed = True
+
+    def restore(self):
+        if not self.prepared or self.committed:
+            return
+        rollback_token = uuid.uuid4().hex
+        for index, (data_block, _old_name) in enumerate(self.name_snapshots):
+            try:
+                data_block.name = f"__CSVMI_ROLLBACK__{rollback_token}__{index:06d}"
+            except (ReferenceError, RuntimeError):
+                pass
+        for data_block, old_name in self.name_snapshots:
+            try:
+                data_block.name = old_name
+            except (ReferenceError, RuntimeError):
+                pass
+        for data_block, snapshot in self.property_snapshots:
+            try:
+                _restore_id_properties(data_block, snapshot)
+            except (ReferenceError, RuntimeError):
+                pass
+
+
+def _cleanup_new_import_data(new_objects, new_collections, new_meshes, temp_collection):
     for obj in list(new_objects):
         if obj and obj.name in bpy.data.objects:
             bpy.data.objects.remove(obj, do_unlink=True)
@@ -2917,6 +3192,9 @@ def _cleanup_new_import_data(new_objects, new_collections, temp_collection):
             bpy.data.collections.remove(collection)
     if temp_collection and temp_collection.name in bpy.data.collections:
         bpy.data.collections.remove(temp_collection)
+    for mesh in list(new_meshes):
+        if mesh and mesh.name in bpy.data.meshes and mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
 
 
 def _has_unapplied_transform(obj, tolerance=1.0e-5):
@@ -2988,12 +3266,16 @@ class CSVMI_OT_import_fbx(Operator):
 
         before_objects = {obj.as_pointer() for obj in bpy.data.objects}
         before_collections = {collection.as_pointer() for collection in bpy.data.collections}
+        before_meshes = {mesh.as_pointer() for mesh in bpy.data.meshes}
         temp_collection = bpy.data.collections.new("__CSVMI_FBX_IMPORT__")
         scene.collection.children.link(temp_collection)
         new_objects = []
         new_collections = []
+        new_meshes = []
+        transaction = FbxReimportTransaction(scene, old_managed)
 
         try:
+            transaction.prepare()
             result = bpy.ops.wm.fbx_import(
                 filepath=path,
                 use_anim=False,
@@ -3008,6 +3290,9 @@ class CSVMI_OT_import_fbx(Operator):
                 for collection in bpy.data.collections
                 if collection.as_pointer() not in before_collections and collection != temp_collection
             ]
+            new_meshes = [
+                mesh for mesh in bpy.data.meshes if mesh.as_pointer() not in before_meshes
+            ]
             if props.cancel_requested:
                 raise InterruptedError("FBX import cancelled.")
             mesh_objects = [obj for obj in new_objects if obj.type == 'MESH']
@@ -3020,20 +3305,26 @@ class CSVMI_OT_import_fbx(Operator):
                 for collection in list(obj.users_collection):
                     if collection != temp_collection:
                         collection.objects.unlink(obj)
-                obj[FBX_MANAGED_KEY] = True
 
             for collection in reversed(new_collections):
                 if collection.name in bpy.data.collections:
                     bpy.data.collections.remove(collection)
 
+            transaction.normalize_new_source(new_objects)
             unapplied = sum(1 for obj in mesh_objects if _has_unapplied_transform(obj))
-            if old_managed is not None:
-                remove_collection_with_contents(old_managed)
+            transaction.reserve_collection_name()
 
             temp_collection.name = desired_name
             temp_collection[FBX_MANAGED_KEY] = True
             temp_collection[FBX_PATH_KEY] = path
+            temp_collection[FBX_SOURCE_REVISION_KEY] = transaction.revision
             visibility_mode = isolate_fbx_source_collection(scene, temp_collection)
+
+            if old_managed is not None:
+                remove_collection_with_contents(old_managed)
+            transaction.commit()
+            removed_previous = remove_unused_previous_fbx_meshes()
+
             props.fbx_managed_collection = temp_collection
             props.fbx_total_count = len(new_objects)
             props.fbx_mesh_count = len(mesh_objects)
@@ -3047,18 +3338,53 @@ class CSVMI_OT_import_fbx(Operator):
                 props.status += " / source Collection hidden"
             if unapplied:
                 props.status += f" / {unapplied:,} unapplied transforms"
+            if transaction.collision_names:
+                props.status += (
+                    f" / {len(set(transaction.collision_names)):,} true name collisions"
+                )
+            if removed_previous:
+                props.status += f" / {removed_previous:,} unused Previous Mesh removed"
+            if old_managed is not None:
+                props.status += " / run Preview Changes to review the new FBX revision"
             props.phase = "FBX loaded"
-            self.report({'WARNING'} if unapplied else {'INFO'}, props.status)
+            self.report(
+                {'WARNING'} if unapplied or transaction.collision_names else {'INFO'},
+                props.status,
+            )
             return {'FINISHED'}
         except InterruptedError:
-            _cleanup_new_import_data(new_objects, new_collections, temp_collection)
+            new_objects = [
+                obj for obj in bpy.data.objects if obj.as_pointer() not in before_objects
+            ]
+            new_collections = [
+                collection
+                for collection in bpy.data.collections
+                if collection.as_pointer() not in before_collections and collection != temp_collection
+            ]
+            new_meshes = [
+                mesh for mesh in bpy.data.meshes if mesh.as_pointer() not in before_meshes
+            ]
+            _cleanup_new_import_data(new_objects, new_collections, new_meshes, temp_collection)
+            transaction.restore()
             props.status = "FBX import cancelled. The previous source was preserved."
             props.phase = "Cancelled"
             self.report({'INFO'}, props.status)
             return {'CANCELLED'}
         except Exception as exc:
             traceback.print_exc()
-            _cleanup_new_import_data(new_objects, new_collections, temp_collection)
+            new_objects = [
+                obj for obj in bpy.data.objects if obj.as_pointer() not in before_objects
+            ]
+            new_collections = [
+                collection
+                for collection in bpy.data.collections
+                if collection.as_pointer() not in before_collections and collection != temp_collection
+            ]
+            new_meshes = [
+                mesh for mesh in bpy.data.meshes if mesh.as_pointer() not in before_meshes
+            ]
+            _cleanup_new_import_data(new_objects, new_collections, new_meshes, temp_collection)
+            transaction.restore()
             props.status = f"FBX import failed: {exc}"
             self.report({'ERROR'}, props.status)
             return {'CANCELLED'}
@@ -3724,6 +4050,8 @@ class CSVMI_PT_panel(Panel):
                         if change["mesh_kind"]:
                             old_mesh = (change.get("old") or {}).get("source_mesh", "—")
                             detail.label(text=f"Mesh: {old_mesh} → {change['new_source_mesh'] or 'Missing'}")
+                            if change.get("mesh_revision_changed"):
+                                detail.label(text="Reason: New FBX revision", icon='FILE_REFRESH')
                             buttons = detail.row(align=True)
                             relink = buttons.operator("csvmi.set_change_decision", text="Relink Mesh")
                             relink.change_index, relink.domain, relink.decision = current.change_index, 'mesh', 'RELINK'

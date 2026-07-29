@@ -97,6 +97,55 @@ def initial_apply():
     assert bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}
 
 
+def direct_fbx_import():
+    class DirectImport:
+        @staticmethod
+        def report(_level, message):
+            print(f"CSVMI_UI_FBX_REPORT {message}", flush=True)
+
+    operator = DirectImport()
+    operator._path = str(Path(bpy.path.abspath(props.fbx_path)).resolve())
+    operator._desired_name = props.fbx_collection_name.strip()
+    operator._old_managed = props.fbx_managed_collection
+    return csvmi.CSVMI_OT_import_fbx._import_fbx(operator, bpy.context)
+
+
+if "--ui-fbx-review" in sys.argv:
+    bpy.ops.preferences.addon_enable(module="io_scene_fbx")
+    bpy.ops.object.select_all(action='DESELECT')
+    source_objects = list(source.objects)
+    for obj in source_objects:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = source_objects[0]
+    fbx_path = Path(tempfile.gettempdir()) / "csvmi_v201_ui_reimport.fbx"
+    assert bpy.ops.export_scene.fbx(
+        filepath=str(fbx_path),
+        use_selection=True,
+        object_types={'MESH'},
+        use_mesh_modifiers=False,
+        bake_anim=False,
+        add_leaf_bones=False,
+    ) == {'FINISHED'}
+    old_meshes = [obj.data for obj in source_objects]
+    bpy.data.batch_remove(source_objects)
+    bpy.data.collections.remove(source)
+    for mesh in old_meshes:
+        if mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+
+    props.source_mode = 'FBX'
+    props.source_collection = None
+    props.fbx_path = str(fbx_path)
+    props.fbx_collection_name = "CSVMI_FBX_UI_Source"
+    assert direct_fbx_import() == {'FINISHED'}
+    initial_apply()
+    assert direct_fbx_import() == {'FINISHED'}
+    assert bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}
+    props.show_preview = True
+    props.status = "FBX re-import review: canonical names preserved; new FBX revision detected."
+    props.use_multi_tick = True
+
+
 if "--ui-managed" in sys.argv or "--ui-review" in sys.argv:
     initial_apply()
     secondary = bpy.data.collections.new("CSV_Secondary_Output_v2")

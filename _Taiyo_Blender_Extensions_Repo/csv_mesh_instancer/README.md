@@ -1,6 +1,6 @@
 # CSV Mesh Instancer
 
-Version 2.0.0
+Version 2.0.1
 
 CSVの永続IDを使い、CollectionまたはFBX内のMeshを共有するObjectを大量配置・差分更新するBlender Extensionです。Houdini RBDシミュレーション後のBlenderクリーンアップを想定し、前回CSV・新CSV・現在のBlender編集を比較して安全に更新します。
 
@@ -10,7 +10,7 @@ CSVの永続IDを使い、CollectionまたはFBX内のMeshを共有するObject�
 - `3D Viewport > Sidebar (N) > CSV Instancer`
 - UIの既定言語は英語
 
-## Version 2.0.0の主な機能
+## Version 2.0.1の主な機能
 
 - 指定可能な永続ID列（既定`id`、負数可、空欄・重複はUpdate停止）
 - 前回CSV、新CSV、現在のBlenderを比較する三方向Update
@@ -24,12 +24,14 @@ CSVの永続IDを使い、CollectionまたはFBX内のMeshを共有するObject�
 - Blender/CSVから削除されたIDを非表示`Deleted` CollectionのEmptyとして保持し、明示的にRestore
 - CSV追加列を型推定し、チェックした列だけObject Custom Propertyへ保存
 - Collection/FBXソース、`.001`サフィックス照合、FBX Unit/Local X補正
+- FBX再インポート時の正規名維持と、世代IDによる同名Mesh更新の検出
+- 旧FBX Meshを`[Previous FBX]`へ安全に退避し、未編集ObjectだけをReview後に再リンク
 - 進捗、ETA、キャンセル、`Split Across Multiple Ticks`（既定ON）
 - 管理出力のShow/Hide、Clear Contents、Delete Collection
 - 圧縮した永続ID台帳を`.blend`内のText datablockへ原子的に保存
 
 ## 重要な互換性
 
-v2はv1.x出力と後方互換ではありません。v1.xの行番号・`ptnum`照合や自動移行は行いません。同名のv1.x管理Collectionを検出した場合は変更せず停止するため、削除するか別の出力名を指定してください。
+v2はv1.x出力と後方互換ではありません。v1.xの行番号・`ptnum`照合や自動移行は行いません。同名のv1.x管理Collectionを検出した場合は変更せず停止するため、削除するか別の出力名を指定してください。v2.0.0の出力とID台帳はv2.0.1で継続利用できます。
 
 詳細は[CSV Mesh Instancer 使用書](CSV_Mesh_Instancer_使用書.md)を参照してください。

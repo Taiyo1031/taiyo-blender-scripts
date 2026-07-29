@@ -17,6 +17,9 @@ OUTPUT_SCHEMA_KEY = "csvmi_schema_version"
 OUTPUT_STATE_TEXT_KEY = "csvmi_state_text"
 OBJECT_ID_KEY = "csvmi_id"
 OBJECT_SCHEMA_KEY = "csvmi_schema_version"
+FBX_CANONICAL_MESH_NAME_KEY = "csvmi_fbx_canonical_mesh_name"
+FBX_SOURCE_REVISION_KEY = "csvmi_fbx_source_revision"
+FBX_PREVIOUS_MESH_KEY = "csvmi_fbx_previous_mesh"
 STATE_TEXT_PREFIX = ".CSVMI_State_"
 STATE_TEXT_LINE_LENGTH = 65536
 ROW_NAME = 0
@@ -94,6 +97,33 @@ def object_transform(obj):
     )
 
 
+def mesh_display_name(mesh):
+    if mesh is None:
+        return ""
+    canonical = mesh.get(FBX_CANONICAL_MESH_NAME_KEY, "")
+    if bool(mesh.get(FBX_PREVIOUS_MESH_KEY, False)) and isinstance(canonical, str) and canonical:
+        return canonical
+    return mesh.name
+
+
+def mesh_revision(mesh):
+    if mesh is None:
+        return ""
+    revision = mesh.get(FBX_SOURCE_REVISION_KEY, "")
+    return revision if isinstance(revision, str) else str(revision)
+
+
+def mesh_descriptor(mesh):
+    return mesh_display_name(mesh), mesh_revision(mesh)
+
+
+def strip_blender_numeric_suffix(name):
+    base, separator, suffix = name.rpartition(".")
+    if separator and len(suffix) >= 3 and suffix.isdigit():
+        return base
+    return name
+
+
 def transform_equal(left, right):
     if left is None or right is None or len(left) != 9 or len(right) != 9:
         return False
@@ -148,7 +178,7 @@ def object_preview_signature(obj, transform=None):
     return (
         obj.name,
         obj.type,
-        obj.data.name if obj.data else "",
+        mesh_descriptor(obj.data) if obj.data else ("", ""),
         tuple(round(value, 9) for value in (transform or object_transform(obj))),
         properties,
     )
@@ -428,6 +458,8 @@ def _change_search_blob(change):
         old.get("source_mesh", ""),
         change.get("new_source_mesh", ""),
     ]
+    if change.get("mesh_revision_changed"):
+        fields.append("new fbx revision")
     fields.extend(change.get("changed_properties", ()))
     return "\x1f".join(str(field).casefold() for field in fields if field is not None)
 
@@ -443,7 +475,9 @@ def _base_change(identity, row, old, obj, source, attributes, selected_props, zo
         "selected_props": selected_props,
         "zone": zone,
         "objname": row[ROW_NAME] if row is not None else (old or {}).get("objname", ""),
-        "new_source_mesh": source.data.name if source is not None else "",
+        "new_source_mesh": mesh_display_name(source.data) if source is not None else "",
+        "new_source_revision": mesh_revision(source.data) if source is not None else "",
+        "mesh_revision_changed": False,
         "transform_kind": "",
         "mesh_kind": "",
         "props_kind": "",
@@ -545,12 +579,55 @@ def build_preview(cache, output, resolved, props, selected_names):
                 change["transform_decision"] = "KEEP"
 
             new_mesh = change["new_source_mesh"]
+            new_revision = change["new_source_revision"]
             old_mesh = old.get("source_mesh", "")
+            old_revision = old.get("source_revision", "")
             mesh_override = old.get("mesh_override")
-            current_mesh = obj.data.name if obj.type == 'MESH' and obj.data else ""
+            mesh_override_revision = old.get("mesh_override_revision", "")
+            current_mesh, current_revision = (
+                mesh_descriptor(obj.data) if obj.type == 'MESH' and obj.data else ("", "")
+            )
+            if (
+                not old_revision
+                and mesh_override is None
+                and obj.type == 'MESH'
+                and obj.data is not None
+                and bool(obj.data.get(FBX_PREVIOUS_MESH_KEY, False))
+                and current_mesh != old_mesh
+                and strip_blender_numeric_suffix(old_mesh) == current_mesh
+            ):
+                # A v2.0.0 ledger may contain Blender's artificial import
+                # suffix. The staged Previous Mesh has already been verified
+                # against the CSV identity ledger and carries its canonical
+                # name, so do not misclassify this repair as a Blender edit.
+                old_mesh = current_mesh
+            if (
+                not old_revision
+                and mesh_override is None
+                and current_mesh == old_mesh
+            ):
+                old_revision = current_revision
+            if (
+                mesh_override is not None
+                and not mesh_override_revision
+                and current_mesh == mesh_override
+            ):
+                mesh_override_revision = current_revision
             expected_mesh = mesh_override or old_mesh
-            csv_mesh_changed = row[ROW_NAME] != old.get("objname") or new_mesh != old_mesh
-            blender_mesh_changed = current_mesh != expected_mesh
+            expected_revision = (
+                mesh_override_revision if mesh_override is not None else old_revision
+            )
+            change["mesh_revision_changed"] = (
+                bool(new_revision or old_revision) and new_revision != old_revision
+            )
+            csv_mesh_changed = (
+                row[ROW_NAME] != old.get("objname")
+                or new_mesh != old_mesh
+                or change["mesh_revision_changed"]
+            )
+            blender_mesh_changed = (
+                current_mesh != expected_mesh or current_revision != expected_revision
+            )
             change["mesh_kind"] = _domain_kind(
                 csv_mesh_changed,
                 blender_mesh_changed,
@@ -616,15 +693,17 @@ def build_preview(cache, output, resolved, props, selected_names):
     return PreviewData(changes, summary, state, output, resolved, cache, tuple(selected_names))
 
 
-def state_record_from_row(cache, row, source_mesh, selected_props):
+def state_record_from_row(cache, row, source_mesh, selected_props, source_revision=""):
     return {
         "csv_transform": list(row_transform(row)),
         "objname": row[ROW_NAME],
         "attrs": row_attributes(cache, row),
         "csv_props": dict(selected_props),
         "source_mesh": source_mesh,
+        "source_revision": source_revision,
         "transform_override": None,
         "mesh_override": None,
+        "mesh_override_revision": "",
         "props_override": None,
         "deleted": False,
         "skipped": False,
