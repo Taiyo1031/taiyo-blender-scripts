@@ -1,212 +1,67 @@
-"""Prepare an unsaved Blender scene for CSV Mesh Instancer v2 UI verification."""
-
-import csv
+import importlib.util
 import sys
 import tempfile
-import time
 from pathlib import Path
 
 import bpy
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "_Taiyo_Blender_Extensions_Repo"))
-
-import csv_mesh_instancer as csvmi  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
+ADDON_DIR = ROOT / "_Taiyo_Blender_Extensions_Repo" / "csv_mesh_instancer"
 
 
-def option_int(name, default):
-    if name not in sys.argv:
-        return default
-    return int(sys.argv[sys.argv.index(name) + 1])
-
-
-def write_fixture(path, row_count, changed=False):
-    with open(path, "w", newline="", encoding="utf-8-sig") as handle:
-        writer = csv.writer(handle)
-        writer.writerow([
-            "ptnum", "Zone", "sx", "sy", "sz", "rx", "ry", "rz",
-            "objname", "id", "tx", "ty", "tz", "category", "enabled",
-        ])
-        for index in range(row_count):
-            tx = index % 50
-            rz = index % 360
-            objname = "UI_Asset"
-            category = "Architecture" if index % 2 else "Furniture"
-            if changed and index < 30:
-                tx += 10
-            if changed and 30 <= index < 40:
-                objname = "UI_Asset.001"
-            if changed and 40 <= index < 50:
-                category = "Cleanup"
-            writer.writerow([
-                index, index % 2, 1, 1, 1, 0, 0, rz, objname, index,
-                tx, index // 50, 0, category, index % 3 != 0,
-            ])
-
-
+spec = importlib.util.spec_from_file_location(
+    "csv_mesh_instancer",
+    ADDON_DIR / "__init__.py",
+    submodule_search_locations=[str(ADDON_DIR)],
+)
+csvmi = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = csvmi
+spec.loader.exec_module(csvmi)
 csvmi.register()
+
+
 scene = bpy.context.scene
-
-source = bpy.data.collections.new("UI_Test_Source")
-source.color_tag = 'COLOR_04'
-scene.collection.children.link(source)
-
-mesh_a = bpy.data.meshes.new("UI_Test_Mesh_A")
-mesh_a.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0)], [], [(0, 1, 2)])
-mesh_a.update()
-source.objects.link(bpy.data.objects.new("UI_Asset", mesh_a))
-
-mesh_b = bpy.data.meshes.new("UI_Test_Mesh_B")
-mesh_b.from_pydata([(0, 0, 0), (0, 1, 0), (0, 0, 1)], [], [(0, 1, 2)])
-mesh_b.update()
-source.objects.link(bpy.data.objects.new("UI_Asset.001", mesh_b))
-
-csv_path = Path(tempfile.gettempdir()) / "csvmi_v2_ui_test.csv"
-ui_row_count = option_int("--ui-rows", 2500)
-write_fixture(csv_path, ui_row_count)
-
 props = scene.csvmi_props
+mesh = bpy.data.meshes.new("Piece")
+mesh.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0)], [], [(0, 1, 2)])
+source = bpy.data.collections.new("CSVMI_FBX_UI_Source")
+scene.collection.children.link(source)
+source[csvmi.FBX_MANAGED_KEY] = True
+obj = bpy.data.objects.new("Piece", mesh)
+obj[csvmi.FBX_CANONICAL_OBJECT_KEY] = "Piece"
+mesh[csvmi.FBX_CANONICAL_MESH_KEY] = "Piece"
+source.objects.link(obj)
+props.fbx_collection = source
+props.fbx_collection_name = source.name
+props.fbx_mesh_count = 1
+csvmi.hide_source_collection(scene, source)
+
+
+csv_path = Path(tempfile.gettempdir()) / "csvmi_v3_ui.csv"
+csv_path.write_text(
+    "objname,tx,ty,tz,rx,ry,rz,sx,sy,sz\n"
+    "Piece,0,0,0,0,0,0,1,1,1\n",
+    encoding="utf-8",
+)
 props.csv_path = str(csv_path)
-props.identity_column = "id"
-props.source_mode = 'COLLECTION'
-props.source_collection = source
-props.ignore_numeric_suffix = True
-props.output_collection_name = "CSV_Output_v2"
-props.split_by_attribute = True
-props.split_attribute = "Zone"
-props.use_multi_tick = True
-props.status = "Version 2 UI fixture is ready. Click Import CSV."
-
-if "--ui-fbx" in sys.argv:
-    props.source_mode = 'FBX'
-
-if "--ui-running" in sys.argv:
-    props.running = True
-    props.active_operation = 'FBX_IMPORT'
-    props.phase = "FBX import"
-    props.status = "Importing FBX. Cancellation is applied after Blender finishes this step."
+assert bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}
+props.fbx_path = str(Path(tempfile.gettempdir()) / "source.fbx")
+props.output_collection_name = "CSV_UI_Output"
+props.status = "Simple v3 UI: CSV, FBX, Placement only."
 
 
-def initial_apply():
+if "--ui-place" in sys.argv:
     props.use_multi_tick = False
-    assert bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}
-    for attribute in props.csv_attributes:
-        attribute.enabled = attribute.name in {"category", "enabled"}
-    assert bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}
-    assert bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT') == {'FINISHED'}
-
-
-def direct_fbx_import():
-    class DirectImport:
-        @staticmethod
-        def report(_level, message):
-            print(f"CSVMI_UI_FBX_REPORT {message}", flush=True)
-
-    operator = DirectImport()
-    operator._path = str(Path(bpy.path.abspath(props.fbx_path)).resolve())
-    operator._desired_name = props.fbx_collection_name.strip()
-    operator._old_managed = props.fbx_managed_collection
-    return csvmi.CSVMI_OT_import_fbx._import_fbx(operator, bpy.context)
-
-
-if "--ui-fbx-review" in sys.argv:
-    bpy.ops.preferences.addon_enable(module="io_scene_fbx")
-    bpy.ops.object.select_all(action='DESELECT')
-    source_objects = list(source.objects)
-    for obj in source_objects:
-        obj.select_set(True)
-    bpy.context.view_layer.objects.active = source_objects[0]
-    fbx_path = Path(tempfile.gettempdir()) / "csvmi_v201_ui_reimport.fbx"
-    assert bpy.ops.export_scene.fbx(
-        filepath=str(fbx_path),
-        use_selection=True,
-        object_types={'MESH'},
-        use_mesh_modifiers=False,
-        bake_anim=False,
-        add_leaf_bones=False,
-    ) == {'FINISHED'}
-    old_meshes = [obj.data for obj in source_objects]
-    bpy.data.batch_remove(source_objects)
-    bpy.data.collections.remove(source)
-    for mesh in old_meshes:
-        if mesh.users == 0:
-            bpy.data.meshes.remove(mesh)
-
-    props.source_mode = 'FBX'
-    props.source_collection = None
-    props.fbx_path = str(fbx_path)
-    props.fbx_collection_name = "CSVMI_FBX_UI_Source"
-    assert direct_fbx_import() == {'FINISHED'}
-    initial_apply()
-    assert direct_fbx_import() == {'FINISHED'}
-    assert bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}
-    props.show_preview = True
-    props.status = "FBX re-import review: canonical names preserved; new FBX revision detected."
+    assert bpy.ops.csvmi.place('EXEC_DEFAULT') == {'FINISHED'}
     props.use_multi_tick = True
 
 
-if "--ui-managed" in sys.argv or "--ui-review" in sys.argv:
-    initial_apply()
-    secondary = bpy.data.collections.new("CSV_Secondary_Output_v2")
-    secondary.color_tag = 'COLOR_05'
-    secondary[csvmi.OUTPUT_MANAGED_KEY] = True
-    secondary[csvmi.OUTPUT_SCHEMA_KEY] = csvmi.OUTPUT_SCHEMA_VERSION
-    secondary.hide_viewport = True
-    secondary.hide_render = True
-    scene.collection.children.link(secondary)
-    csvmi.v2_engine.write_output_state(
-        secondary,
-        {"schema": 2, "id_column": "id", "records": {}},
-    )
-
-if "--ui-review" in sys.argv:
-    output = bpy.data.collections["CSV_Output_v2"]
-    object_five = next(
-        obj for obj in csvmi.collect_collection_objects(output)
-        if str(obj.get(csvmi.OBJECT_ID_KEY, "")) == "5"
-    )
-    object_five.location.x += 3.0
-    object_twenty = next(
-        obj for obj in csvmi.collect_collection_objects(output)
-        if str(obj.get(csvmi.OBJECT_ID_KEY, "")) == "20"
-    )
-    bpy.data.objects.remove(object_twenty, do_unlink=True)
-    write_fixture(csv_path, ui_row_count, changed=True)
-    assert bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}
-    assert bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}
-    props.show_preview = True
-    props.review_search = ""
-    props.status = "Change Review fixture: CSV, Blender, conflict, mesh, props, and delete changes."
-    props.use_multi_tick = True
-
-if "--ui-auto-update" in sys.argv:
-    props.use_multi_tick = True
-    assert bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}
-    assert bpy.ops.csvmi.preview_changes('EXEC_DEFAULT') == {'FINISHED'}
-    ui_update_started = time.perf_counter()
-    result = bpy.ops.csvmi.apply_reviewed('EXEC_DEFAULT')
-    print(f"CSVMI_UI_APPLY_STARTED rows={ui_row_count} result={result}", flush=True)
-
-    def report_finished_update():
-        if props.running:
-            return 0.1
-        elapsed = time.perf_counter() - ui_update_started
-        publish_rate = props.ui_publish_count / max(0.001, props.process_seconds)
-        print(
-            "CSVMI_UI_APPLY_DONE "
-            f"rows={ui_row_count} wall={elapsed:.3f}s process={props.process_seconds:.3f}s "
-            f"max_tick={props.max_tick_ms:.1f}ms publishes={props.ui_publish_count} "
-            f"publish_rate={publish_rate:.2f}/s progress={props.progress:.3f}",
-            flush=True,
-        )
-        return None
-
-    bpy.app.timers.register(report_finished_update, first_interval=0.1)
-
-if bpy.context.screen is not None:
-    for area in bpy.context.screen.areas:
+for window in bpy.context.window_manager.windows:
+    for area in window.screen.areas:
         if area.type == 'VIEW_3D':
             area.spaces.active.show_region_ui = True
+            area.tag_redraw()
 
-print(f"CSVMI_V2_UI_READY {csv_path} rows={ui_row_count}", flush=True)
+
+print("CSVMI_V3_UI_READY", flush=True)

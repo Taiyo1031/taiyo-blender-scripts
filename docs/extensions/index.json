@@ -29,8 +29,8 @@
       "schema_version": "1.0.0",
       "id": "csv_mesh_instancer",
       "name": "CSV Mesh Instancer",
-      "tagline": "Review stable-ID CSV changes and update linked meshes safely",
-      "version": "2.0.1",
+      "tagline": "Import CSV and FBX files and place linked meshes quickly",
+      "version": "3.0.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -38,10 +38,10 @@
       ],
       "blender_version_min": "4.5.9",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/csv_mesh_instancer/CSV_Mesh_Instancer_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./csv_mesh_instancer-2.0.1.zip",
-      "archive_size": 46744,
-      "archive_hash": "sha256:c6621693c2891b4483d11e698240237b3212805e0798081f083bb75b7f7f5564",
-      "taiyo_updated_at": 1785293352
+      "archive_url": "./csv_mesh_instancer-3.0.0.zip",
+      "archive_size": 12321,
+      "archive_hash": "sha256:76775aa20d481be857c644c9384294dfe02cb87234c354dd7b65befe7549fb52",
+      "taiyo_updated_at": 1786000665
     },
     {
       "schema_version": "1.0.0",

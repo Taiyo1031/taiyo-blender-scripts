@@ -1,9 +1,9 @@
 schema_version = "1.0.0"
 
 id = "csv_mesh_instancer"
-version = "2.0.1"
+version = "3.0.0"
 name = "CSV Mesh Instancer"
-tagline = "Review stable-ID CSV changes and update linked meshes safely"
+tagline = "Import CSV and FBX files and place linked meshes quickly"
 maintainer = "Taiyo"
 type = "add-on"
 blender_version_min = "4.5.9"
