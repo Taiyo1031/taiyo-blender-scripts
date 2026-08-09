@@ -1,6 +1,6 @@
 # CSV Mesh Instancer 使用書
 
-Version 3.0.0
+Version 3.0.1
 
 ## 1. 概要
 
@@ -27,6 +27,8 @@ objname,tx,ty,tz,rx,ry,rz,sx,sy,sz
 
 FBX内のMesh Objectを専用のSource Collectionへ読み込みます。Source CollectionはViewportとRenderから非表示になり、可能なView LayerではExcludeされます。
 
+`Show FBX Source` / `Hide FBX Source`でSource Collection全体のViewport・Render表示を切り替えます。
+
 再Import時は旧ソースの名前を一時退避してから読み込むため、FBX本来のObject名・Mesh名を照合に使用できます。出力が使用中の旧Meshは次のPlacementまで`[Previous FBX]`名で保持し、未使用になったものだけ削除します。不正FBXでは旧ソースと名前を復旧します。
 
 ## 4. Placement
@@ -42,6 +44,9 @@ FBX内のMesh Objectを専用のSource Collectionへ読み込みます。Source 
 - 同名のVersion 3出力は全置換
 - 通常Collectionや旧Version出力は上書きしない
 - 大量ObjectのViewport再評価を避けるため、完成した出力CollectionはViewportとRenderで非表示
+- `Show CSV Output` / `Hide CSV Output`で出力Collection全体のViewport・Render表示を切り替え
+
+表示切替はObject単位のoperatorや走査を使わず、CollectionとView Layerの設定だけを変更します。そのためアドオン側の処理量はCollection内のObject数に依存しません。Hide時はView Layerから再Excludeし、次のPlacementで非表示Objectが評価されるのを防ぎます。Show時はView Layerへ対象を戻すため、Blenderのdepsgraph更新時間がかかる場合があります。
 
 `Split Across Multiple Ticks`は既定ONです。大量配置を約12ms単位に分け、進捗とETAを低頻度で更新します。初回生成中のCancelでは新しい仮出力だけを削除します。再配置ではメモリを二重使用しないよう旧Objectを再利用するため、処理開始後はCancelを無効化します。OFFでは同じ処理を一括実行します。
 
@@ -55,7 +60,7 @@ FBX内のMesh Objectを専用のSource Collectionへ読み込みます。Source 
 - 検索、フィルター、Zone Collection分割
 - CSV追加属性のCustom Property転送
 - Deleted EmptyとRestore
-- Managed Outputs一覧、Show/Hide、Clear、Delete
+- Managed Outputs一覧、Clear、Delete
 - 実体化
 - v1/v2出力の移行と更新
 

@@ -60,6 +60,7 @@ def reset_data():
             bpy.data.meshes.remove(mesh)
     props = bpy.context.scene.csvmi_props
     props.fbx_collection = None
+    props.output_collection = None
     props.csv_path = ""
     props.fbx_path = ""
     props.fbx_collection_name = "CSVMI_FBX_Source"
@@ -212,6 +213,7 @@ def test_fbx_import_and_placement(temp_dir):
     props.output_collection_name = "Simple_Output"
     check(bpy.ops.csvmi.place('EXEC_DEFAULT') == {'FINISHED'}, "Initial placement failed")
     output = bpy.data.collections["Simple_Output"]
+    check(props.output_collection == output, "Placement did not remember its output Collection")
     placed = list(output.objects)
     check(len(placed) == 2, "Placement count mismatch")
     check(props.missing_count == 1, "Missing source count mismatch")
@@ -231,6 +233,20 @@ def test_fbx_import_and_placement(temp_dir):
         @ piece.rotation_euler.to_quaternion().conjugated()
     )
     check(piece.delta_rotation_euler.to_quaternion().rotation_difference(expected_delta).angle < 1e-5, "Local X correction mismatch")
+
+    for target, collection in (("FBX", first_source), ("OUTPUT", output)):
+        check(
+            bpy.ops.csvmi.set_collection_visibility(target=target, visible=True)
+            == {'FINISHED'},
+            f"{target} Show failed",
+        )
+        check(csvmi.collection_is_visible(bpy.context.scene, collection), f"{target} stayed hidden")
+        check(
+            bpy.ops.csvmi.set_collection_visibility(target=target, visible=False)
+            == {'FINISHED'},
+            f"{target} Hide failed",
+        )
+        check(not csvmi.collection_is_visible(bpy.context.scene, collection), f"{target} stayed visible")
 
     old_meshes = {obj.data for obj in placed}
     old_names = {
@@ -311,15 +327,35 @@ def test_tick_cancel(temp_dir):
     print(f"[PASS] bounded cancellation first_tick={first_tick * 1000:.1f}ms")
 
 
-def run_stress():
-    if not REAL_CSV.is_file():
-        print(f"[SKIP] stress CSV not found: {REAL_CSV}")
-        return
-    print("[STRESS] 60k actual CSV placement and replacement", flush=True)
+def run_stress(temp_dir):
+    stress_csv = REAL_CSV
+    source_label = "actual"
+    if not stress_csv.is_file():
+        stress_csv = temp_dir / "synthetic_60k.csv"
+        write_csv(
+            stress_csv,
+            (
+                (
+                    f"Piece_{index % 1225:04d}",
+                    float(index % 1000),
+                    float((index // 1000) % 1000),
+                    float(index % 37),
+                    float(index % 360),
+                    float((index * 2) % 360),
+                    float((index * 3) % 360),
+                    1.0,
+                    1.0,
+                    1.0,
+                )
+                for index in range(60_474)
+            ),
+        )
+        source_label = "synthetic"
+    print(f"[STRESS] 60k {source_label} CSV placement and replacement", flush=True)
     reset_data()
     print("[STRESS STAGE] reset", flush=True)
     props = bpy.context.scene.csvmi_props
-    props.csv_path = str(REAL_CSV)
+    props.csv_path = str(stress_csv)
     started = time.perf_counter()
     check(bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}, f"Stress CSV failed: {props.status}")
     import_seconds = time.perf_counter() - started
@@ -344,6 +380,14 @@ def run_stress():
     first_seconds = time.perf_counter() - started
     print(f"[STRESS STAGE] placed in {first_seconds:.2f}s", flush=True)
     check(len(bpy.data.collections["Stress_Output"].objects) == len(cache.rows), "Stress count mismatch")
+    if os.environ.get("CSVMI_STRESS_SKIP_TOGGLE") != "1":
+        output = bpy.data.collections["Stress_Output"]
+        toggle_started = time.perf_counter()
+        csvmi.set_collection_visibility(bpy.context.scene, output, True)
+        csvmi.set_collection_visibility(bpy.context.scene, output, False)
+        toggle_seconds = time.perf_counter() - toggle_started
+        check(not csvmi.collection_is_visible(bpy.context.scene, output), "Stress output Hide failed")
+        print(f"[STRESS STAGE] show/hide in {toggle_seconds:.3f}s", flush=True)
     if os.environ.get("CSVMI_STRESS_FIRST_ONLY") == "1":
         print("[PASS] first-placement stress profile")
         return
@@ -369,7 +413,7 @@ def main():
     try:
         props = bpy.context.scene.csvmi_props
         check(props.use_multi_tick, "Split Across Multiple Ticks must default ON")
-        check(len(csvmi.CLASSES) == 6, "Unexpected v3 UI/operators remain")
+        check(len(csvmi.CLASSES) == 7, "Unexpected v3 UI/operators remain")
         check(not (ADDON_DIR / "v2_engine.py").exists(), "v2 difference engine still exists")
         with tempfile.TemporaryDirectory(prefix="csvmi_v3_test_") as directory:
             temp_dir = Path(directory)
@@ -378,7 +422,7 @@ def main():
                 test_fbx_import_and_placement(temp_dir)
                 test_tick_cancel(temp_dir)
             if "--stress" in sys.argv:
-                run_stress()
+                run_stress(temp_dir)
         print("CSVMI_V3_TESTS_OK")
     finally:
         csvmi.unregister()

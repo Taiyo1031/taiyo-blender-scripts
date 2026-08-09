@@ -1,6 +1,6 @@
 # CSV Mesh Instancer
 
-Version 3.0.0
+Version 3.0.1
 
 CSVのTransformを読み込み、FBXのMesh datablockを共有するObjectを高速配置するBlender Extensionです。
 
@@ -19,6 +19,8 @@ UIと内部処理は次の3機能だけです。
 3. Placement
 
 Placementには、FBX用のUnit Scale `0.01`、Local X Rotation `90°`、`.001`サフィックス照合、高速な一意Object名、複数tick処理、進捗、ETA、キャンセルを含みます。
+
+FBX SourceとCSV Outputには、Collection全体を高速に切り替える`Show` / `Hide`ボタンがあります。Objectを1件ずつ走査しません。
 
 Stable ID、Change Review、属性フィルター、Custom Property転送、削除IDのEmpty化、Restore、属性別Collection、管理Collection一覧、実体化はありません。
 

@@ -48,7 +48,7 @@ props.csv_path = str(csv_path)
 assert bpy.ops.csvmi.import_csv('EXEC_DEFAULT') == {'FINISHED'}
 props.fbx_path = str(Path(tempfile.gettempdir()) / "source.fbx")
 props.output_collection_name = "CSV_UI_Output"
-props.status = "Simple v3 UI: CSV, FBX, Placement only."
+props.status = "Simple v3 UI with fast FBX and CSV Output visibility."
 
 
 if "--ui-place" in sys.argv:

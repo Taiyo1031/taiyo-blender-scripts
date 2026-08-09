@@ -1,7 +1,7 @@
 bl_info = {
     "name": "CSV Mesh Instancer",
     "author": "Taiyo",
-    "version": (3, 0, 0),
+    "version": (3, 0, 1),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar(N) > CSV Instancer",
     "description": "Import CSV and FBX files and place linked mesh objects quickly.",
@@ -263,6 +263,61 @@ def hide_source_collection(scene, collection):
     collection.hide_viewport = True
     collection.hide_render = True
     return excluded
+
+
+def collection_is_visible(scene, collection):
+    if collection is None or collection.hide_viewport or collection.hide_render:
+        return False
+    found_in_view_layer = False
+    for view_layer in scene.view_layers:
+        layer = find_layer_collection(view_layer.layer_collection, collection)
+        if layer is None:
+            continue
+        found_in_view_layer = True
+        if not layer.exclude and not layer.hide_viewport:
+            return True
+    return not found_in_view_layer
+
+
+def set_collection_visibility(scene, collection, visible):
+    """Toggle a whole Collection without iterating through its Objects."""
+    if visible:
+        collection.hide_viewport = False
+        collection.hide_render = False
+        for view_layer in scene.view_layers:
+            layer = find_layer_collection(view_layer.layer_collection, collection)
+            if layer is not None:
+                layer.exclude = False
+                layer.hide_viewport = False
+    else:
+        collection.hide_viewport = True
+        collection.hide_render = True
+        # Re-exclude the whole Collection so a later Placement does not evaluate
+        # every hidden Object. This remains O(View Layer count), never O(Object count).
+        for view_layer in scene.view_layers:
+            layer = find_layer_collection(view_layer.layer_collection, collection)
+            if layer is not None:
+                layer.exclude = True
+    tag_view3d_redraw()
+
+
+def managed_output_collection(props):
+    collection = props.output_collection
+    if (
+        collection is not None
+        and collection.name in bpy.data.collections
+        and bool(collection.get(OUTPUT_MANAGED_KEY, False))
+        and int(collection.get(OUTPUT_VERSION_KEY, 0)) == OUTPUT_VERSION
+    ):
+        return collection
+    collection = bpy.data.collections.get(props.output_collection_name.strip())
+    if (
+        collection is not None
+        and bool(collection.get(OUTPUT_MANAGED_KEY, False))
+        and int(collection.get(OUTPUT_VERSION_KEY, 0)) == OUTPUT_VERSION
+    ):
+        return collection
+    return None
 
 
 def remove_collection_objects(collection):
@@ -539,6 +594,7 @@ class PlacementTask:
         self.staging.name = self.props.output_collection_name.strip()
         self.staging.hide_viewport = True
         self.staging.hide_render = True
+        self.props.output_collection = self.staging
         cleanup_previous_meshes()
         elapsed = time.perf_counter() - self.started_at
         self.props.generated_count = self.generated_count
@@ -620,6 +676,7 @@ class CSVMI_Props(PropertyGroup):
     fbx_collection_name: StringProperty(name="Source Collection", default="CSVMI_FBX_Source")
     fbx_collection: PointerProperty(type=bpy.types.Collection)
     output_collection_name: StringProperty(name="Output Collection", default="CSV_Output")
+    output_collection: PointerProperty(type=bpy.types.Collection)
     ignore_numeric_suffix: BoolProperty(name="Ignore .001 Suffixes", default=False)
     apply_fbx_correction: BoolProperty(name="Apply FBX Correction", default=True)
     fbx_unit_scale: FloatProperty(
@@ -953,6 +1010,46 @@ class CSVMI_OT_cancel(Operator):
         return {'FINISHED'}
 
 
+class CSVMI_OT_set_collection_visibility(Operator):
+    bl_idname = "csvmi.set_collection_visibility"
+    bl_label = "Set Collection Visibility"
+    bl_description = "Show or hide the complete Collection without iterating through its Objects"
+    bl_options = {'REGISTER'}
+
+    target: StringProperty(options={'HIDDEN'})
+    visible: BoolProperty(options={'HIDDEN'})
+
+    @classmethod
+    def poll(cls, context):
+        props = getattr(context.scene, "csvmi_props", None)
+        return props is not None and not props.busy
+
+    def execute(self, context):
+        props = context.scene.csvmi_props
+        if self.target == 'FBX':
+            collection = props.fbx_collection
+            valid = (
+                collection is not None
+                and collection.name in bpy.data.collections
+                and bool(collection.get(FBX_MANAGED_KEY, False))
+            )
+            label = "FBX Source"
+        elif self.target == 'OUTPUT':
+            collection = managed_output_collection(props)
+            valid = collection is not None
+            label = "CSV Output"
+        else:
+            collection = None
+            valid = False
+            label = "Collection"
+        if not valid:
+            self.report({'ERROR'}, f"{label} Collection was not found.")
+            return {'CANCELLED'}
+        set_collection_visibility(context.scene, collection, self.visible)
+        props.status = f"{label} {'shown' if self.visible else 'hidden'}."
+        return {'FINISHED'}
+
+
 class CSVMI_PT_panel(Panel):
     bl_label = "CSV Mesh Instancer"
     bl_idname = "CSVMI_PT_panel"
@@ -996,6 +1093,14 @@ class CSVMI_PT_panel(Panel):
                 text=f"{int(props.fbx_mesh_count):,} Mesh objects loaded",
                 icon='CHECKMARK',
             )
+            fbx_visible = collection_is_visible(context.scene, props.fbx_collection)
+            operator = fbx_box.operator(
+                "csvmi.set_collection_visibility",
+                text="Hide FBX Source" if fbx_visible else "Show FBX Source",
+                icon='HIDE_ON' if fbx_visible else 'HIDE_OFF',
+            )
+            operator.target = 'FBX'
+            operator.visible = not fbx_visible
 
         place_box = layout.box()
         place_box.label(text="3. Placement", icon='OUTLINER_COLLECTION')
@@ -1008,6 +1113,16 @@ class CSVMI_PT_panel(Panel):
             correction.prop(props, "fbx_rotation_x")
         place_box.prop(props, "use_multi_tick")
         place_box.operator("csvmi.place", icon='PLAY')
+        output = managed_output_collection(props)
+        if output is not None:
+            output_visible = collection_is_visible(context.scene, output)
+            operator = place_box.operator(
+                "csvmi.set_collection_visibility",
+                text="Hide CSV Output" if output_visible else "Show CSV Output",
+                icon='HIDE_ON' if output_visible else 'HIDE_OFF',
+            )
+            operator.target = 'OUTPUT'
+            operator.visible = not output_visible
 
         if props.status and props.status != "Ready":
             status = layout.box()
@@ -1028,6 +1143,7 @@ CLASSES = (
     CSVMI_OT_import_fbx,
     CSVMI_OT_place,
     CSVMI_OT_cancel,
+    CSVMI_OT_set_collection_visibility,
     CSVMI_PT_panel,
 )
 
