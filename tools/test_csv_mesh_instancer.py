@@ -327,6 +327,38 @@ def test_tick_cancel(temp_dir):
     print(f"[PASS] bounded cancellation first_tick={first_tick * 1000:.1f}ms")
 
 
+def test_blender_style_output_names(temp_dir):
+    print("[TEST] Blender-style output Object names")
+    reset_data()
+    make_source(["Piece"])
+    csv_path = temp_dir / "names.csv"
+    write_csv(
+        csv_path,
+        [
+            ("Piece", 0, 0, 0, 0, 0, 0, 1, 1, 1),
+            ("Piece", 1, 0, 0, 0, 0, 0, 1, 1, 1),
+        ],
+    )
+    import_csv(csv_path)
+    props = bpy.context.scene.csvmi_props
+    props.output_collection_name = "Name_Output"
+    check(bpy.ops.csvmi.place('EXEC_DEFAULT') == {'FINISHED'}, "Name placement failed")
+    output = bpy.data.collections["Name_Output"]
+    check(
+        {obj.name for obj in output.objects} == {"Piece.001", "Piece.002"},
+        f"Unexpected Blender-style names: {[obj.name for obj in output.objects]}",
+    )
+
+    for index, obj in enumerate(output.objects):
+        obj.name = f"{index + 2:06d}_Piece"
+    check(bpy.ops.csvmi.place('EXEC_DEFAULT') == {'FINISHED'}, "Name migration failed")
+    check(
+        {obj.name for obj in output.objects} == {"Piece.001", "Piece.002"},
+        "Number-prefixed names were not migrated",
+    )
+    print("[PASS] Blender-style output Object names")
+
+
 def run_stress(temp_dir):
     stress_csv = REAL_CSV
     source_label = "actual"
@@ -421,6 +453,7 @@ def main():
                 test_csv_import(temp_dir)
                 test_fbx_import_and_placement(temp_dir)
                 test_tick_cancel(temp_dir)
+                test_blender_style_output_names(temp_dir)
             if "--stress" in sys.argv:
                 run_stress(temp_dir)
         print("CSVMI_V3_TESTS_OK")

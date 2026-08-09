@@ -69,6 +69,7 @@ compatibility_archives=(
   "csv_mesh_instancer-2.0.0.zip"
   "csv_mesh_instancer-2.0.1.zip"
   "csv_mesh_instancer-3.0.0.zip"
+  "csv_mesh_instancer-3.0.1.zip"
   "laid_collection_instance_linker-1.0.0.zip"
   "laid_collection_instance_linker-1.0.1.zip"
   "modular_asset_renamer-1.0.0.zip"

@@ -1,6 +1,6 @@
 # CSV Mesh Instancer 使用書
 
-Version 3.0.1
+Version 3.0.2
 
 ## 1. 概要
 
@@ -40,7 +40,8 @@ FBX内のMesh Objectを専用のSource Collectionへ読み込みます。Source 
 - Unit Scale既定`0.01`
 - Local X Rotation既定`90°`。BlenderのローカルX回転に相当
 - `Ignore .001 Suffixes`では末尾の`.数字3桁以上`だけを無視
-- Object名に`CSV_`は付けず、`CSV物理行_objname`形式を使用。行番号を先頭に置いてBlender内部の名前比較を高速化し、Mesh datablock名はFBXの元名をそのまま維持
+- Object名はCSVの`objname`を使用。同名の場合はBlender標準の`.001`、`.002`を末尾に付け、`000012_`のようなCSV行番号や`CSV_`を先頭に付けない
+- Mesh datablock名はFBXの元名をそのまま維持
 - 同名のVersion 3出力は全置換
 - 通常Collectionや旧Version出力は上書きしない
 - 大量ObjectのViewport再評価を避けるため、完成した出力CollectionはViewportとRenderで非表示
@@ -50,7 +51,11 @@ FBX内のMesh Objectを専用のSource Collectionへ読み込みます。Source 
 
 `Split Across Multiple Ticks`は既定ONです。大量配置を約12ms単位に分け、進捗とETAを低頻度で更新します。初回生成中のCancelでは新しい仮出力だけを削除します。再配置ではメモリを二重使用しないよう旧Objectを再利用するため、処理開始後はCancelを無効化します。OFFでは同じ処理を一括実行します。
 
-60,474行・1,225種類の実CSVを使ったBlender 4.5.9負荷試験では、CSV Import 0.29秒、初回Placement 2.05秒、再Placement 0.47秒を確認しています。環境やデータ構成で時間は変わります。
+旧出力が行番号付き名の場合やCSVの並びが変わった場合は、衝突を避けるため旧Objectを一時名へ退避してから末尾サフィックス形式へ変更します。このリネームも複数tickへ分割します。
+
+末尾サフィックス命名時のBlender内部比較を抑えるため、配置順は`objname → CSV物理行`で安定ソートします。配置結果のTransformと件数は変わりません。
+
+60,474行・1,225種類の合成CSVを使ったBlender 4.5.9負荷試験では、CSV Import 0.24秒、初回Placement 4.22秒、再Placement 4.82秒、Show/Hide 0.075秒を確認しています。環境やデータ構成で時間は変わります。
 
 ## 5. Version 3で削除した機能
 

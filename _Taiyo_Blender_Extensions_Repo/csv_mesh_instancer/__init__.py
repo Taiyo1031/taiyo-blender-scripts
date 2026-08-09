@@ -1,7 +1,7 @@
 bl_info = {
     "name": "CSV Mesh Instancer",
     "author": "Taiyo",
-    "version": (3, 0, 1),
+    "version": (3, 0, 2),
     "blender": (4, 5, 9),
     "location": "View3D > Sidebar(N) > CSV Instancer",
     "description": "Import CSV and FBX files and place linked mesh objects quickly.",
@@ -161,6 +161,41 @@ def csv_cache_is_stale(cache):
 
 def strip_numeric_suffix(name):
     return NUMERIC_SUFFIX_RE.sub("", name)
+
+
+class BlenderObjectNameAllocator:
+    """Reserve deterministic Blender-style names without querying bpy per row."""
+
+    def __init__(self, used_names):
+        self.used_names = set(used_names)
+        self.next_suffix = {}
+
+    def reserve(self, requested_name):
+        if requested_name not in self.used_names:
+            self.used_names.add(requested_name)
+            return requested_name
+        match = NUMERIC_SUFFIX_RE.search(requested_name)
+        if match is None:
+            stem = requested_name
+            suffix = 1
+        else:
+            stem = requested_name[:match.start()]
+            suffix = int(match.group()[1:]) + 1
+        suffix = max(suffix, self.next_suffix.get(stem, suffix))
+        while True:
+            candidate = f"{stem}.{suffix:03d}"
+            suffix += 1
+            if candidate not in self.used_names:
+                self.used_names.add(candidate)
+                self.next_suffix[stem] = suffix
+                return candidate
+
+
+def generated_object_name_allocator(output_collection):
+    output_objects = set(output_collection.objects) if output_collection else set()
+    return BlenderObjectNameAllocator(
+        obj.name for obj in bpy.data.objects if obj not in output_objects
+    )
 
 
 def source_object_name(obj):
@@ -481,6 +516,7 @@ class PlacementTask:
         self.scene = scene
         self.props = scene.csvmi_props
         self.cache = cache
+        self.rows = tuple(sorted(cache.rows, key=lambda row: (row[0], row[10])))
         self.source_collection = source_collection
         self.old_output = old_output
         self.source_objects, self.exact, self.normalized = build_source_index(
@@ -503,14 +539,35 @@ class PlacementTask:
             resolve_source(
                 row[0], self.exact, self.normalized, self.props.ignore_numeric_suffix
             )
-            for row in cache.rows
+            for row in self.rows
         )
-        self.rows_index = 0
         self.old_objects = list(old_output.objects) if old_output is not None else []
+        name_allocator = generated_object_name_allocator(old_output)
+        self.desired_names = tuple(
+            name_allocator.reserve(row[0]) if source is not None else None
+            for row, source in zip(self.rows, self.resolved)
+        )
+        expected_names = tuple(name for name in self.desired_names if name is not None)
+        expected_name_set = set(expected_names)
+        reused_count = min(len(self.old_objects), len(expected_names))
+        needs_name_staging = self.replacing and (
+            any(
+                self.old_objects[index].name != expected_names[index]
+                for index in range(reused_count)
+            )
+            or any(
+                obj.name in expected_name_set
+                for obj in self.old_objects[reused_count:]
+            )
+        )
+        self.names_staged = bool(needs_name_staging)
+        self.rename_index = 0
+        self.rename_token = time.time_ns()
+        self.rows_index = 0
         self.reuse_index = 0
         self.remove_index = len(self.old_objects)
         self.remove_chunk_size = 1024
-        self.phase = 'GENERATE'
+        self.phase = 'RENAME' if needs_name_staging else 'GENERATE'
         self.started_at = time.perf_counter()
         self.last_ui_at = 0.0
         self.generated_count = 0
@@ -521,8 +578,9 @@ class PlacementTask:
         removable_count = max(0, len(self.old_objects) - valid_count)
         self.total_units = max(
             1,
-            len(cache.rows)
-            + removable_count,
+            len(self.rows)
+            + removable_count
+            + (len(self.old_objects) if needs_name_staging else 0),
         )
         self.done = False
         self.cancelled = False
@@ -544,6 +602,7 @@ class PlacementTask:
             else:
                 self.props.eta = f"Remaining: ~{math.ceil(seconds / 60)}m"
         phase_labels = {
+            'RENAME': "Preparing Blender-style names",
             'GENERATE': "Placing objects",
             'REMOVE': "Removing unused objects",
             'FINALIZE': "Finishing placement",
@@ -551,26 +610,39 @@ class PlacementTask:
         self.props.phase = phase_labels.get(self.phase, "Placement")
         tag_view3d_redraw()
 
+    def stage_old_name(self):
+        obj = self.old_objects[self.rename_index]
+        obj.name = f"__CSVMI_NAME_{self.rename_token}_{self.rename_index:06d}"
+        self.rename_index += 1
+        self.completed_units += 1
+
     def generate_one(self):
-        row = self.cache.rows[self.rows_index]
+        row = self.rows[self.rows_index]
         source = self.resolved[self.rows_index]
+        object_name = self.desired_names[self.rows_index]
         self.rows_index += 1
         if source is None:
             self.missing_count += 1
             if len(self.missing_names) < 20:
                 self.missing_names.add(row[0])
         else:
-            object_name = f"{row[10]:06d}_{row[0]}"
             if self.reuse_index < len(self.old_objects):
                 obj = self.old_objects[self.reuse_index]
                 self.reuse_index += 1
-                if obj.name != object_name:
-                    obj.name = object_name
+                if self.names_staged:
+                    obj.name = row[0]
                 obj.data = source.data
             else:
-                obj = bpy.data.objects.new(object_name, source.data)
+                # Give Blender only the requested base name. Its internal naming
+                # path assigns .001/.002 much faster than requesting every numbered
+                # suffix explicitly once tens of thousands of Objects exist.
+                obj = bpy.data.objects.new(row[0], source.data)
                 self.staging.objects.link(obj)
                 self.created.append(obj)
+            if obj.name != object_name:
+                raise RuntimeError(
+                    f"Could not assign Object name '{object_name}'; got '{obj.name}'."
+                )
             apply_csv_transform(obj, row, self.props)
             self.generated_count += 1
         self.completed_units += 1
@@ -643,8 +715,16 @@ class PlacementTask:
             self.abort()
             return True
         deadline = None if time_budget is None else time.perf_counter() + time_budget
+        if self.phase == 'RENAME':
+            while self.rename_index < len(self.old_objects):
+                self.stage_old_name()
+                if deadline is not None and time.perf_counter() >= deadline:
+                    self.update_ui()
+                    return False
+            self.phase = 'GENERATE'
+            self.update_ui(force=True)
         if self.phase == 'GENERATE':
-            while self.rows_index < len(self.cache.rows):
+            while self.rows_index < len(self.rows):
                 self.generate_one()
                 if deadline is not None and time.perf_counter() >= deadline:
                     self.update_ui()
