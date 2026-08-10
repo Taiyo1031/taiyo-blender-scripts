@@ -88,6 +88,7 @@ compatibility_archives=(
   "unreal_bridge_tools-2.2.16.zip"
   "unreal_bridge_tools-2.2.17.zip"
   "unreal_bridge_tools-2.2.18.zip"
+  "unreal_bridge_tools-2.2.19.zip"
   "vertex_color_material_painter-1.0.0.zip"
   "vertex_color_material_painter-1.0.1.zip"
   "vertex_color_material_painter-1.0.2.zip"

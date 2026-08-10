@@ -2,6 +2,7 @@ import csv
 import importlib.util
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import bpy
@@ -56,6 +57,7 @@ def bind_operator_methods(addon, harness_type):
         "_eta_seconds",
         "_update_progress",
         "_try_restart_to_temp",
+        "_release_export_snapshot",
         "_finish",
     ):
         setattr(harness_type, name, getattr(addon.UBT_OT_ExportCSV, name))
@@ -67,6 +69,11 @@ def main():
     temp_dir = Path(tempfile.mkdtemp(prefix="ubt-test-"))
     addon.preset_utils.USER_PRESET_PATH_OVERRIDE = str(temp_dir / "presets.json")
     try:
+        assert addon._format_eta(None) == "calculating..."
+        assert addon._format_eta(8) == "8s"
+        assert addon._format_eta(123) == "2m 03s"
+        assert addon._format_eta(3900) == "1h 05m"
+
         reset_scene()
         scene_root = bpy.context.scene.collection
         collection = bpy.data.collections.new("UBT_Test")
@@ -183,7 +190,7 @@ def main():
         ]
         assert len(rows) == 2, rows
         assert rows[1][10] == "KeepBox", rows[1]
-        assert rows[1][11] == "UBT_Test", rows[1]
+        assert rows[1][11] == keep.users_collection[0].name, rows[1]
 
         settings.filters.clear()
         hidden = new_mesh_object("HiddenBox", mesh, collection)
@@ -219,6 +226,8 @@ def main():
         assert operator._seconds_per_tick == addon.EXPORT_FAST_SECONDS_PER_TICK
         assert settings.export_running is True
         assert settings.export_total == len(collection.objects), settings.export_total
+        assert settings.export_eta == "calculating..."
+        assert "Remaining: calculating..." in settings.export_status
         initial_batch = operator._items_per_tick
         for _ in range(8):
             has_more = operator._process_tick(bpy.context)
@@ -236,6 +245,8 @@ def main():
         assert settings.export_progress == 1.0
         assert settings.export_status.startswith("Exported ")
         assert operator._row_buffer == []
+        assert operator._objects_snapshot == ()
+        assert operator._collection_name_by_pointer == {}
         with open(settings.export_path, newline="", encoding="utf-8") as handle:
             rows = list(csv.reader(handle))
         assert len(rows) == len(collection.objects) + 1, len(rows)
@@ -252,6 +263,114 @@ def main():
         assert settings.export_items_per_second > 0.0
 
         assert keep.name in bpy.data.objects
+
+        # Collection-name caching must preserve Object.users_collection[0]
+        # for recursive, multi-linked, and scene-root objects.
+        reset_scene()
+        scene_root = bpy.context.scene.collection
+        primary = bpy.data.collections.new("UBT_Primary")
+        child = bpy.data.collections.new("UBT_Child")
+        secondary = bpy.data.collections.new("UBT_Secondary")
+        scene_root.children.link(primary)
+        scene_root.children.link(secondary)
+        primary.children.link(child)
+
+        shared = bpy.data.objects.new("SharedObject", None)
+        primary.objects.link(shared)
+        secondary.objects.link(shared)
+        child_only = bpy.data.objects.new("ChildOnly", None)
+        child.objects.link(child_only)
+        root_only = bpy.data.objects.new("RootOnly", None)
+        scene_root.objects.link(root_only)
+
+        expected_collection_names = {
+            obj.name: obj.users_collection[0].name
+            for obj in (shared, child_only, root_only)
+        }
+        cached_collection_names = addon._build_first_collection_name_map(
+            (shared, child_only, root_only),
+        )
+        for obj in (shared, child_only, root_only):
+            assert (
+                cached_collection_names[obj.as_pointer()]
+                == expected_collection_names[obj.name]
+            )
+
+        settings = bpy.context.scene.ubt_props
+        settings.filters.clear()
+        settings.collection = primary
+        settings.scope = "recursive"
+        settings.select_visible_only = False
+        settings.case_sensitive = False
+        settings.name_mode = "keep_raw"
+        settings.export_mode = "fast_locked"
+        settings.export_path = str(temp_dir / "ubt_recursive_export_test.csv")
+        result = bpy.ops.ubt.export_csv()
+        assert result == {"FINISHED"}, result
+        with open(settings.export_path, newline="", encoding="utf-8") as handle:
+            rows = list(csv.reader(handle))
+        rows_by_name = {row[10]: row for row in rows[1:]}
+        assert set(rows_by_name) == {"SharedObject", "ChildOnly"}, rows
+        assert rows_by_name["SharedObject"][11] == expected_collection_names["SharedObject"]
+        assert rows_by_name["ChildOnly"][11] == expected_collection_names["ChildOnly"]
+
+        settings.scope = "all"
+        settings.collection = None
+        settings.export_path = str(temp_dir / "ubt_all_export_test.csv")
+        result = bpy.ops.ubt.export_csv()
+        assert result == {"FINISHED"}, result
+        with open(settings.export_path, newline="", encoding="utf-8") as handle:
+            rows = list(csv.reader(handle))
+        rows_by_name = {row[10]: row for row in rows[1:]}
+        assert set(rows_by_name) == {"SharedObject", "ChildOnly", "RootOnly"}, rows
+        assert rows_by_name["RootOnly"][11] == expected_collection_names["RootOnly"]
+
+        # Regression benchmark for the former quadratic users_collection lookup.
+        reset_scene()
+        scene_root = bpy.context.scene.collection
+        performance_collection = bpy.data.collections.new("UBT_Performance")
+        scene_root.children.link(performance_collection)
+        performance_count = 60_000
+        for index in range(performance_count):
+            obj = bpy.data.objects.new(f"Performance_{index:05d}", None)
+            obj.location = (index % 300, index // 300, index % 7)
+            performance_collection.objects.link(obj)
+
+        settings = bpy.context.scene.ubt_props
+        settings.filters.clear()
+        settings.collection = performance_collection
+        settings.scope = "direct"
+        settings.select_visible_only = True
+        settings.case_sensitive = False
+        settings.name_mode = "keep_raw"
+        settings.export_mode = "fast_locked"
+        settings.export_path = str(temp_dir / "ubt_performance_60k.csv")
+        started = time.perf_counter()
+        result = bpy.ops.ubt.export_csv()
+        elapsed = time.perf_counter() - started
+        assert result == {"FINISHED"}, result
+        assert elapsed < 15.0, f"60k export took {elapsed:.3f}s"
+        with open(settings.export_path, newline="", encoding="utf-8") as handle:
+            reader = csv.reader(handle)
+            header = next(reader)
+            row_count = 0
+            first_row = None
+            last_row = None
+            for row in reader:
+                if first_row is None:
+                    first_row = row
+                last_row = row
+                row_count += 1
+        assert header[10:] == ["objname", "colname"], header
+        assert row_count == performance_count, row_count
+        assert first_row[0] == "1", first_row
+        assert last_row[0] == str(performance_count), last_row
+        assert first_row[11] == performance_collection.name, first_row
+        assert last_row[11] == performance_collection.name, last_row
+        print(
+            f"Unreal Bridge Tools 60k benchmark: {elapsed:.3f}s "
+            f"({performance_count / elapsed:.0f} objects/s)"
+        )
         print("Unreal Bridge Tools integration test passed")
     finally:
         addon.preset_utils.USER_PRESET_PATH_OVERRIDE = None

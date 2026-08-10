@@ -1,5 +1,7 @@
 # Unreal Bridge Tools 使用書
 
+**対象version: 2.2.20**
+
 ## 1. このアドオンの目的
 
 **Unreal Bridge Tools** は、Blenderで配置したオブジェクトのTransform情報をCSVに書き出し、Unreal Engine側のPCGや配置処理へ渡しやすくするための補助アドオンです。
@@ -22,7 +24,7 @@
 1. Blenderを開く
 2. `Edit > Preferences > Add-ons` を開く
 3. `Install...` を押す
-4. `unreal_bridge_tools-2.2.19.zip` を選択
+4. `unreal_bridge_tools-2.2.20.zip` を選択
 5. Add-on一覧で **Unreal Bridge Tools** を有効化
 6. 3D Viewの右側サイドバーを開く
 7. `Unreal Bridge Tools` タブを開く
@@ -70,7 +72,9 @@ CSVの保存先です。拡張子が `.csv` でない場合は自動的に `.csv
 
 書き出し処理は大量オブジェクトでも進捗が見えるようにtimer tickごとに分割して実行されます。標準の `Fast Locked` は60,000個以上の書き出し向けで、Blender操作をほぼ止め、1tickあたりの処理量を大きくして高速化します。`Responsive` は従来寄りに操作を通しながら小さめのchunkで処理します。
 
-進捗率、残り時間、書き出し件数、処理速度はNパネルのゲージとBlender下部のステータスバーに表示されます。
+進捗率、残り時間、書き出し件数、処理速度はNパネルのゲージとBlender下部のステータスバーに表示されます。残り時間は `Remaining: 2m 03s` の形式で、計算前は `Remaining: calculating...` と表示されます。
+
+書き出し対象と最初の所属Collection名は開始時に一度だけ取得されます。各オブジェクトから所属Collectionを繰り返し全探索しないため、60,000個規模でも処理時間が二乗で増えません。
 
 ### Test Write
 

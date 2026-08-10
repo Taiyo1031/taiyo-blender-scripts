@@ -8,7 +8,7 @@ Blender上のオブジェクトTransform情報とCollection情報をCSVへ書き
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar (N) > Unreal Bridge Tools`
-- バージョン: `2.2.19`
+- バージョン: `2.2.20`
 - 対応Blender目安: `4.2.0` 以降
 - カテゴリ: `Import-Export`
 
@@ -34,7 +34,7 @@ Blender上のオブジェクトTransform情報とCollection情報をCSVへ書き
 - `Name Normalize`: 生名維持、数値サフィックス除去、ドット以降削除
 - `Test Write`: CSV保存先への書き込み可否を確認
 - `Export Mode`: 60,000個以上向けの `Fast Locked` と、従来寄りに操作を通す `Responsive` を切り替え
-- `Export CSV`: 大量オブジェクト時は `Fast Locked` を標準として、Blender操作をほぼ止めながら大きなchunkで書き出し。Nパネルのゲージ、進捗率、残り時間、処理速度を表示
+- `Export CSV`: 大量オブジェクト時は `Fast Locked` を標準として、所属Collectionを一度だけキャッシュし、大きなchunkで書き出し。Nパネルのゲージ、進捗率、残り時間、処理速度を表示
 
 ## 出力CSV
 出力列は以下です。
@@ -50,7 +50,8 @@ id, tx, ty, tz, rx, ry, rz, sx, sy, sz, objname, colname
 - `Scope` が `All Collections` 以外の場合は `Target Collection` の指定が必要です。
 - 保存先フォルダを作れない場合は、一時フォルダへフォールバックします。
 - プリセットはBlenderのユーザー設定領域に保存され、Extension更新後も維持されます。
-- 書き出し中の進捗率と残り時間はNパネルのゲージとBlender下部のステータスバーに表示され、`Esc` で中断できます。
+- 書き出し中の進捗率と残り時間は、`Remaining: 2m 03s` の形式でNパネルのゲージとBlender下部のステータスバーに表示され、`Esc` で中断できます。
+- オブジェクトの所属Collectionは書き出し開始時に一度だけ取得するため、オブジェクト数に応じて処理時間が二乗で増える問題を解消しています。
 - 高速化のために全オブジェクトを自動で非表示にはしません。非表示化はCSV対象を変える危険があり、60,000個規模では非表示変更そのものも重くなります。
 - Blender Pythonのデータアクセスは基本的にメインスレッド中心です。マルチスレッド化ではなく、UI割り込みとファイル書き込み回数を減らして高速化しています。
 - 大量の書き出し前に `.blend` を保存しておくと安心です。

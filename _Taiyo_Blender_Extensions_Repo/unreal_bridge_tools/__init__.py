@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Unreal Bridge Tools",
     "author": "Overnight Artelier",
-    "version": (2, 2, 19),
+    "version": (2, 2, 20),
     "blender": (4, 2, 0),
     "location": "3D Viewport > N Panel > Unreal Bridge Tools",
     "description": "Export transforms & collision tags from Blender to CSV for Unreal Engine PCG pipeline.",
@@ -145,26 +145,31 @@ def compiled_name_filters_pass(name, includes, excludes, case_sensitive=False):
         return False
     return True
 
-def _count_collection_objects(coll, recursive=True):
-    seen = set()
-    stack = [coll]
-    while stack:
-        current = stack.pop()
-        for ob in current.objects:
-            if ob.name not in seen:
-                seen.add(ob.name)
-        if recursive:
-            stack.extend(current.children)
-    return len(seen)
+def _build_first_collection_name_map(objects):
+    """Cache Object.users_collection[0] without its per-object global scan."""
+    target_pointers = {ob.as_pointer() for ob in objects}
+    if not target_pointers:
+        return {}
 
-def _estimate_object_count(context, scope, collection):
-    if scope == 'all':
-        return len(context.view_layer.objects)
-    if collection is None:
-        return 0
-    if scope == 'direct':
-        return len(collection.objects)
-    return _count_collection_objects(collection, recursive=True)
+    collection_names = {}
+
+    def record_collection(collection):
+        collection_name = collection.name
+        for ob in collection.objects:
+            pointer = ob.as_pointer()
+            if pointer in target_pointers:
+                collection_names.setdefault(pointer, collection_name)
+        return len(collection_names) == len(target_pointers)
+
+    # Match bpy.types.Object.users_collection ordering: data collections first,
+    # then each scene's master collection.
+    for collection in bpy.data.collections:
+        if record_collection(collection):
+            return collection_names
+    for scene in bpy.data.scenes:
+        if record_collection(scene.collection):
+            break
+    return collection_names
 
 def _set_status_text(context, text=None):
     workspace = getattr(context, "workspace", None)
@@ -197,7 +202,7 @@ def _clamp_int(value, minimum, maximum):
 
 def _format_eta(seconds):
     if seconds is None:
-        return "--"
+        return "calculating..."
     seconds = max(0, int(round(seconds)))
     if seconds >= 3600:
         hours, remainder = divmod(seconds, 3600)
@@ -346,7 +351,7 @@ class UBT_Props(PropertyGroup):
     export_processed: IntProperty(default=0, min=0)
     export_total: IntProperty(default=0, min=0)
     export_exported: IntProperty(default=0, min=0)
-    export_eta: StringProperty(default="--")
+    export_eta: StringProperty(default="calculating...")
     export_status: StringProperty(default="")
     export_items_per_second: FloatProperty(default=0.0, min=0.0)
 
@@ -768,7 +773,12 @@ class UBT_OT_ExportCSV(Operator):
             self._case_sensitive,
         )
         self._name_mode = p.name_mode
-        self._total = max(1, _estimate_object_count(context, self._scope, self._collection))
+        self._objects_snapshot = None
+        self._objects_snapshot = tuple(self._make_iterator(context))
+        self._total = len(self._objects_snapshot)
+        self._collection_name_by_pointer = _build_first_collection_name_map(
+            self._objects_snapshot,
+        )
         self._processed = 0
         self._exported = 0
         self._row_id = 1
@@ -779,7 +789,7 @@ class UBT_OT_ExportCSV(Operator):
         self._last_tick_seconds = 0.0
         self._using_temp = False
         self._original_error = ""
-        self._iterator = self._make_iterator(context)
+        self._iterator = iter(self._objects_snapshot)
         self._row_buffer = []
 
         export_path = bpy.path.abspath(_enforce_csv_ext(p.export_path or "//exports/TransformData.csv"))
@@ -801,6 +811,7 @@ class UBT_OT_ExportCSV(Operator):
                 self._open_export_file(fallback)
             except Exception as fallback_exc:
                 self._close_export_file()
+                self._release_export_snapshot()
                 self.report({'ERROR'}, f"Failed: {fallback_exc}")
                 return {'CANCELLED'}
 
@@ -811,14 +822,17 @@ class UBT_OT_ExportCSV(Operator):
         p.export_processed = 0
         p.export_total = self._total
         p.export_exported = 0
-        p.export_eta = "--"
+        p.export_eta = "calculating..."
         p.export_items_per_second = 0.0
         p.export_status = "Starting Unreal Bridge export..."
-        context.window_manager.progress_begin(0, self._total)
+        context.window_manager.progress_begin(0, max(1, self._total))
         self._update_progress(context, force=True)
         return None
 
     def _make_iterator(self, context):
+        snapshot = getattr(self, "_objects_snapshot", None)
+        if snapshot is not None:
+            return iter(snapshot)
         if self._scope == 'all':
             return _iter_all_scene_objects(context)
         return _iter_collection_objects(
@@ -903,7 +917,7 @@ class UBT_OT_ExportCSV(Operator):
         rot = m.to_euler('XYZ')
         scl = m.to_scale()
         objname = self._resolve_name(ob.name)
-        colname = ob.users_collection[0].name if ob.users_collection else ""
+        colname = self._collection_name_by_pointer.get(ob.as_pointer(), "")
         self._queue_export_row([
             self._row_id,
             round(loc.x, 6), round(loc.y, 6), round(loc.z, 6),
@@ -993,14 +1007,14 @@ class UBT_OT_ExportCSV(Operator):
         p.export_eta = eta
         p.export_items_per_second = max(0.0, self._items_per_second)
         p.export_status = (
-            f"{percent:.1f}% | ETA {eta} | "
+            f"{percent:.1f}% | Remaining: {eta} | "
             f"{self._processed}/{self._total} scanned, {self._exported} exported"
         )
         context.window_manager.progress_update(value)
         _set_status_text(
             context,
             (
-                f"Unreal Bridge Export: {percent:.1f}% | ETA {eta} | "
+                f"Unreal Bridge Export: {percent:.1f}% | Remaining: {eta} | "
                 f"{self._processed}/{self._total} scanned, {self._exported} exported | "
                 f"{self._items_per_tick}/tick | ESC cancels"
             ),
@@ -1012,7 +1026,7 @@ class UBT_OT_ExportCSV(Operator):
             return False
         self._using_temp = True
         self._original_error = str(exc)
-        self._iterator = self._make_iterator(context)
+        self._iterator = iter(self._objects_snapshot)
         self._processed = 0
         self._exported = 0
         self._row_id = 1
@@ -1028,6 +1042,11 @@ class UBT_OT_ExportCSV(Operator):
             return False
         self._update_progress(context, force=True)
         return True
+
+    def _release_export_snapshot(self):
+        self._iterator = None
+        self._objects_snapshot = ()
+        self._collection_name_by_pointer = {}
 
     def _finish(self, context, cancelled=False, error_message=""):
         global _EXPORT_RUNNING
@@ -1060,6 +1079,7 @@ class UBT_OT_ExportCSV(Operator):
         p = context.scene.ubt_props
         p.export_running = False
         p.export_cancel_requested = False
+        self._release_export_snapshot()
 
         if error_message:
             p.export_status = f"Failed: {error_message}"
@@ -1183,7 +1203,7 @@ class UBT_PT_Main(Panel):
                 )
                 box.label(
                     text=(
-                        f"ETA {p.export_eta} | "
+                        f"Remaining: {p.export_eta} | "
                         f"{p.export_items_per_second:.0f} objects/s | ESC cancels"
                     ),
                     icon="INFO",
