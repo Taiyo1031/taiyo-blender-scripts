@@ -16,6 +16,7 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 - `export_selected_names_csv`: Export Selected Object Names to CSV
 - `instance_name_fixer`: Instance Name Fixer
 - `laid_collection_instance_linker`: CW_Laid Collection Instance Linker
+- `hierarchy_restriction_manager`: Hierarchy Restriction Manager
 - `map_link_tools`: Map Link Tools
 - `mesh_attribute_batch_remover`: Mesh Attribute Batch Remover
 - `modular_asset_renamer`: Modular Asset Renamer

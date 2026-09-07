@@ -32,6 +32,7 @@ packages=(
   "custom_properties_batch_editor"
   "export_selected_names_csv"
   "gn_parameter_csv_exporter"
+  "hierarchy_restriction_manager"
   "instance_name_fixer"
   "laid_collection_instance_linker"
   "map_link_tools"

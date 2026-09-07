@@ -1,0 +1,15 @@
+schema_version = "1.0.0"
+id = "hierarchy_restriction_manager"
+version = "1.0.0"
+name = "Hierarchy Restriction Manager"
+tagline = "Manage and restore restrictions across Collection hierarchies"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.5.5"
+website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/hierarchy_restriction_manager/README.md"
+license = ["SPDX:GPL-3.0-or-later"]
+tags = ["Scene", "Object", "User Interface"]
+[permissions]
+files = "Save and load custom hierarchy presets in the user directory"
+[build]
+paths_exclude_pattern = ["__pycache__/", ".*", "*.zip"]

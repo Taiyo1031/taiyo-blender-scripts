@@ -27,24 +27,6 @@
     },
     {
       "schema_version": "1.0.0",
-      "id": "csv_mesh_instancer",
-      "name": "CSV Mesh Instancer",
-      "tagline": "Import CSV and FBX files and place linked meshes quickly",
-      "version": "3.0.2",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.5.9",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/csv_mesh_instancer/CSV_Mesh_Instancer_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./csv_mesh_instancer-3.0.2.zip",
-      "archive_size": 14433,
-      "archive_hash": "sha256:758d196e3bbf52072bc3228e80a620ca4e3d5342e6a7188339466bf4624781a9",
-      "taiyo_updated_at": 1786254701
-    },
-    {
-      "schema_version": "1.0.0",
       "id": "vertex_color_material_painter",
       "name": "Vertex Color Material Painter",
       "tagline": "Paint selected edit-mode faces with material ID colors",
@@ -204,24 +186,6 @@
     },
     {
       "schema_version": "1.0.0",
-      "id": "move_selected_to_own_collections",
-      "name": "Move Objects to Own Collections",
-      "tagline": "Move selected objects into matching child collections",
-      "version": "1.5.0",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.2.0",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/move_selected_to_own_collections/Move_Objects_to_Own_Collections_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./move_selected_to_own_collections-1.5.0.zip",
-      "archive_size": 5539,
-      "archive_hash": "sha256:f18b5a91ad9fc43f4f5abbbd620bce8bccec2af5c2f30ff4464efb49f22d3240",
-      "taiyo_updated_at": 1784368972
-    },
-    {
-      "schema_version": "1.0.0",
       "id": "unreal_bridge_tools",
       "name": "Unreal Bridge Tools",
       "tagline": "Export transforms and collision tags for Unreal Engine PCG",
@@ -237,6 +201,50 @@
       "archive_size": 17048,
       "archive_hash": "sha256:335dbd89dacd6ff39b5f8e96c3c1f82c8d961f849e66d377ed77ce55a322b166",
       "taiyo_updated_at": 1786343653
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "hierarchy_restriction_manager",
+      "name": "Hierarchy Restriction Manager",
+      "tagline": "Manage and restore restrictions across Collection hierarchies",
+      "version": "1.0.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.5",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/hierarchy_restriction_manager/README.md",
+      "permissions": {
+        "files": "Save and load custom hierarchy presets in the user directory"
+      },
+      "tags": [
+        "Scene",
+        "Object",
+        "User Interface"
+      ],
+      "archive_url": "./hierarchy_restriction_manager-1.0.0.zip",
+      "archive_size": 27836,
+      "archive_hash": "sha256:8f958ee1eedb0df7c0923b12eee8d9e2e7523ea2bc99055bb0e239d579d56b98",
+      "taiyo_updated_at": 1788773557
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "move_selected_to_own_collections",
+      "name": "Move Objects to Own Collections",
+      "tagline": "Move selected objects into matching child collections",
+      "version": "1.5.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/move_selected_to_own_collections/Move_Objects_to_Own_Collections_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./move_selected_to_own_collections-1.5.0.zip",
+      "archive_size": 5539,
+      "archive_hash": "sha256:f18b5a91ad9fc43f4f5abbbd620bce8bccec2af5c2f30ff4464efb49f22d3240",
+      "taiyo_updated_at": 1784368972
     },
     {
       "schema_version": "1.0.0",
@@ -260,6 +268,42 @@
       "archive_size": 15346,
       "archive_hash": "sha256:5a57ba9abd18a63e08d12947d55df6145f2e6f1494067b6048023653788e46fd",
       "taiyo_updated_at": 1780942705
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "csv_mesh_instancer",
+      "name": "CSV Mesh Instancer",
+      "tagline": "Import CSV and FBX files and place linked meshes quickly",
+      "version": "3.0.2",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.9",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/csv_mesh_instancer/CSV_Mesh_Instancer_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./csv_mesh_instancer-3.0.2.zip",
+      "archive_size": 14433,
+      "archive_hash": "sha256:758d196e3bbf52072bc3228e80a620ca4e3d5342e6a7188339466bf4624781a9",
+      "taiyo_updated_at": 1786254701
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "taiyo_extension_manager",
+      "name": "Taiyo Extension Manager",
+      "tagline": "Search, install, update, and uninstall Taiyo Extensions",
+      "version": "1.0.15",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
+      "archive_url": "./taiyo_extension_manager-1.0.15.zip",
+      "archive_size": 13289,
+      "archive_hash": "sha256:f6206b04c31cf27dd62d45bb123129ba565f3e9c018e192aa0b99863267d79ed",
+      "taiyo_updated_at": 1788773557
     },
     {
       "schema_version": "1.0.0",
@@ -304,20 +348,20 @@
     },
     {
       "schema_version": "1.0.0",
-      "id": "taiyo_extension_manager",
-      "name": "Taiyo Extension Manager",
-      "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.14",
+      "id": "mesh_attribute_batch_remover",
+      "name": "Mesh Attribute Batch Remover",
+      "tagline": "Remove one named mesh attribute from many objects",
+      "version": "1.0.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
-      "blender_version_min": "4.2.0",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.14.zip",
-      "archive_size": 13116,
-      "archive_hash": "sha256:aa48a8b39db2594f90b26ee37430c65fcf0deea0d77060ec141888727e80e7d0",
+      "blender_version_min": "4.5.9",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/mesh_attribute_batch_remover/README.md",
+      "archive_url": "./mesh_attribute_batch_remover-1.0.0.zip",
+      "archive_size": 5000,
+      "archive_hash": "sha256:f80a83120034d687d10bffdb18ec639c1a0ab99d3ca87303c0214390a0e5c1ba",
       "taiyo_updated_at": 1785256629
     },
     {
@@ -468,24 +512,6 @@
       "archive_size": 8721,
       "archive_hash": "sha256:a96e3446389e3173c4034aad555f3ea40a7888b6c29c0591b0f7b04efbef6238",
       "taiyo_updated_at": 1779596198
-    },
-    {
-      "schema_version": "1.0.0",
-      "id": "mesh_attribute_batch_remover",
-      "name": "Mesh Attribute Batch Remover",
-      "tagline": "Remove one named mesh attribute from many objects",
-      "version": "1.0.0",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.5.9",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/mesh_attribute_batch_remover/README.md",
-      "archive_url": "./mesh_attribute_batch_remover-1.0.0.zip",
-      "archive_size": 5000,
-      "archive_hash": "sha256:f80a83120034d687d10bffdb18ec639c1a0ab99d3ca87303c0214390a0e5c1ba",
-      "taiyo_updated_at": 1785256629
     }
   ]
 }

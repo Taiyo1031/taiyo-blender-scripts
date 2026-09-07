@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 14),
+    "version": (1, 0, 15),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -33,6 +33,10 @@ RELEASE_TIMESTAMP_KEY = "taiyo_updated_at"
 TAG_FILTER_SEPARATOR = "\n"
 
 TAG_ALIASES = {
+    "hierarchy_restriction_manager": (
+        "hierarchy", "collection", "visibility", "restriction", "render", "holdout",
+        "solo", "batch", "filter", "表示", "非表示", "階層", "選択", "一括", "コレクション", "制限",
+    ),
     "attribute_csv_exporter": (
         "attribute", "attributes", "csv", "data", "export", "mesh", "spreadsheet",
         "table", "属性", "書き出し", "メッシュ", "表",
@@ -146,6 +150,10 @@ TAG_ALIASES = {
 }
 
 DESCRIPTION_ALIASES = {
+    "hierarchy_restriction_manager": {
+        "ja": "Collection階層の表示・選択・レンダー制限を一括変更し、Soloや復元を行います。",
+        "en": "Apply, preview and restore visibility, selection and render restrictions across hierarchies.",
+    },
     "attribute_csv_exporter": {
         "ja": "選択メッシュの属性をCSVに書き出します。",
         "en": "Export selected mesh attributes to CSV.",

@@ -48,7 +48,7 @@ repo/
 
 このスクリプトは以下を行います。
 
-- 25個の Extensions パッケージを `blender --command extension validate` で検証
+- 26個の Extensions パッケージを `blender --command extension validate` で検証
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `blender --command extension server-generate --repo-dir docs/extensions --html` で `index.json` と `index.html` を生成
 
@@ -65,7 +65,7 @@ repo/
 ## 配布前チェック
 
 - `find . -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store'` で不要物を確認します。
-- `docs/extensions/index.json` の配布パッケージが25個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は25個より多くても問題ありません。
+- `docs/extensions/index.json` の配布パッケージが26個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は26個より多くても問題ありません。
 - `docs/extensions/index.json` と `docs/extensions/index.html` が生成されていることを確認します。
 - 可能ならBlenderのPreferencesからRemote Repositoryに `index.json` URLを追加して確認します。
 
@@ -88,3 +88,7 @@ repo/
 - Vertex Color Material Painterの統合テストは `blender --background --python tools/test_vertex_color_material_painter.py` で実行します。
 - Unreal Bridge Toolsの統合テストは `blender --background --python tools/test_unreal_bridge_tools.py` で実行します。
 - `tools/build_extensions.sh` はRepository index生成後に `tools/add_extension_update_metadata.py` を実行し、各packageの最終Git更新時刻を `taiyo_updated_at` として `docs/extensions/index.json` に追記します。マネージャーの `Recently Updated` はこの値を使います。
+
+- Hierarchy Restriction Managerの統合テストは `blender --background --factory-startup --python-exit-code 1 --python tools/test_hierarchy_restriction_manager.py`。UIでのUndo/Redo/Cancelは `tools/ui_test_hierarchy_restriction_manager.py`、負荷計測は `tools/benchmark_hierarchy_restriction_manager.py` を使います。
+- Blender 4.5のEventには `timer` 属性がありません。Modal処理は `event.type == "TIMER"` で進めます。Collectionのexclude/global hide_viewport変更ではObjectの一時hide状態が消えることがあるため、Cancel/Solo復元では直接書いた値以外の消失状態も補償します。
+- HRMはObject Modeでのみ制限変更を実行します。Blender 4.5のEdit Mode UndoではCollection/Object制限が戻らないことをUIテストで確認済みです。勝手なモード切替で回避しないでください。
