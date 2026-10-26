@@ -55,7 +55,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 
 このコマンドは以下を行います。
 
-- `_Taiyo_Blender_Extensions_Repo` 内の26個のパッケージを validate
+- `_Taiyo_Blender_Extensions_Repo` 内の27個のパッケージを validate
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `docs/extensions/index.json` と `docs/extensions/index.html` を生成
 
@@ -74,6 +74,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 | `gn_parameter_csv_exporter` | GN Parameter CSV Exporter | Geometry Nodes入力値をCSV化 |
 | `instance_name_fixer` | Instance Name Fixer | インスタンス名を整理 |
 | `laid_collection_instance_linker` | CW_Laid Collection Instance Linker | Laid_MAPを分割済みCollection Instanceで再構築 |
+| `zone_groups` | Taiyo Object Groups | 手動・空間グループ、複数所属、色分け、表示制御 |
 | `hierarchy_restriction_manager` | Hierarchy Restriction Manager | 階層の表示・選択・レンダー制限、Solo、復元 |
 | `map_link_tools` | Map Link Tools | リンク配置・共有Mesh・名前整理 |
 | `mesh_attribute_batch_remover` | Mesh Attribute Batch Remover | 指定したMesh Attributeを多数のObjectから一括削除 |
@@ -95,3 +96,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 GitHub Pagesは `main` ブランチの `/docs` から公開する想定です。
 
 Private repositoryでPagesが使えない場合は、BlenderからRemote Repositoryとして使える状態を優先してPublicへ切り替えます。
+
+### Taiyo Object Groups 1.0.0
+
+Blender 4.5.9以降の4.5 LTS向け。Collectionを増やさないManual／Volumeグループ、複数所属、色分け、表示制御に対応します。 [使用書](./_Taiyo_Blender_Extensions_Repo/zone_groups/README.md)

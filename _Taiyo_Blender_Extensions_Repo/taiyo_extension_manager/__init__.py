@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 15),
+    "version": (1, 0, 16),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -33,6 +33,7 @@ RELEASE_TIMESTAMP_KEY = "taiyo_updated_at"
 TAG_FILTER_SEPARATOR = "\n"
 
 TAG_ALIASES = {
+    "zone_groups": ("zone", "group", "volume", "color", "selection", "グループ", "範囲", "色分け", "複数所属", "表示"),
     "hierarchy_restriction_manager": (
         "hierarchy", "collection", "visibility", "restriction", "render", "holdout",
         "solo", "batch", "filter", "表示", "非表示", "階層", "選択", "一括", "コレクション", "制限",
@@ -150,6 +151,7 @@ TAG_ALIASES = {
 }
 
 DESCRIPTION_ALIASES = {
+    "zone_groups": {"ja": "Collectionを増やさず手動・空間グループを管理し、複数所属の色分けと表示を切り替えます。", "en": "Manage Manual and Volume groups with reversible colors and visibility."},
     "hierarchy_restriction_manager": {
         "ja": "Collection階層の表示・選択・レンダー制限を一括変更し、Soloや復元を行います。",
         "en": "Apply, preview and restore visibility, selection and render restrictions across hierarchies.",

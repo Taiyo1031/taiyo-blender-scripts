@@ -131,7 +131,12 @@ def test_distributed_index_metadata(manager):
 
     errors = []
     items = index_data["data"]
-    assert len(items) == 25
+    assert len(items) == 27
+    zone = next(item for item in items if item['id'] == 'zone_groups')
+    assert zone['name'] == 'Taiyo Object Groups'
+    assert zone['blender_version_min'] == '4.5.9'
+    assert '色分け' in manager.TAG_ALIASES['zone_groups']
+    assert manager.DESCRIPTION_ALIASES['zone_groups']['ja']
     assert all(item.get(manager.RELEASE_TIMESTAMP_KEY, 0) > 0 for item in items)
     for item in items:
         normalized = PkgManifest_Normalized.from_dict_with_error_fn(

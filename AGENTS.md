@@ -48,7 +48,7 @@ repo/
 
 このスクリプトは以下を行います。
 
-- 26個の Extensions パッケージを `blender --command extension validate` で検証
+- 27個の Extensions パッケージを `blender --command extension validate` で検証
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `blender --command extension server-generate --repo-dir docs/extensions --html` で `index.json` と `index.html` を生成
 
@@ -65,7 +65,7 @@ repo/
 ## 配布前チェック
 
 - `find . -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store'` で不要物を確認します。
-- `docs/extensions/index.json` の配布パッケージが26個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は26個より多くても問題ありません。
+- `docs/extensions/index.json` の配布パッケージが27個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は27個より多くても問題ありません。
 - `docs/extensions/index.json` と `docs/extensions/index.html` が生成されていることを確認します。
 - 可能ならBlenderのPreferencesからRemote Repositoryに `index.json` URLを追加して確認します。
 
@@ -92,3 +92,9 @@ repo/
 - Hierarchy Restriction Managerの統合テストは `blender --background --factory-startup --python-exit-code 1 --python tools/test_hierarchy_restriction_manager.py`。UIでのUndo/Redo/Cancelは `tools/ui_test_hierarchy_restriction_manager.py`、負荷計測は `tools/benchmark_hierarchy_restriction_manager.py` を使います。
 - Blender 4.5のEventには `timer` 属性がありません。Modal処理は `event.type == "TIMER"` で進めます。Collectionのexclude/global hide_viewport変更ではObjectの一時hide状態が消えることがあるため、Cancel/Solo復元では直接書いた値以外の消失状態も補償します。
 - HRMはObject Modeでのみ制限変更を実行します。Blender 4.5のEdit Mode UndoではCollection/Object制限が戻らないことをUIテストで確認済みです。勝手なモード切替で回避しないでください。
+
+- Taiyo Object Groupsの統合テストは `blender --background --factory-startup --python-exit-code 1 --python tools/test_zone_groups.py`。UIのLive/Undo/Cancelは `tools/ui_test_zone_groups.py` と `tools/ui_test_zone_groups_undo.py`、負荷測定は `tools/benchmark_zone_groups.py`。最低対応はBlender 4.5.9。
+- macOSの `/usr/bin/git` がXcodeライセンス未同意で失敗しても `/Library/Developer/CommandLineTools/usr/bin/git` が利用できる場合があります。Synology由来の実行ビット差分は `git -c core.fileMode=false status` で内容差分と区別し、無関係なmode変更をcommitに含めないでください。
+- Blender Extensionのregister()は `_RestrictData` 内で実行されるため、登録時に `bpy.data.scenes` を走査しないでください。大規模Sceneの `obj.name in scene.objects` の反復は遅いため、更新時にObject集合を構築して照合します。
+
+- Taiyo Object Groupsの復元情報はObject側の `zg_baseline` に保存し、Sceneの所有UUIDで競合を防ぎます。大量の復元対象をSceneのObject PointerPropertyリストへ追加すると、依存関係更新の負荷が増えるため避けます。

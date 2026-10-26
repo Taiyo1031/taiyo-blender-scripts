@@ -49,6 +49,7 @@ packages=(
   "unreal_bridge_tools"
   "vertex_color_material_painter"
   "viewport_export_selected_meshes"
+  "zone_groups"
 )
 
 compatibility_archives=(

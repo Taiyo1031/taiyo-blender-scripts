@@ -31,3 +31,5 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 - `unreal_bridge_tools`: Unreal Bridge Tools
 - `vertex_color_material_painter`: Vertex Color Material Painter
 - `viewport_export_selected_meshes`: Viewport Export Selected Meshes
+
+- `zone_groups`: Taiyo Object Groups 1.0.0（Blender 4.5.9+、Manual／Volume・色分け）

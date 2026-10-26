@@ -1,0 +1,108 @@
+[
+  {
+    "objects": 1000,
+    "volumes": 2,
+    "members": 136,
+    "cold": {
+      "ms": 9.015749965328723,
+      "max_slice_ms": 5.147999967448413,
+      "ticks": 1
+    },
+    "incremental": {
+      "ms": 6.6697910078801215,
+      "max_slice_ms": 6.6603339510038495,
+      "ticks": 1
+    },
+    "hide": {
+      "ms": 5.937666981481016,
+      "max_slice_ms": 5.023083998821676,
+      "ticks": 1
+    },
+    "show": {
+      "ms": 2.2524160449393094,
+      "max_slice_ms": 2.2517500328831375,
+      "ticks": 0
+    },
+    "no_change": {
+      "ms": 0.2062079729512334,
+      "max_slice_ms": 0.20570802735164762,
+      "ticks": 0
+    },
+    "peak_ram_delta_bytes": 688128,
+    "transaction_setup_ms": 0.04175002686679363
+  },
+  {
+    "objects": 10000,
+    "volumes": 4,
+    "members": 1877,
+    "cold": {
+      "ms": 77.52554101170972,
+      "max_slice_ms": 5.43074996676296,
+      "ticks": 15
+    },
+    "incremental": {
+      "ms": 1.5165000222623348,
+      "max_slice_ms": 1.5152500127442181,
+      "ticks": 0
+    },
+    "hide": {
+      "ms": 710.4350000154227,
+      "max_slice_ms": 5.3927499684505165,
+      "ticks": 135
+    },
+    "show": {
+      "ms": 202.48033298412338,
+      "max_slice_ms": 5.106959026306868,
+      "ticks": 40
+    },
+    "no_change": {
+      "ms": 2.842749992851168,
+      "max_slice_ms": 2.842124958988279,
+      "ticks": 0
+    },
+    "peak_ram_delta_bytes": 5242880,
+    "overlap_10000_hide": {
+      "ms": 3759.8481670138426,
+      "max_slice_ms": 6.12425000872463,
+      "ticks": 716
+    },
+    "overlap_10000_show": {
+      "ms": 1064.3557499861345,
+      "max_slice_ms": 6.965790991671383,
+      "ticks": 210
+    },
+    "transaction_setup_ms": 0.6563750212080777
+  },
+  {
+    "objects": 50000,
+    "volumes": 10,
+    "members": 4037,
+    "cold": {
+      "ms": 394.6765000000596,
+      "max_slice_ms": 7.011874986346811,
+      "ticks": 76
+    },
+    "incremental": {
+      "ms": 3.401625028345734,
+      "max_slice_ms": 3.4000419545918703,
+      "ticks": 0
+    },
+    "hide": {
+      "ms": 10336.861875024624,
+      "max_slice_ms": 7.674167049117386,
+      "ticks": 1679
+    },
+    "show": {
+      "ms": 2465.5475830077194,
+      "max_slice_ms": 5.920625000726432,
+      "ticks": 454
+    },
+    "no_change": {
+      "ms": 6.991207948885858,
+      "max_slice_ms": 5.001584009733051,
+      "ticks": 1
+    },
+    "peak_ram_delta_bytes": 28278784,
+    "transaction_setup_ms": 3.0681249918416142
+  }
+]

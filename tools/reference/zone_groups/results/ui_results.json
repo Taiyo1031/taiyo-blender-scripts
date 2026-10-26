@@ -1,0 +1,54 @@
+[
+  {
+    "test": "modal started",
+    "passed": true
+  },
+  {
+    "test": "restriction applied",
+    "passed": true
+  },
+  {
+    "test": "native Undo restores restrictions",
+    "passed": true
+  },
+  {
+    "test": "native Redo restores restrictions",
+    "passed": true
+  },
+  {
+    "test": "modal Cancel restores restrictions",
+    "passed": true
+  },
+  {
+    "test": "duplicate completes",
+    "passed": true
+  },
+  {
+    "test": "native Undo restores group definitions",
+    "passed": true
+  },
+  {
+    "test": "native Redo restores group definitions",
+    "passed": true
+  },
+  {
+    "test": "Live evaluates without panel action",
+    "passed": true
+  },
+  {
+    "test": "Live debounces continuous drag",
+    "passed": true
+  },
+  {
+    "test": "Live settles once",
+    "passed": true
+  },
+  {
+    "test": "Live detects member Object movement",
+    "passed": true
+  },
+  {
+    "test": "Panel redraw does not evaluate",
+    "passed": true
+  }
+]
