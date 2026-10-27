@@ -1,0 +1,36 @@
+{
+  "objects": 60000,
+  "results": [
+    {
+      "test": "Isolate completes",
+      "passed": true,
+      "seconds": 3.7260162080001464
+    },
+    {
+      "test": "Show All restores original monitor/eye/locks",
+      "passed": true,
+      "seconds": 2.6325074999999742
+    },
+    {
+      "test": "Cancel after bulk commit restores all state",
+      "passed": true,
+      "seconds": 10.509607707999749,
+      "restore_seconds": 6.720168041000306
+    },
+    {
+      "test": "Native Undo restores monitor flags",
+      "passed": true
+    },
+    {
+      "test": "Native Redo restores Isolate",
+      "passed": true
+    }
+  ],
+  "stats": {
+    "evaluations": 0,
+    "writes": 239600,
+    "handler_max_ms": 7.85470799974064,
+    "slice_max_ms": 131.17279100015367,
+    "style_native_max_ms": 129.0635000000293
+  }
+}

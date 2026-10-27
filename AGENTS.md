@@ -102,3 +102,5 @@ repo/
 - Taiyo Object Groups 1.1.0のMesh回帰は `tools/test_zone_groups_mesh.py` と `tools/test_zone_groups_mesh_invalid.py`、実UIは `tools/ui_test_zone_groups_mesh_undo.py` / `tools/ui_test_zone_groups_mesh_live.py`。OperatorはObjectのPointerPropertyを保持できないため、Mesh選択ダイアログではScene内の名前を指定し、実行時に参照を解決します。
 
 - Taiyo Object Groups 1.1.1の6万Object実UI回帰は `tools/ui_test_zone_groups_isolate_large.py`。hide_viewport変更とhide_getの読取りをObjectごとに交互実行するとView Layer再同期が極端に重くなります。状態は変更前に読み、一括RNA適用と分割Cancel復元を維持してください。
+
+- Taiyo Object Groupsの一括色/制限変更は `tools/test_zone_groups_display_sync.py` で元Objectとevaluated_getの両方を検証します。Object collectionのforeach_setは描画用ID更新通知が不足するため、変更Objectのupdate_tagを省略しないでください。

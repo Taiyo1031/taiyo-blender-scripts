@@ -22,7 +22,7 @@ class ZG_PT_main(bpy.types.Panel):
     bl_label='Groups'; bl_idname='ZG_PT_main'; bl_space_type='VIEW_3D'; bl_region_type='UI'; bl_category='Groups'
     def draw(self,context):
         layout=self.layout; s=context.scene.zg; rt=R.get(context.scene)
-        layout.label(text='Taiyo Object Groups 1.1.1')
+        layout.label(text='Taiyo Object Groups 1.1.2')
         global_box=layout.box(); global_box.label(text='Global Settings / All Groups')
         controls=global_box.column(); controls.enabled=R.ACTIVE is None and context.mode=='OBJECT'
         controls.operator('zg.color_toggle',text='Group Colors',depress=s.color_enabled,icon='COLOR')

@@ -362,6 +362,9 @@ def apply_style(scene, journal=None, restore_only=False):
         start = now()
         if len(changed) > 64:
             scene.objects.foreach_set(attr,staged_flags[attr].reshape(-1))
+            # foreach_set bypasses per-Object RNA update callbacks.
+            # Explicitly sync changed IDs to evaluated viewport/render data.
+            for obj in changed:obj.update_tag(refresh={'OBJECT'})
         else:
             for obj in changed:
                 value = staged_flags[attr][object_indices[obj]]

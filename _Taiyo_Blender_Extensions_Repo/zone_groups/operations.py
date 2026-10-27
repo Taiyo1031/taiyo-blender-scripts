@@ -122,7 +122,9 @@ class Transaction:
                     values[indices[obj]]=entry[column];changed.append(obj)
                 if i%128==0:
                     self.rt.progress=f'Cancelling: restoring {attr} {i}/{len(self.journal)}';yield
-            if len(changed)>64:self.scene.objects.foreach_set(attr,values.reshape(-1))
+            if len(changed)>64:
+                self.scene.objects.foreach_set(attr,values.reshape(-1))
+                for obj in changed:obj.update_tag(refresh={'OBJECT'})
             else:
                 for obj in changed:
                     value=values[indices[obj]]

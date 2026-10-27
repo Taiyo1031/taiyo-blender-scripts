@@ -1,4 +1,4 @@
-bl_info = {'name':'Taiyo Object Groups','author':'Taiyo','version':(1,1,1),'blender':(4,5,9),
+bl_info = {'name':'Taiyo Object Groups','author':'Taiyo','version':(1,1,2),'blender':(4,5,9),
            'location':'3D Viewport > Sidebar > Groups','description':'Logical spatial groups with reversible colors and restrictions','category':'Object'}
 import bpy
 from . import properties, runtime, operations, ui

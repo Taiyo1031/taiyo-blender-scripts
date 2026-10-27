@@ -1,0 +1,12 @@
+{
+  "blender": "4.5.9 LTS",
+  "passed": [
+    "Bulk enable: original and evaluated color",
+    "Bulk color edit reaches evaluated Objects",
+    "Disable restores evaluated original colors",
+    "Cancel after bulk color commit restores evaluated colors",
+    "Bulk viewport restriction reaches evaluated visibility",
+    "Bulk visibility restore",
+    "Bulk render restriction reaches evaluated IDs"
+  ]
+}

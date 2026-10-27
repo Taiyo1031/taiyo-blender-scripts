@@ -1,6 +1,6 @@
 # Taiyo Object Groups
 
-対象Version **1.1.1** / Blender **4.5.9以降**（4.5.9 LTS／5.2.2 LTSで検証）。Taiyo Blender ExtensionsのRemote Repository、または `zone_groups-1.1.1.zip` を「Install from Disk」でインストールしてください。
+対象Version **1.1.2** / Blender **4.5.9以降**（4.5.9 LTS／5.2.2 LTSで検証）。Taiyo Blender ExtensionsのRemote Repository、または `zone_groups-1.1.2.zip` を「Install from Disk」でインストールしてください。
 
 Collectionを増やさず、Objectを任意の論理グループに分類します。ManualとVolumeの複数所属、グループの複製・統合、表示・選択・Render制限、グループ別の色分けに対応します。書き出し機能はありません。
 
@@ -103,3 +103,9 @@ Membersの`+` → **Register Existing Mesh**で、既存の閉じたMeshを指�
 Updating欄には処理段階と件数を表示します。Cancelは分割した復元処理へ移り、元の状態へ戻し終わると終了します。一括APIの呼出し中は中断できません。保存時は不完全な状態を残さないため復元を完了してから保存します。
 
 このMacの6万共有Mesh ObjectでIsolateは約3.5〜4.7秒、解除約3.5〜4.4秒。制作Sceneの依存関係や形状により変動します。修正版をインストールした後はBlenderを再起動して使用してください。実行中の旧版ジョブは更新だけでは置き換わりません。
+
+## 1.1.2：一括変更後の表示色を修正
+
+1.1.1では65個以上のObject色を一括変更したとき、Object本体の色は変わっても描画用の評価済みObjectへ通知されず、色が表示されない場合がありました。一括適用とCancel復元の両方で変更Objectへ更新通知を追加しました。表示・Render制限にも同じ通知を適用します。
+
+更新・Blender再起動後、Group ColorsをONにし、Show Object Colors in This Viewを押してください。Volumeの所属がDirtyならEvaluateで確定します。Blender 4.5.10での報告を受けた修正ですが、実行テストは手元の4.5.9 / 5.2.2で実施し、4.5.10実機はNOT RUNです。

@@ -1,3 +1,22 @@
+# Taiyo Object Groups 1.1.2 — 検証結果
+
+2026-10-27 / macOS arm64。200共有Mesh Object（65個以上の一括適用経路）で、元Objectと描画用評価済みObjectの両方を比較。
+
+| 試験 | 4.5.9 | 5.2.2 |
+|---|---|---|
+| Group Colors ON・色変更・OFFで元色復元 | PASS | PASS |
+| 一括色適用後Cancelで描画色復元 | PASS | PASS |
+| 一括Viewport制限と解除の評価済み状態・visible_get | PASS | PASS |
+| Render制限と解除の評価済み状態 | PASS | PASS |
+
+修正前は元色が赤でも評価済みObjectは白のままで、修正後は一致することを確認。Blender 4.5.10実機 / Windows / Linux / ユーザーの制作SceneはNOT RUN。
+テストは `tools/test_zone_groups_display_sync.py`。機械可読結果は `tools/reference/zone_groups/results/1.1.2/`。
+
+6万共有Mesh Objectの4.5.9実UI回帰: Isolate 3.73秒・解除2.63秒、Cancel要求後の復元6.72秒、Undo/Redo PASS。最大処理区間は 131.17ms。5.2.2での6万Object再測定はNOT RUN。
+
+---
+以下は1.1.1以前の履歴結果です。
+
 # Taiyo Object Groups 1.1.1 — 検証結果
 
 検証日: 2026-10-27。macOS / arm64。6万ObjectのIsolate不具合を修正。
