@@ -1,4 +1,6 @@
-# Taiyo Object Groups 1.0.0 — 検証結果
+# Taiyo Object Groups 1.0.1 — 検証結果
+
+1.0.1追加確認: Blender 4.5.9 / 5.2.2で繰り返しの.blend読込後に監視タイマーを保持する回帰テストPASS。4.5.9のBackground統合テスト再実行PASS。5.2.2の実UIデモで読込後のLive移動・所属復元PASS。以下の包括的なUI/Undo/性能結果は1.0.0時点の実測で、1.0.1での全再実行はNOT RUN。
 
 検証日: 2026-10-27（日本時間）。Blender **4.5.9 LTS** / macOS 27.0.1 / arm64 / NumPy 1.26.4。
 対象: Blender 4.5.9以降の4.5 LTS。Windows／Linuxおよび他パッチ版は **NOT RUN**。

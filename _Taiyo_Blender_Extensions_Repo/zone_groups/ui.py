@@ -20,7 +20,7 @@ class ZG_PT_main(bpy.types.Panel):
     bl_label='Groups'; bl_idname='ZG_PT_main'; bl_space_type='VIEW_3D'; bl_region_type='UI'; bl_category='Groups'
     def draw(self,context):
         layout=self.layout; s=context.scene.zg; rt=R.get(context.scene)
-        layout.label(text='Taiyo Object Groups 1.0.0')
+        layout.label(text='Taiyo Object Groups 1.0.1')
         if context.mode!='OBJECT': layout.label(text='Object Mode required',icon='INFO')
         if R.ACTIVE: layout.label(text=rt.progress or 'Updating… Esc to cancel',icon='TIME')
         if rt.warning: layout.label(text=rt.warning,icon='ERROR')

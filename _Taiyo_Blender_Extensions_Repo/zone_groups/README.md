@@ -1,6 +1,6 @@
 # Taiyo Object Groups
 
-対象Version **1.0.0** / Blender **4.5.9以降の4.5 LTS**。Taiyo Blender ExtensionsのRemote Repository、または `zone_groups-1.0.0.zip` を「Install from Disk」でインストールしてください。
+対象Version **1.0.1** / Blender **4.5.9以降の4.5 LTS**。Taiyo Blender ExtensionsのRemote Repository、または `zone_groups-1.0.1.zip` を「Install from Disk」でインストールしてください。
 
 Collectionを増やさず、Objectを任意の論理グループに分類します。ManualとVolumeの複数所属、グループの複製・統合、表示・選択・Render制限、グループ別の色分けに対応します。書き出し機能はありません。
 
@@ -70,3 +70,7 @@ UI描画からScene走査を行いません。Objectの逆引き、座標、種�
 実測値・環境・制約は [TEST_RESULTS.md](TEST_RESULTS.md) を参照してください。大規模Sceneのモニターフラグ変更はBlenderの依存グラフ更新が重く、評価より時間がかかります。5万Objectの処理速度はポリゴン数・Modifier・親子関係にも依存し、数値保証はしません。Windows／Linuxは未実行です。
 
 テストコードはリポジトリの `tools/test_zone_groups.py`、`tools/ui_test_zone_groups.py`、`tools/ui_test_zone_groups_undo.py`、`tools/benchmark_zone_groups.py`。元モックと仕様書は `tools/reference/zone_groups/` に隔離しています。
+
+## 1.0.1の修正
+
+.blend読込後にもLive更新・選択情報更新が継続するよう、監視タイマーを永続登録に変更しました。Blender 5.2.2 LTSで体験デモの読込後も確認しています。

@@ -1,4 +1,4 @@
-bl_info = {'name':'Taiyo Object Groups','author':'Taiyo','version':(1,0,0),'blender':(4,5,9),
+bl_info = {'name':'Taiyo Object Groups','author':'Taiyo','version':(1,0,1),'blender':(4,5,9),
            'location':'3D Viewport > Sidebar > Groups','description':'Logical spatial groups with reversible colors and restrictions','category':'Object'}
 import bpy
 from . import properties, runtime, operations, ui
@@ -16,7 +16,7 @@ def register():
     for handlers,callback in HANDLERS:
         if callback not in handlers: handlers.append(callback)
     runtime.ENABLED=True
-    bpy.app.timers.register(runtime.timer,first_interval=.1)
+    bpy.app.timers.register(runtime.timer,first_interval=.1,persistent=True)
     runtime.CACHE.clear()
 def unregister():
     if not runtime.ENABLED: return
