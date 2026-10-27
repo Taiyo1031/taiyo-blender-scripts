@@ -1,6 +1,6 @@
 # Taiyo Object Groups
 
-対象Version **1.1.0** / Blender **4.5.9以降**（4.5.9 LTS／5.2.2 LTSで検証）。Taiyo Blender ExtensionsのRemote Repository、または `zone_groups-1.1.0.zip` を「Install from Disk」でインストールしてください。
+対象Version **1.1.1** / Blender **4.5.9以降**（4.5.9 LTS／5.2.2 LTSで検証）。Taiyo Blender ExtensionsのRemote Repository、または `zone_groups-1.1.1.zip` を「Install from Disk」でインストールしてください。
 
 Collectionを増やさず、Objectを任意の論理グループに分類します。ManualとVolumeの複数所属、グループの複製・統合、表示・選択・Render制限、グループ別の色分けに対応します。書き出し機能はありません。
 
@@ -95,3 +95,11 @@ Membersの`+` → **Register Existing Mesh**で、既存の閉じたMeshを指�
 ### Mesh Liveの目安（1.1.0）
 
 このMacの5万候補・256/1024三角形では評価は約0.6〜0.8秒規模でした。実測はTEST_RESULTS.mdを参照してください。BVH構築と交差候補列挙は一括APIのため中断できず、高密度Meshや大量表示変更では5msを超えます。まず単純なMeshでLiveを試し、操作待ちが気になる場合はOn Demandを使用してください。5msや300msは応答保証ではありません。
+
+## 1.1.1：大規模Isolateの修正
+
+6万ObjectでUpdatingのまま進みにくい問題を修正しました。表示状態を先に読み取り、変更を準備してからチャンネルごとにまとめて適用し、Objectごとの依存関係再構築を避けます。少量の差分は個別適用し、変更のないチャンネルは書き込みません。大量の一括APIではScene内の値を読み戻して保持し、制御対象外の値を維持します。
+
+Updating欄には処理段階と件数を表示します。Cancelは分割した復元処理へ移り、元の状態へ戻し終わると終了します。一括APIの呼出し中は中断できません。保存時は不完全な状態を残さないため復元を完了してから保存します。
+
+このMacの6万共有Mesh ObjectでIsolateは約3.5〜4.7秒、解除約3.5〜4.4秒。制作Sceneの依存関係や形状により変動します。修正版をインストールした後はBlenderを再起動して使用してください。実行中の旧版ジョブは更新だけでは置き換わりません。

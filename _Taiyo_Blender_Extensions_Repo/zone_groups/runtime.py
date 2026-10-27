@@ -281,7 +281,34 @@ def apply_style(scene, journal=None, restore_only=False):
                 objects.add(obj)
                 if i % 256 == 0: yield
             layer_objects.append((layer, objects))
+    # Read eye states before the first monitor flag write. hide_get() syncs
+    # the View Layer after hide_viewport changes; interleaving them caused
+    # a full Scene sync for every Object (quadratic at large Scene sizes).
+    hidden_layers = defaultdict(list)
+    for layer, objects in layer_objects:
+        for i, obj in enumerate(objects):
+            if obj in candidates and obj.hide_get(view_layer=layer):
+                hidden_layers[obj].append(layer.name)
+            if i % 128 == 0:
+                rt.progress = f'Reading visibility: {i}/{len(objects)}'
+                yield
+    # Stage Object flags, then submit one RNA bulk update per changed channel.
+    # Yielding after each monitor write lets Blender rebuild a 60k-object
+    # dependency graph thousands of times between timer callbacks.
+    scene_order = list(scene.objects)
+    object_indices = {obj:i for i,obj in enumerate(scene_order)}
+    staged_flags = {}
+    changed_flags = defaultdict(set)
+    restore_eyes = {}
+    for attr in ('hide_viewport','hide_select','hide_render','color'):
+        width = 4 if attr == 'color' else 1
+        values = np.empty(len(scene_order)*width, dtype=np.float32 if width==4 else np.bool_)
+        scene.objects.foreach_get(attr,values)
+        staged_flags[attr] = values.reshape((-1,4)) if width==4 else values
+        yield
+    total = len(candidates)
     for i, obj in enumerate(candidates):
+        if i % 128 == 0: rt.progress = f'Applying visibility / colors: {i}/{total}'
         yield  # RNA flag writes can be expensive on large dependency graphs.
         if not alive(obj): continue
         if obj.zg_baseline.mask and obj.zg_baseline.owner != settings.owner_uid:
@@ -304,7 +331,7 @@ def apply_style(scene, journal=None, restore_only=False):
         if not desired and not b: continue
         if journal is not None and obj not in journal:
             journal[obj] = (obj.hide_viewport,obj.hide_select,obj.hide_render,tuple(obj.color),
-                            [l.name for l, objects in layer_objects if obj in objects and obj.hide_get(view_layer=l)], baseline_values(obj.zg_baseline))
+                            hidden_layers.get(obj,[]), baseline_values(obj.zg_baseline))
         if b is None:
             b = obj.zg_baseline; b.owner = settings.owner_uid; baselines[obj] = b; rt.owned.add(obj)
         for bit, attr, saved in ((1,'hide_viewport','viewport'),(2,'hide_select','select'),(4,'hide_render','render'),(8,'color','color')):
@@ -312,7 +339,7 @@ def apply_style(scene, journal=None, restore_only=False):
                 if not b.mask & bit:
                     setattr(b, saved, getattr(obj,attr)); b.mask |= bit
                     if bit == 1:
-                        b.hidden_layers = json.dumps([l.name for l, objects in layer_objects if obj in objects and obj.hide_get(view_layer=l)])
+                        b.hidden_layers = json.dumps(hidden_layers.get(obj,[]))
                 value = desired[bit]
             elif b.mask & bit:
                 value = getattr(b,saved); b.mask &= ~bit
@@ -320,13 +347,33 @@ def apply_style(scene, journal=None, restore_only=False):
             old = tuple(obj.color) if bit == 8 else getattr(obj,attr)
             new = tuple(value) if bit == 8 else value
             if old != new:
-                setattr(obj,attr,value); STATS['writes'] += 1
-                if bit == 1 and b.hidden_layers != '[]': restore_hidden(obj,scene,b.hidden_layers)
+                staged_flags[attr][object_indices[obj]] = value
+                changed_flags[attr].add(obj)
+                if bit == 1 and b.hidden_layers != '[]': restore_eyes[obj] = b.hidden_layers
         if i % 8 == 0: yield
         if not b.mask:
             b.owner = ''
             rt.owned.discard(obj)
+    if len(scene.objects) != len(scene_order):
+        raise InterruptedError('Scene Objects changed during visibility update')
+    for attr, changed in changed_flags.items():
+        rt.progress = 'Applying ' + attr + f': {len(changed)} Objects'
+        yield
+        start = now()
+        if len(changed) > 64:
+            scene.objects.foreach_set(attr,staged_flags[attr].reshape(-1))
+        else:
+            for obj in changed:
+                value = staged_flags[attr][object_indices[obj]]
+                setattr(obj,attr,tuple(value) if attr=='color' else bool(value))
+        STATS['style_native_max_ms'] = max(STATS.get('style_native_max_ms',0.),(now()-start)*1000)
+        STATS['writes'] += len(changed)
+        yield
+    for i,(obj,encoded) in enumerate(restore_eyes.items()):
+        restore_hidden(obj,scene,encoded)
+        if i%128==0:yield
     rt.style_pending = False
+    rt.progress = ''
 
 def drain(generator):
     for _ in generator: pass

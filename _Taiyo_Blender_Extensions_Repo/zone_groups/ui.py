@@ -22,7 +22,7 @@ class ZG_PT_main(bpy.types.Panel):
     bl_label='Groups'; bl_idname='ZG_PT_main'; bl_space_type='VIEW_3D'; bl_region_type='UI'; bl_category='Groups'
     def draw(self,context):
         layout=self.layout; s=context.scene.zg; rt=R.get(context.scene)
-        layout.label(text='Taiyo Object Groups 1.1.0')
+        layout.label(text='Taiyo Object Groups 1.1.1')
         global_box=layout.box(); global_box.label(text='Global Settings / All Groups')
         controls=global_box.column(); controls.enabled=R.ACTIVE is None and context.mode=='OBJECT'
         controls.operator('zg.color_toggle',text='Group Colors',depress=s.color_enabled,icon='COLOR')
@@ -30,7 +30,7 @@ class ZG_PT_main(bpy.types.Panel):
         color=controls.row(); color.enabled=s.color_enabled and s.color_rule=='OVERLAP'; color.prop(s,'overlap_color')
         controls.operator('zg.object_color',icon='SHADING_SOLID'); controls.operator('zg.show_all')
         status=layout.row(align=True)
-        status.label(text='Updating…' if R.ACTIVE else ('Object Mode required' if context.mode!='OBJECT' else 'Ready'),icon='TIME' if R.ACTIVE else 'INFO')
+        status.label(text=(rt.progress or 'Updating…') if R.ACTIVE else ('Object Mode required' if context.mode!='OBJECT' else 'Ready'),icon='TIME' if R.ACTIVE else 'INFO')
         cancel=status.row(); cancel.enabled=R.ACTIVE is not None; cancel.operator('zg.cancel_job',text='',icon='CANCEL')
         detail=layout.row(); detail.label(text='Warning: see details' if rt.warning else 'No warnings',icon='ERROR' if rt.warning else 'CHECKMARK'); detail.operator('zg.status_details',text='',icon='INFO')
 

@@ -1,3 +1,27 @@
+# Taiyo Object Groups 1.1.1 — 検証結果
+
+検証日: 2026-10-27。macOS / arm64。6万ObjectのIsolate不具合を修正。
+
+| 実UI試験（6万共有Mesh Object） | 4.5.9 LTS | 5.2.2 LTS |
+|---|---:|---:|
+| Isolate完了・結果一致 | PASS / 3.52秒 | PASS / 4.74秒 |
+| Show All・元monitor/eye/lock復元 | PASS / 3.49秒 | PASS / 4.43秒 |
+| 一括適用後Cancelの全状態復元 | PASS | PASS |
+| ネイティブUndo/Redo | PASS | PASS |
+| 全試験の最大処理区間 | 108.32ms | 73.18ms |
+| 表示一括APIの最大区間 | 5.99ms | 6.68ms |
+
+4.5.9のCancel復元は要求後5.76秒。5.2.2のCancel試験は開始から復元完了まで12.22秒（Cancel要求後だけの時間はNOT RUN）。初期Scene作成とUndoスナップショット等も含むため、最大区間は5ms保証ではありません。
+
+旧方式の再現: 6千Emptyで16.72秒。表示読取りを分離するだけでも6万Objectでは90秒で486件に留まりました。一括適用後は6万Emptyを4.50秒で完了。
+
+既存Background統合テストは両バージョンPASS（制限・元色・Scene共有競合・Cancel）。5.2.2の全操作ファミリー実UI Undo/RedoとMesh Live/CancelもPASS。Windows/Linux、ユーザーの実制作Scene、巨大なMesh形状の再負荷試験はNOT RUN。
+
+原本結果: `tools/reference/zone_groups/results/1.1.1/`。再現スクリプト: `tools/ui_test_zone_groups_isolate_large.py`。
+
+---
+以下は1.1.0の履歴結果です。
+
 # Taiyo Object Groups 1.1.0 — 検証結果
 
 検証日: 2026-10-27。macOS / arm64。Blender 4.5.9 LTS / 5.2.2 LTS。
