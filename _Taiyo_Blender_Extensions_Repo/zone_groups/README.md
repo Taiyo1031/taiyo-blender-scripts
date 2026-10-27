@@ -1,6 +1,6 @@
 # Taiyo Object Groups
 
-対象Version **1.0.1** / Blender **4.5.9以降の4.5 LTS**。Taiyo Blender ExtensionsのRemote Repository、または `zone_groups-1.0.1.zip` を「Install from Disk」でインストールしてください。
+対象Version **1.1.0** / Blender **4.5.9以降**（4.5.9 LTS／5.2.2 LTSで検証）。Taiyo Blender ExtensionsのRemote Repository、または `zone_groups-1.1.0.zip` を「Install from Disk」でインストールしてください。
 
 Collectionを増やさず、Objectを任意の論理グループに分類します。ManualとVolumeの複数所属、グループの複製・統合、表示・選択・Render制限、グループ別の色分けに対応します。書き出し機能はありません。
 
@@ -8,7 +8,7 @@ Collectionを増やさず、Objectを任意の論理グループに分類しま�
 
 3D ViewportのNパネル → **Groups**。操作はObject Modeで行います。
 
-- `+ / New Group`：Manualグループを作成。名前・色を編集できます。
+- `New`：空のManualグループを作成。`From Selection`：選択Objectを登録したManualグループを作成。名前・色を編集できます。
 - `Add Selected / Remove Selected`：選択Objectとの所属関係だけを変更します。元Objectは変更しません。
 - `Select / Extend / Deselect`：所属Objectの選択を置換／追加／解除。非表示・選択ロック・View Layer外のObjectはスキップします。
 - `Expand to Groups`：選択Objectが属する全グループのメンバーへ選択を広げます。
@@ -21,7 +21,7 @@ Manualメンバー、またはVolume参照が残るグループは所属方式�
 
 ## Volume
 
-Membership ModeをVolumeへ切り替え、`+` からBox／Sphereを追加します。Emptyは既存Collectionに置きます。`−` は参照解除のみで、Emptyを削除しません。Controllerとして参照中のEmptyは自動所属から除外されます。
+Membership ModeをVolumeへ切り替え、`+` からBox／Sphereを追加します。Emptyは3Dカーソル位置の既存Collectionに置きます。各Volume行の選択アイコンで参照Objectを選択できます。非表示／選択ロックは自動解除しません。`−` は参照解除のみで、Emptyを削除しません。Controllerとして参照中のEmptyは自動所属から除外されます。
 
 - 各Regionは「ADDの和集合 − EXCLUDEの和集合」。Volumeの順番には依存しません。
 - Merge後はRegionごとに独立した条件を保持し、各Regionの結果をORで合成します。Regionボタンで編集対象を選びます。
@@ -50,9 +50,9 @@ Dirtyの人数は前回の値です。評価は段階的に計算し、全結果
 
 ViewportはOutlinerの**モニター**相当、Selectは選択ロック、Renderはレンダー制限です。複数所属時は1つでも制限があれば制限します。各項目の元値をObject側へ永続保存し、Sceneの所有UUIDで管理するため、元から非表示だったObjectをShow Allで勝手に表示しません。
 
-`Isolate`はアクティブグループだけを一時表示し、再実行で戻ります。複数所属の競合よりIsolate対象を優先しますが、元の非表示状態は尊重します。`Show All`はIsolateとグループの表示制限だけを解除し、Select／Renderは変更しません。
+一覧の各行の`Isolate`はそのグループだけを一時表示し、同じ行の再実行で戻り、別行では対象を切り替えます。複数所属の競合よりIsolate対象を優先しますが、元の非表示状態は尊重します。`Show All`はIsolateとグループの表示制限だけを解除し、Select／Renderは変更しません。
 
-`Group Colors`で色分けをON（初期値OFF）。`Show Object Colors in This View`で現在の3D ViewをSolid／Object Colorへ切り替えます。
+一覧上部の **Global Settings / All Groups** → `Group Colors`で色分けをON（初期値OFF）。`Show Object Colors in This View`で現在の3D ViewをSolid／Object Colorへ切り替えます。
 
 - **Top Group（初期値）**：一覧で最も上にある所属グループの色。↑↓で優先順位を変更できます。
 - **Overlap Color**：2つ以上のグループに所属するObjectを指定色にします。初期値はマゼンタ。
@@ -71,6 +71,27 @@ UI描画からScene走査を行いません。Objectの逆引き、座標、種�
 
 テストコードはリポジトリの `tools/test_zone_groups.py`、`tools/ui_test_zone_groups.py`、`tools/ui_test_zone_groups_undo.py`、`tools/benchmark_zone_groups.py`。元モックと仕様書は `tools/reference/zone_groups/` に隔離しています。
 
-## 1.0.1の修正
+## 1.0.1から継承した修正
 
 .blend読込後にもLive更新・選択情報更新が継続するよう、監視タイマーを永続登録に変更しました。Blender 5.2.2 LTSで体験デモの読込後も確認しています。
+
+## 1.1.0：Mesh VolumeとUI整理
+
+Members／Visibilityは初期状態で閉じます（既存ファイルの開閉状態は保持）。進捗・警告領域は固定し、詳細は情報アイコンで確認できます。CancelまたはEscで更新を中止できます。色分け・Show Allは一覧上部の全体設定です。EmptyのShapeはBox／Sphereだけを選択できます。
+
+Membersの`+` → **Register Existing Mesh**で、既存の閉じたMeshを指定します。選択中のアクティブMeshが初期候補です。Meshの新規作成はBlender標準機能で行ってください。登録元Objectの表示方法やRender設定は変更しません。内部Objectを見たいときは、VolumeのViewport DisplayをWireにすると便利です。
+
+- 凹形状やトーラスの貫通穴に対応します。面は閉じた単一の連結面集合で、法線の向きが整合している必要があります。穴あき境界・非多様体・遊離頂点／辺・退化面・自己交差はエラーです。
+- 元メッシュを判定に使用し、Modifier／Geometry Nodesは無視します。必要な場合は事前に適用してください。Mesh含有RegionのTestはOrigin／Bounds Centerのみです。既存のFully Inside／Any Overlap Regionでは先に方式を変更してください。
+- EmptyとMeshを同じRegion内でADD／EXCLUDEとして混在できます。Merge後もRegionは独立したOR結合です。Controller自身は自動所属対象外です。
+- 非等方Scale・負Scale・親によるshearを座標変換へ反映します。表面上は内部です。極端に薄い形状や数値的に曖昧な交差は結果を推測せずエラーにします。境界許容差はVolumeの最大寸法の約1e-7です。
+- 不正なMeshでは前回の確定結果を保持しDirtyと警告を表示します。初回未評価ならメンバーは未確定です。Live失敗後は関係データが変わるかEvaluateを押すまで再試行しません。
+- Meshデータごとに形状/BVHを共有キャッシュし、Transform変更時は再構築しません。頂点・面の変更やUndo／Loadでは必要なキャッシュを再構築します。依存グラフの大規模な再構築では安全のため全形状キャッシュを無効化します。
+- Duplicateは参照MeshのObjectとMeshデータを独立複製します。参照解除・グループ削除は元Meshを削除しません。
+- 評価は分割しますが、Blender内部の三角形化・BVH構築・交差候補作成は分割できません。低ポリゴンを推奨し、重いMeshや大規模SceneではOn Demand／Manualを選んでください。5msは目標であり応答時間の保証ではありません。
+
+検証スクリプト: `tools/test_zone_groups_mesh.py`、`tools/benchmark_zone_groups_mesh.py`。旧1.0.xのEmpty参照はそのまま読み込めます。
+
+### Mesh Liveの目安（1.1.0）
+
+このMacの5万候補・256/1024三角形では評価は約0.6〜0.8秒規模でした。実測はTEST_RESULTS.mdを参照してください。BVH構築と交差候補列挙は一括APIのため中断できず、高密度Meshや大量表示変更では5msを超えます。まず単純なMeshでLiveを試し、操作待ちが気になる場合はOn Demandを使用してください。5msや300msは応答保証ではありません。

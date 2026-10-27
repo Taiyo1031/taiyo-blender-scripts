@@ -1,0 +1,26 @@
+[
+  {
+    "test": "Live initial mesh",
+    "passed": true
+  },
+  {
+    "test": "drag debounced",
+    "passed": true
+  },
+  {
+    "test": "Live moved membership",
+    "passed": true
+  },
+  {
+    "test": "move reuses mesh cache",
+    "passed": true
+  },
+  {
+    "test": "idle no evaluation",
+    "passed": true
+  },
+  {
+    "test": "Cancel button restores restriction",
+    "passed": true
+  }
+]

@@ -1,5 +1,5 @@
 """Separate factory-startup UI process: actual modal/Undo/Live/draw checks."""
-import bpy, sys, pathlib, time, json, traceback, addon_utils
+import bpy, sys, pathlib, time, json, traceback, addon_utils, os
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'_Taiyo_Blender_Extensions_Repo'))
 addon_utils.enable('zone_groups', default_set=True)
 from zone_groups import runtime as R, operations as O
@@ -25,9 +25,11 @@ def call(name,**kw):
 def tick():
     global stage,mark,evals
     try:
-        if time.monotonic()-started>100: raise TimeoutError(stage)
+        if time.monotonic()-started>float(os.environ.get('ZG_UI_TIMEOUT','100')): raise TimeoutError(stage)
         s=bpy.context.scene
-        if stage=='start':
+        if R.ACTIVE:
+            pathlib.Path('/tmp/zone_groups_ui_progress.json').write_text(json.dumps({'stage':stage,'seconds':time.monotonic()-started,'journal':len(R.ACTIVE.journal),'progress':R.get(s).progress}))
+        if stage=='start' and R.ACTIVE is None:
             with ctx(): bpy.ops.ed.undo_push(message='Zone Groups fixture')
             record('modal started',call('restriction',field='render')=={'RUNNING_MODAL'})
             stage='applied'

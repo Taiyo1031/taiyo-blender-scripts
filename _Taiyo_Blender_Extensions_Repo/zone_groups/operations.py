@@ -83,7 +83,7 @@ def merge_items(self,context):
 
 class Transaction:
     def __init__(self,scene):
-        self.scene=scene; self.saved=None; self.journal={}; self.created=[]
+        self.scene=scene; self.saved=None; self.journal={}; self.created=[]; self.created_meshes=[]
         self.selected=list(bpy.context.selected_objects)
         self.active=bpy.context.view_layer.objects.active
         self.cancel_requested=False; self.generator=None; self.finished=False
@@ -110,6 +110,8 @@ class Transaction:
                     if obj.name in layer.objects: obj.hide_set(layer.name in values[4],view_layer=layer)
             for obj in self.created:
                 if R.alive(obj) and obj.name in bpy.data.objects: bpy.data.objects.remove(obj,do_unlink=True)
+            for mesh in self.created_meshes:
+                if mesh.users==0: bpy.data.meshes.remove(mesh)
             for obj in bpy.context.selected_objects: obj.select_set(False)
             for obj in self.selected:
                 if R.alive(obj) and obj.name in bpy.context.view_layer.objects: obj.select_set(True)
@@ -159,7 +161,7 @@ class BackgroundJob(Transaction):
             try:
                 if job.step(): return None
             except Exception as error:
-                job.abort(); rt=R.get(scene); rt.warning=str(error); rt.style_pending=False
+                job.abort(); rt=R.get(scene); rt.warning=str(error); rt.style_pending=False; rt.failed_generation=rt.generation
                 if not isinstance(error,(ValueError,InterruptedError)): traceback.print_exc()
                 return None
             return .01
@@ -170,11 +172,12 @@ class ZG_Operator:
     bl_options={'REGISTER','UNDO'}
     mode: EnumProperty(items=[('SET','Select','Replace selection'),('EXTEND','Extend','Add selection'),('DESELECT','Deselect','Remove selection')])
     shape: EnumProperty(items=[('CUBE','Box','Box Empty'),('SPHERE','Sphere','Sphere Empty')])
-    direction: EnumProperty(items=[('UP','Up',''),('DOWN','Down','')])
+    direction: EnumProperty(description='Change color priority by reordering groups',items=[('UP','Up','Higher color priority'),('DOWN','Down','Lower color priority')])
     source_uid: StringProperty(name='Source UUID')
-    source_choice: EnumProperty(name='Source',items=merge_items)
+    source_choice: EnumProperty(name='Source',description='Group merged into the active group; its definition is removed',items=merge_items)
     field: StringProperty()
     value: StringProperty()
+    mesh_name: StringProperty(name='Mesh', description='Name of an existing closed Mesh in this Scene; modifiers are ignored')
     action=''
 
     @classmethod
@@ -182,6 +185,9 @@ class ZG_Operator:
         return context.scene is not None and context.mode=='OBJECT' and R.ACTIVE is None
 
     def invoke(self,context,event):
+        if self.action=='volume_mesh':
+            self.mesh_name=context.active_object.name if context.active_object and context.active_object.type=='MESH' else ''
+            return context.window_manager.invoke_props_dialog(self)
         if self.action=='group_merge':
             if not merge_items(self,context):
                 self.report({'WARNING'},'No compatible group'); return {'CANCELLED'}
@@ -190,6 +196,8 @@ class ZG_Operator:
         return self.start(context,modal=True)
 
     def draw(self,context):
+        if self.action=='volume_mesh':
+            self.layout.prop_search(self,'mesh_name',context.scene,'objects'); self.layout.label(text='Closed raw Mesh only; modifiers ignored'); return
         self.layout.prop(self,'source_choice')
         self.layout.label(text='Remove source group only; preserve Objects and Empties.')
 
@@ -211,7 +219,7 @@ class ZG_Operator:
         try:
             while not self.tx.step(): pass
         except Exception as error:
-            self.tx.abort(); self.report({'WARNING'},str(error))
+            self.tx.abort(); R.get(context.scene).warning=str(error); R.get(context.scene).failed_generation=R.get(context.scene).generation; self.report({'WARNING'},str(error))
             if not isinstance(error,(ValueError,InterruptedError)): traceback.print_exc()
             return {'CANCELLED'}
         self.report_result(); return {'FINISHED'}
@@ -226,14 +234,14 @@ class ZG_Operator:
         if event.type=='TIMER':
             try: done=self.tx.step()
             except Exception as error:
-                self.tx.abort(); self.cleanup(context); self.report({'WARNING'},str(error))
+                self.tx.abort(); self.cleanup(context); R.get(context.scene).warning=str(error); R.get(context.scene).failed_generation=R.get(context.scene).generation; self.report({'WARNING'},str(error))
                 if not isinstance(error,(ValueError,InterruptedError)): traceback.print_exc()
                 return {'CANCELLED'}
             if done:
                 self.cleanup(context); self.report_result(); return {'FINISHED'}
             context.area.tag_redraw()
         # Keep viewport navigation available, block concurrent edits during transaction.
-        if event.type in {'MIDDLEMOUSE','WHEELUPMOUSE','WHEELDOWNMOUSE','MOUSEMOVE'}: return {'PASS_THROUGH'}
+        if event.type in {'MIDDLEMOUSE','WHEELUPMOUSE','WHEELDOWNMOUSE','MOUSEMOVE','LEFTMOUSE'}: return {'PASS_THROUGH'}
         return {'RUNNING_MODAL'}
 
     def cleanup(self,context):
@@ -245,8 +253,13 @@ class ZG_Operator:
 
     def work(self,context):
         scene=context.scene; s=scene.zg; g=R.active(scene); action=self.action
-        if action=='group_new':
-            new_group(scene)
+        if action in {'group_new','group_from_selection'}:
+            if action=='group_from_selection' and not context.selected_objects: raise ValueError('Select Objects first')
+            new=new_group(scene)
+            if action=='group_from_selection':
+                for i,obj in enumerate(context.selected_objects):
+                    new.manual_members.add().obj=obj
+                    if i%128==0: yield
         else:
             if g is None and action not in {'show_all','color_toggle'}: raise ValueError('No active group')
             if action in {'group_merge','group_duplicate','select_members','select_groups_of_selection','isolate','restriction','color_toggle'}:
@@ -280,6 +293,14 @@ class ZG_Operator:
             elif action=='volume_add':
                 if g.source!='VOLUME': raise ValueError('Volume group required')
                 new_volume(context,g,self.shape,self.tx.created); R.invalidate(scene)
+            elif action=='volume_mesh':
+                if g.source!='VOLUME': raise ValueError('Volume group required')
+                r=R.region(g)
+                if r.eval_mode not in {'ORIGIN','BOUNDS_CENTER'}: raise ValueError('Choose Origin / Bounds Center before adding Mesh')
+                obj=scene.objects.get(self.mesh_name)
+                if not obj or obj.type!='MESH' or obj.name not in scene.objects: raise ValueError('Choose a Mesh in this Scene')
+                v=r.volumes.add(); v.kind='MESH'; v.controller=obj; r.volume_index=len(r.volumes)-1
+                R.invalidate(scene)
             elif action=='volume_remove':
                 r=R.region(g)
                 if 0<=r.volume_index<len(r.volumes): r.volumes.remove(r.volume_index)
@@ -303,6 +324,8 @@ class ZG_Operator:
                             obj=v.controller
                             if obj and obj not in mapping:
                                 copy=obj.copy(); copy.zg_baseline.mask=0; copy.zg_baseline.owner=""; self.tx.created.append(copy)
+                                if obj.type=='MESH':
+                                    copy.data=obj.data.copy(); self.tx.created_meshes.append(copy.data)
                                 (context.collection or scene.collection).objects.link(copy)
                                 mapping[obj]=copy
                                 yield
@@ -335,7 +358,7 @@ class ZG_Operator:
             elif action=='restriction':
                 if self.field not in {'show','selectable','render'}: raise ValueError('Invalid restriction')
                 setattr(g,self.field,not getattr(g,self.field))
-            elif action=='isolate': s.isolate_uid='' if s.isolate_uid else g.uid
+            elif action=='isolate': s.isolate_uid='' if s.isolate_uid==g.uid else g.uid
             elif action=='show_all':
                 s.isolate_uid=''
                 for item in s.groups: item.show=True
@@ -376,6 +399,7 @@ class ZG_Operator:
             yield from R.apply_style(scene,self.tx.journal)
 
 ACTIONS={
+ 'group_from_selection':'New from Selection','volume_mesh':'Register Existing Mesh',
  'group_new':'New Group','group_remove':'Delete Group','group_move':'Move Group',
  'group_duplicate':'Duplicate Group','group_merge':'Merge Groups',
  'membership_mode':'Membership Mode','add_selected':'Add Selected','remove_selected':'Remove Selected',
@@ -384,14 +408,36 @@ ACTIONS={
  'evaluate':'Evaluate','isolate':'Isolate','show_all':'Show All','restriction':'Group Restriction',
  'color_toggle':'Group Colors'}
 
+DESCRIPTIONS={
+ 'group_new':'Create an empty Manual group without creating a Collection',
+ 'group_from_selection':'Create a Manual group containing the selected Objects; one Undo restores the previous state',
+ 'group_remove':'Delete only this group definition; keep its Objects and Volume controllers',
+ 'group_move':'Move this group in the list; order affects color priority only',
+ 'group_duplicate':'Duplicate memberships; Volume Objects and Mesh data are copied independently',
+ 'group_merge':'Merge a group of the same membership type into the active group; preserve independent Regions',
+ 'membership_mode':'Switch an empty group between explicit Manual membership and spatial Volume membership',
+ 'add_selected':'Add selected Objects to this Manual group without moving them',
+ 'remove_selected':'Remove selected Objects from this Manual group; keep the Objects',
+ 'select_members':'Select, extend or deselect members; hidden and locked Objects are skipped',
+ 'select_groups_of_selection':'Extend selection to members of every group containing the selected Objects',
+ 'volume_add':'Create a Box or Sphere Empty at the 3D cursor and register it as an ADD Volume',
+ 'volume_mesh':'Register an existing closed Mesh as a Volume; use raw geometry and ignore modifiers',
+ 'volume_remove':'Remove only this Volume reference; preserve the controller Object',
+ 'fit_to_selection':'Create a Box Empty enclosing the selected Object bounds plus margin',
+ 'evaluate':'Recalculate memberships of all groups, including Manual update groups; Esc cancels',
+ 'isolate':'Temporarily show only this group; click again to restore, or choose another group to switch',
+ 'show_all':'Exit Isolate and clear group viewport restrictions; preserve original visibility and selection/render locks',
+ 'restriction':'Toggle the viewport, selection or render restriction for the active group; restrictions win across memberships',
+ 'color_toggle':'Toggle Object colors for all groups; disabling restores original colors without changing materials'}
 CLASSES=[]
 for action,label in ACTIONS.items():
     cls=type('ZG_OT_'+action,(ZG_Operator,bpy.types.Operator),{
-        '__module__':__name__,'bl_idname':'zg.'+action,'bl_label':label,'action':action,
+        '__module__':__name__,'bl_idname':'zg.'+action,'bl_label':label,'bl_description':DESCRIPTIONS[action],'action':action,
         '__annotations__':dict(ZG_Operator.__annotations__)})
     CLASSES.append(cls)
 
 class ZG_OT_object_color(bpy.types.Operator):
+    bl_description='Switch only the current 3D View to Solid shading with Object colors'
     bl_idname='zg.object_color'; bl_label='Show Object Colors in This View'
     @classmethod
     def poll(cls,context): return context.area is not None and context.area.type=='VIEW_3D'

@@ -98,3 +98,5 @@ repo/
 - Blender Extensionのregister()は `_RestrictData` 内で実行されるため、登録時に `bpy.data.scenes` を走査しないでください。大規模Sceneの `obj.name in scene.objects` の反復は遅いため、更新時にObject集合を構築して照合します。
 
 - Taiyo Object Groupsの復元情報はObject側の `zg_baseline` に保存し、Sceneの所有UUIDで競合を防ぎます。大量の復元対象をSceneのObject PointerPropertyリストへ追加すると、依存関係更新の負荷が増えるため避けます。
+
+- Taiyo Object Groups 1.1.0のMesh回帰は `tools/test_zone_groups_mesh.py` と `tools/test_zone_groups_mesh_invalid.py`、実UIは `tools/ui_test_zone_groups_mesh_undo.py` / `tools/ui_test_zone_groups_mesh_live.py`。OperatorはObjectのPointerPropertyを保持できないため、Mesh選択ダイアログではScene内の名前を指定し、実行時に参照を解決します。

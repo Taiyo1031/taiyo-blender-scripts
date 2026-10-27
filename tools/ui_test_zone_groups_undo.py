@@ -27,7 +27,7 @@ def tick():
     global stage,index,before,after
     try:
         if time.monotonic()-started>120: raise TimeoutError(stage)
-        if stage=='next':
+        if stage=='next' and R.ACTIVE is None:
             if index==len(ACTIONS):
                 print('ZONE GROUPS ALL UNDO PASS',flush=True); bpy.ops.wm.quit_blender(); return None
             action=ACTIONS[index]; kw={}
@@ -45,7 +45,7 @@ def tick():
             after=snap()
             with ctx(): bpy.ops.ed.undo()
             stage='undo'
-        elif stage=='undo':
+        elif stage=='undo' and R.ACTIVE is None:
             record(ACTIONS[index]+' Undo',snap()==before)
             with ctx(): bpy.ops.ed.redo()
             stage='redo'

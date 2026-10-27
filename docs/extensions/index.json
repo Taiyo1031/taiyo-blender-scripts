@@ -428,7 +428,7 @@
       "id": "zone_groups",
       "name": "Taiyo Object Groups",
       "tagline": "Manage spatial groups with reversible colors and restrictions",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -441,10 +441,10 @@
         "Scene",
         "User Interface"
       ],
-      "archive_url": "./zone_groups-1.0.1.zip",
-      "archive_size": 24450,
-      "archive_hash": "sha256:93e20ca460f57612cd698d18c817a4b459695bdf1712ff32879686f688430051",
-      "taiyo_updated_at": 1793067437
+      "archive_url": "./zone_groups-1.1.0.zip",
+      "archive_size": 32174,
+      "archive_hash": "sha256:f9d40eda8ca87a6162d75ad155f085c1a4883f4c435131b7139bea03f96c8323",
+      "taiyo_updated_at": 1793072208
     },
     {
       "schema_version": "1.0.0",

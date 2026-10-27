@@ -1,0 +1,206 @@
+[
+  {
+    "test": "group_from_selection starts",
+    "passed": true
+  },
+  {
+    "test": "group_from_selection Undo",
+    "passed": true
+  },
+  {
+    "test": "group_from_selection Redo",
+    "passed": true
+  },
+  {
+    "test": "add_selected starts",
+    "passed": true
+  },
+  {
+    "test": "add_selected Undo",
+    "passed": true
+  },
+  {
+    "test": "add_selected Redo",
+    "passed": true
+  },
+  {
+    "test": "remove_selected starts",
+    "passed": true
+  },
+  {
+    "test": "remove_selected Undo",
+    "passed": true
+  },
+  {
+    "test": "remove_selected Redo",
+    "passed": true
+  },
+  {
+    "test": "add_selected starts",
+    "passed": true
+  },
+  {
+    "test": "add_selected Undo",
+    "passed": true
+  },
+  {
+    "test": "add_selected Redo",
+    "passed": true
+  },
+  {
+    "test": "group_duplicate starts",
+    "passed": true
+  },
+  {
+    "test": "group_duplicate Undo",
+    "passed": true
+  },
+  {
+    "test": "group_duplicate Redo",
+    "passed": true
+  },
+  {
+    "test": "group_merge starts",
+    "passed": true
+  },
+  {
+    "test": "group_merge Undo",
+    "passed": true
+  },
+  {
+    "test": "group_merge Redo",
+    "passed": true
+  },
+  {
+    "test": "color_toggle starts",
+    "passed": true
+  },
+  {
+    "test": "color_toggle Undo",
+    "passed": true
+  },
+  {
+    "test": "color_toggle Redo",
+    "passed": true
+  },
+  {
+    "test": "isolate starts",
+    "passed": true
+  },
+  {
+    "test": "isolate Undo",
+    "passed": true
+  },
+  {
+    "test": "isolate Redo",
+    "passed": true
+  },
+  {
+    "test": "show_all starts",
+    "passed": true
+  },
+  {
+    "test": "show_all Undo",
+    "passed": true
+  },
+  {
+    "test": "show_all Redo",
+    "passed": true
+  },
+  {
+    "test": "group_new starts",
+    "passed": true
+  },
+  {
+    "test": "group_new Undo",
+    "passed": true
+  },
+  {
+    "test": "group_new Redo",
+    "passed": true
+  },
+  {
+    "test": "membership_mode starts",
+    "passed": true
+  },
+  {
+    "test": "membership_mode Undo",
+    "passed": true
+  },
+  {
+    "test": "membership_mode Redo",
+    "passed": true
+  },
+  {
+    "test": "volume_mesh starts",
+    "passed": true
+  },
+  {
+    "test": "volume_mesh Undo",
+    "passed": true
+  },
+  {
+    "test": "volume_mesh Redo",
+    "passed": true
+  },
+  {
+    "test": "volume_add starts",
+    "passed": true
+  },
+  {
+    "test": "volume_add Undo",
+    "passed": true
+  },
+  {
+    "test": "volume_add Redo",
+    "passed": true
+  },
+  {
+    "test": "fit_to_selection starts",
+    "passed": true
+  },
+  {
+    "test": "fit_to_selection Undo",
+    "passed": true
+  },
+  {
+    "test": "fit_to_selection Redo",
+    "passed": true
+  },
+  {
+    "test": "group_duplicate starts",
+    "passed": true
+  },
+  {
+    "test": "group_duplicate Undo",
+    "passed": true
+  },
+  {
+    "test": "group_duplicate Redo",
+    "passed": true
+  },
+  {
+    "test": "group_merge starts",
+    "passed": true
+  },
+  {
+    "test": "group_merge Undo",
+    "passed": true
+  },
+  {
+    "test": "group_merge Redo",
+    "passed": true
+  },
+  {
+    "test": "group_remove starts",
+    "passed": true
+  },
+  {
+    "test": "group_remove Undo",
+    "passed": true
+  },
+  {
+    "test": "group_remove Redo",
+    "passed": true
+  }
+]
