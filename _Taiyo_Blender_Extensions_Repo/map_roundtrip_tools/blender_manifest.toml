@@ -1,0 +1,15 @@
+schema_version = "1.0.0"
+id = "map_roundtrip_tools"
+version = "0.1.0"
+name = "Map Roundtrip Tools"
+tagline = "Roundtrip linked map placements and library FBX through Houdini"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.5.0"
+website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/README.md"
+license = ["SPDX:GPL-3.0-or-later"]
+tags = ["Import-Export", "Object"]
+[permissions]
+files = "Read placement CSV and FBX, write FBX files and user presets"
+[build]
+paths_exclude_pattern = ["__pycache__/", ".*", "*.zip"]

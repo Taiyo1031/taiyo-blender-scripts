@@ -48,7 +48,7 @@ repo/
 
 このスクリプトは以下を行います。
 
-- 27個の Extensions パッケージを `blender --command extension validate` で検証
+- 28個の Extensions パッケージを `blender --command extension validate` で検証
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `blender --command extension server-generate --repo-dir docs/extensions --html` で `index.json` と `index.html` を生成
 
@@ -65,7 +65,7 @@ repo/
 ## 配布前チェック
 
 - `find . -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store'` で不要物を確認します。
-- `docs/extensions/index.json` の配布パッケージが27個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は27個より多くても問題ありません。
+- `docs/extensions/index.json` の配布パッケージが28個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は28個より多くても問題ありません。
 - `docs/extensions/index.json` と `docs/extensions/index.html` が生成されていることを確認します。
 - 可能ならBlenderのPreferencesからRemote Repositoryに `index.json` URLを追加して確認します。
 
@@ -104,3 +104,7 @@ repo/
 - Taiyo Object Groups 1.1.1の6万Object実UI回帰は `tools/ui_test_zone_groups_isolate_large.py`。hide_viewport変更とhide_getの読取りをObjectごとに交互実行するとView Layer再同期が極端に重くなります。状態は変更前に読み、一括RNA適用と分割Cancel復元を維持してください。
 
 - Taiyo Object Groupsの一括色/制限変更は `tools/test_zone_groups_display_sync.py` で元Objectとevaluated_getの両方を検証します。Object collectionのforeach_setは描画用ID更新通知が不足するため、変更Objectのupdate_tagを省略しないでください。
+
+- Map Roundtrip Tools 0.1.0とUnreal Bridge Tools 2.3.0の回帰は `blender --background --factory-startup --python-exit-code 1 --python tools/test_map_roundtrip_tools.py`。実UIのESC復元は `blender --factory-startup --enable-event-simulate --python tools/ui_test_map_roundtrip_tools.py`、性能測定は `tools/benchmark_map_roundtrip_tools.py`。詳細結果はMap RoundtripのVALIDATION.mdを参照してください。
+- Map RoundtripのPreviewは配置を変更せず、実行時にplanを再作成します。Archiveは全データ内の同じub_zoneを対象にします。復元には元Collection所属・タグ・除外状態も必要です。
+- Blender 4.5.9 / 5.2.2では `wm.fbx_import` とFBX exporterのtemp_override選択上書きを往復テストで確認済みです。Object作成の非線形遅延と最終依存グラフ同期は別々に測定し、Collection link自体と混同しないでください。

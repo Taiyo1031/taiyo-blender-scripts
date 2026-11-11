@@ -1,6 +1,6 @@
 # Unreal Bridge Tools 使用書
 
-**対象version: 2.2.20**
+**対象version: 2.3.0**
 
 ## 1. このアドオンの目的
 
@@ -24,7 +24,7 @@
 1. Blenderを開く
 2. `Edit > Preferences > Add-ons` を開く
 3. `Install...` を押す
-4. `unreal_bridge_tools-2.2.20.zip` を選択
+4. `unreal_bridge_tools-2.3.0.zip` を選択
 5. Add-on一覧で **Unreal Bridge Tools** を有効化
 6. 3D Viewの右側サイドバーを開く
 7. `Unreal Bridge Tools` タブを開く
@@ -147,3 +147,11 @@ id,tx,ty,tz,rx,ry,rz,sx,sy,sz,objname,colname
 - Blender Pythonのデータアクセスは基本的にメインスレッド中心です。CPU全コアを使うマルチスレッド化ではなく、UI割り込みとCSV書き込み回数を減らして高速化しています。
 - 書き出し中に中断したい場合は `Esc` を押してください。中断時は途中までのCSVが残る場合があります。
 - 大量処理前に `.blend` を保存しておくと、名前変更やタグ付けを戻しやすくなります。
+
+## Map Roundtrip対応（2.3.0 / Blender 4.5以上）
+
+- `Scope = Selected` は開始時の選択だけを書き出します。Target Collectionは不要です。選択ゼロならCSVを作りません。既存Filters／Visible Onlyは適用されます。
+- `Tag Exported Objects (ub_zone)` は既定ONです。CSVが正常に保存されたときだけ、実際に書き出したObjectへCSVファイル名（拡張子なし）を付与します。中断・エラーではタグを変更しません。この設定はプリセットに含めません。
+- `Zones > Select In Zone` は`ZONE_`から始まるCube Emptyの範囲に原点が入るMeshを選択します。Emptyの回転・スケールとdisplay sizeを反映し、同名サフィックス領域は合成します。重複はゾーン名順で決まります。Selectedスコープでは使えません。
+- Zones処理はtimerで分割し、ESCで中断できます。中断時の途中選択は残ります。タグ名はCSVへ追加せず、12列の形式は従来どおりです。
+- 推奨手順：Recursiveでゾーンを選択 → Selectedで`ZONE_A.csv`を出力 → Map Roundtrip ToolsでPreview → Dry RunをOFFにしてReplace Zone。

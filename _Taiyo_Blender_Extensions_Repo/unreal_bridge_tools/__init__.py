@@ -1,8 +1,8 @@
 bl_info = {
     "name": "Unreal Bridge Tools",
     "author": "Overnight Artelier",
-    "version": (2, 2, 20),
-    "blender": (4, 2, 0),
+    "version": (2, 3, 0),
+    "blender": (4, 5, 0),
     "location": "3D Viewport > N Panel > Unreal Bridge Tools",
     "description": "Export transforms & collision tags from Blender to CSV for Unreal Engine PCG pipeline.",
     "warning": "",
@@ -20,6 +20,8 @@ from bpy.props import (
 )
 from bpy.types import Operator, Panel, AddonPreferences, PropertyGroup, UIList
 from math import pi
+from .constants import ZONE_KEY
+from .zones import UBT_OT_SelectInZone, zone_items
 
 try:
     from . import preset_utils
@@ -330,9 +332,15 @@ class UBT_Props(PropertyGroup):
             ('direct', "Direct Only", ""),
             ('recursive', "Recursive", ""),
             ('all', "All Collections", ""),
+            ('selected', "Selected", "Selected objects only"),
         ],
         default='recursive'
     )
+
+    tag_zone: BoolProperty(name="Tag Exported Objects (ub_zone)", default=True)
+    zone_prefix: StringProperty(name="Zone Prefix", default="ZONE_")
+    zone_choice: EnumProperty(name="Zone", items=zone_items)
+    zone_result: StringProperty(default="")
 
     select_visible_only: BoolProperty(
         name="Visible Only",
@@ -611,7 +619,9 @@ class UBT_OT_SelectWithColl(Operator):
     invert: BoolProperty(default=False)
     def execute(self, context):
         p = context.scene.ubt_props
-        if p.scope == 'all':
+        if p.scope == 'selected':
+            iterable = tuple(context.selected_objects)
+        elif p.scope == 'all':
             iterable = _iter_all_scene_objects(context)
         else:
             if p.collection is None:
@@ -744,7 +754,7 @@ class UBT_OT_ExportCSV(Operator):
         if not p.export_path and prefs is not None:
             p.export_path = prefs.default_export_path
 
-        if p.scope == 'all':
+        if p.scope in ('all', 'selected'):
             collection = None
         else:
             if p.collection is None:
@@ -776,6 +786,12 @@ class UBT_OT_ExportCSV(Operator):
         self._objects_snapshot = None
         self._objects_snapshot = tuple(self._make_iterator(context))
         self._total = len(self._objects_snapshot)
+        if self._scope == 'selected' and self._total == 0:
+            self.report({'ERROR'}, "No objects selected.")
+            return {'CANCELLED'}
+        self._tag_targets = []
+        self._tag_zone = p.tag_zone
+        self._zone_name = os.path.splitext(os.path.basename(bpy.path.abspath(p.export_path)))[0] if p.export_path else ""
         self._collection_name_by_pointer = _build_first_collection_name_map(
             self._objects_snapshot,
         )
@@ -833,6 +849,8 @@ class UBT_OT_ExportCSV(Operator):
         snapshot = getattr(self, "_objects_snapshot", None)
         if snapshot is not None:
             return iter(snapshot)
+        if self._scope == 'selected':
+            return iter(tuple(context.selected_objects))
         if self._scope == 'all':
             return _iter_all_scene_objects(context)
         return _iter_collection_objects(
@@ -928,6 +946,8 @@ class UBT_OT_ExportCSV(Operator):
             objname,
             colname,
         ])
+        if self._tag_zone:
+            self._tag_targets.append(ob)
         self._row_id += 1
         self._exported += 1
         return True
@@ -1036,6 +1056,7 @@ class UBT_OT_ExportCSV(Operator):
         self._items_per_second = 0.0
         self._last_tick_seconds = 0.0
         self._row_buffer = []
+        self._tag_targets = []
         try:
             self._open_export_file(_safe_temp_csv_path())
         except Exception:
@@ -1080,6 +1101,16 @@ class UBT_OT_ExportCSV(Operator):
         p.export_running = False
         p.export_cancel_requested = False
         self._release_export_snapshot()
+        if not cancelled and not error_message and self._tag_zone:
+            if self._zone_name:
+                for ob in self._tag_targets:
+                    try:
+                        ob[ZONE_KEY] = self._zone_name
+                    except ReferenceError:
+                        pass
+            else:
+                self.report({'WARNING'}, "Zone tagging skipped: export filename is empty.")
+        self._tag_targets = []
 
         if error_message:
             p.export_status = f"Failed: {error_message}"
@@ -1144,11 +1175,23 @@ class UBT_PT_Main(Panel):
         box.label(text="Scope & Export")
         row = box.row(align=True)
         row.prop(p, "scope", expand=True)
-        if p.scope != 'all':
+        if p.scope not in ('all', 'selected'):
             box.prop(p, "collection")
         box.prop(p, "export_path")
         box.prop(p, "export_mode")
+        box.prop(p, "tag_zone")
         box.operator("ubt.test_write", icon="FILE_TICK")
+
+        box = layout.box()
+        box.label(text="Zones")
+        box.prop(p, "zone_prefix")
+        box.prop(p, "zone_choice")
+        previous = layout.operator_context
+        box.operator_context = 'INVOKE_DEFAULT'
+        box.operator("ubt.select_in_zone")
+        if p.zone_result:
+            box.label(text=p.zone_result)
+        layout.operator_context = previous
 
         box = layout.box()
         box.label(text="Filters")
@@ -1230,6 +1273,7 @@ classes = (
     UBT_OT_SelectWithColl,
     UBT_OT_TestWrite,
     UBT_OT_ExportCSV,
+    UBT_OT_SelectInZone,
     UBT_PT_Main,
 )
 

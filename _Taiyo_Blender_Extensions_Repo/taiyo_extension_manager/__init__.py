@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 16),
+    "version": (1, 0, 17),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -33,6 +33,7 @@ RELEASE_TIMESTAMP_KEY = "taiyo_updated_at"
 TAG_FILTER_SEPARATOR = "\n"
 
 TAG_ALIASES = {
+    "map_roundtrip_tools": ("map", "roundtrip", "houdini", "unreal", "fbx", "csv", "linked", "zone", "マップ", "往復", "配置", "書き出し", "取り込み", "置換"),
     "zone_groups": ("zone", "group", "volume", "color", "selection", "グループ", "範囲", "色分け", "複数所属", "表示"),
     "hierarchy_restriction_manager": (
         "hierarchy", "collection", "visibility", "restriction", "render", "holdout",
@@ -151,6 +152,7 @@ TAG_ALIASES = {
 }
 
 DESCRIPTION_ALIASES = {
+    "map_roundtrip_tools": {"ja": "ゾーン単位の配置CSVをリンク複製として復元し、ライブラリFBXをHoudiniと往復します。", "en": "Roundtrip zone placements as linked meshes and exchange library FBX with Houdini."},
     "zone_groups": {"ja": "Collectionを増やさず手動・空間グループを管理し、複数所属の色分けと表示を切り替えます。", "en": "Manage Manual and Volume groups with reversible colors and visibility."},
     "hierarchy_restriction_manager": {
         "ja": "Collection階層の表示・選択・レンダー制限を一括変更し、Soloや復元を行います。",

@@ -189,18 +189,18 @@
       "id": "unreal_bridge_tools",
       "name": "Unreal Bridge Tools",
       "tagline": "Export transforms and collision tags for Unreal Engine PCG",
-      "version": "2.2.20",
+      "version": "2.3.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
-      "blender_version_min": "4.2.0",
+      "blender_version_min": "4.5.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./unreal_bridge_tools-2.2.20.zip",
-      "archive_size": 17048,
-      "archive_hash": "sha256:335dbd89dacd6ff39b5f8e96c3c1f82c8d961f849e66d377ed77ce55a322b166",
-      "taiyo_updated_at": 1786343653
+      "archive_url": "./unreal_bridge_tools-2.3.0.zip",
+      "archive_size": 21044,
+      "archive_hash": "sha256:afaa5f1d2621a4d17a6cbd8d88276ecf3ff15c7269c598868bd8e334fa8de0be",
+      "taiyo_updated_at": 1794393245
     },
     {
       "schema_version": "1.0.0",
@@ -333,7 +333,7 @@
       "id": "taiyo_extension_manager",
       "name": "Taiyo Extension Manager",
       "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.16",
+      "version": "1.0.17",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -341,10 +341,10 @@
       ],
       "blender_version_min": "4.2.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.16.zip",
-      "archive_size": 13462,
-      "archive_hash": "sha256:3b0cfa55649556f998d0151abcd129608dc7bb605e8406d9d70b7788c30278f8",
-      "taiyo_updated_at": 1793042875
+      "archive_url": "./taiyo_extension_manager-1.0.17.zip",
+      "archive_size": 13612,
+      "archive_hash": "sha256:64f0695296e30d45d10d941f147f1f7a78957be62d12c0e52118e303bdcdafd6",
+      "taiyo_updated_at": 1794393245
     },
     {
       "schema_version": "1.0.0",
@@ -535,6 +535,31 @@
       "archive_size": 8721,
       "archive_hash": "sha256:a96e3446389e3173c4034aad555f3ea40a7888b6c29c0591b0f7b04efbef6238",
       "taiyo_updated_at": 1779596198
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "map_roundtrip_tools",
+      "name": "Map Roundtrip Tools",
+      "tagline": "Roundtrip linked map placements and library FBX through Houdini",
+      "version": "0.1.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/README.md",
+      "permissions": {
+        "files": "Read placement CSV and FBX, write FBX files and user presets"
+      },
+      "tags": [
+        "Import-Export",
+        "Object"
+      ],
+      "archive_url": "./map_roundtrip_tools-0.1.0.zip",
+      "archive_size": 117752,
+      "archive_hash": "sha256:043177ba864a19d621fdacd9ee6114c77e4a31a6e55308c049623b9ad256a833",
+      "taiyo_updated_at": 1794393245
     }
   ]
 }

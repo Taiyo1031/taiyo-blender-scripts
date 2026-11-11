@@ -1,0 +1,49 @@
+{
+  "blender": "4.5.9 LTS",
+  "runs": [
+    {
+      "count": 10000,
+      "csv_selected_seconds": 0.2768072079634294,
+      "csv_collection_seconds": 0.24637720797909424,
+      "plan_seconds": 0.03544741700170562,
+      "replace_seconds": 4.074451874999795,
+      "phases": {
+        "Plan": 0.0010451251291669905,
+        "Planning CSV": 0.04666017001727596,
+        "Creating linked instances": 3.983469633734785,
+        "Archiving": 0.03256438969401643
+      },
+      "max_uninterruptible_step_seconds": 0.6002852499950677
+    },
+    {
+      "count": 30000,
+      "csv_selected_seconds": 0.820650374982506,
+      "csv_collection_seconds": 0.7264367499738,
+      "plan_seconds": 0.11551600001985207,
+      "replace_seconds": 50.81520970800193,
+      "phases": {
+        "Plan": 0.0012721249368041754,
+        "Planning CSV": 0.1378186197252944,
+        "Creating linked instances": 50.522627596219536,
+        "Archiving": 0.114698157296516
+      },
+      "max_uninterruptible_step_seconds": 1.8755691249971278
+    },
+    {
+      "count": 60000,
+      "csv_selected_seconds": 1.8120462910155766,
+      "csv_collection_seconds": 1.6395717080449685,
+      "plan_seconds": 0.23607062501832843,
+      "replace_seconds": 281.85463795799296,
+      "phases": {
+        "Plan": 0.0017159990384243429,
+        "Planning CSV": 0.30711302504641935,
+        "Creating linked instances": 281.1803362054052,
+        "Archiving": 0.2694037374458276
+      },
+      "max_uninterruptible_step_seconds": 5.468046625028364
+    }
+  ],
+  "temp": "/var/folders/69/4lfhcfbj0dl9804ysfss0mlm0000gn/T/mrt-bench-16653d9g",
+  "numpy_100k_seconds": 0.018572457949630916
+}

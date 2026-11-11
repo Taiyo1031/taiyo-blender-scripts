@@ -8,8 +8,8 @@ Blender上のオブジェクトTransform情報とCollection情報をCSVへ書き
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar (N) > Unreal Bridge Tools`
-- バージョン: `2.2.20`
-- 対応Blender目安: `4.2.0` 以降
+- バージョン: `2.3.0`
+- 対応Blender目安: `4.5.0` 以降
 - カテゴリ: `Import-Export`
 
 ## 使う場面
@@ -58,3 +58,11 @@ id, tx, ty, tz, rx, ry, rz, sx, sy, sz, objname, colname
 
 ## GitHub仕様書
 - [Unreal_Bridge_Tools_使用書.md](https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md)
+
+## Map Roundtrip対応（2.3.0 / Blender 4.5以上）
+
+- `Scope = Selected` は開始時の選択だけを書き出します。Target Collectionは不要です。選択ゼロならCSVを作りません。既存Filters／Visible Onlyは適用されます。
+- `Tag Exported Objects (ub_zone)` は既定ONです。CSVが正常に保存されたときだけ、実際に書き出したObjectへCSVファイル名（拡張子なし）を付与します。中断・エラーではタグを変更しません。この設定はプリセットに含めません。
+- `Zones > Select In Zone` は`ZONE_`から始まるCube Emptyの範囲に原点が入るMeshを選択します。Emptyの回転・スケールとdisplay sizeを反映し、同名サフィックス領域は合成します。重複はゾーン名順で決まります。Selectedスコープでは使えません。
+- Zones処理はtimerで分割し、ESCで中断できます。中断時の途中選択は残ります。タグ名はCSVへ追加せず、12列の形式は従来どおりです。
+- 推奨手順：Recursiveでゾーンを選択 → Selectedで`ZONE_A.csv`を出力 → Map Roundtrip ToolsでPreview → Dry RunをOFFにしてReplace Zone。

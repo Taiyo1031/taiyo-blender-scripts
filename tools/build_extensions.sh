@@ -8,6 +8,7 @@ OUTPUT_DIR="$ROOT_DIR/docs/extensions"
 if [[ -z "${BLENDER_BIN:-}" ]]; then
   blender_candidates=(
     "/Applications/Blender.app/Contents/MacOS/Blender"
+    "/Applications/Blender4.5.9.app/Contents/MacOS/Blender"
     "C:/Program Files/Blender Foundation/Blender 4.5/blender.exe"
     "C:/Program Files/Blender Foundation/Blender 4.4/blender.exe"
     "C:/Program Files/Blender Foundation/Blender 4.3/blender.exe"
@@ -36,6 +37,7 @@ packages=(
   "instance_name_fixer"
   "laid_collection_instance_linker"
   "map_link_tools"
+  "map_roundtrip_tools"
   "mesh_attribute_batch_remover"
   "modular_asset_renamer"
   "move_selected_to_own_collections"
@@ -91,6 +93,7 @@ compatibility_archives=(
   "unreal_bridge_tools-2.2.17.zip"
   "unreal_bridge_tools-2.2.18.zip"
   "unreal_bridge_tools-2.2.19.zip"
+  "unreal_bridge_tools-2.2.20.zip"
   "vertex_color_material_painter-1.0.0.zip"
   "vertex_color_material_painter-1.0.1.zip"
   "vertex_color_material_painter-1.0.2.zip"
