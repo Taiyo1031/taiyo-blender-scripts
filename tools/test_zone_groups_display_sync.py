@@ -1,5 +1,5 @@
 """Verify viewport evaluated IDs, not just original Object values after bulk writes."""
-import bpy,sys,pathlib,json
+import bpy,sys,pathlib,json,tempfile
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'_Taiyo_Blender_Extensions_Repo'))
 import zone_groups as Z
 from zone_groups import runtime as R,operations as O
@@ -37,6 +37,6 @@ assert all(not o.visible_get() for o in objects);results.append('Bulk viewport r
 g.show=True;styled();assert all(o.visible_get() for o in objects);results.append('Bulk visibility restore')
 g.render=False;styled();assert all(o.evaluated_get(dg).hide_render for o in objects);results.append('Bulk render restriction reaches evaluated IDs')
 g.render=True;styled();assert all(not o.evaluated_get(dg).hide_render for o in objects)
-path=pathlib.Path('/tmp/zone_groups_display_sync_'+bpy.app.version_string.split()[0]+'.json');path.write_text(json.dumps(dict(blender=bpy.app.version_string,passed=results),indent=2))
+path=pathlib.Path(tempfile.gettempdir())/('zone_groups_display_sync_'+bpy.app.version_string.split()[0]+'.json');path.write_text(json.dumps(dict(blender=bpy.app.version_string,passed=results),indent=2))
 print('DISPLAY_SYNC_PASS',bpy.app.version_string,results,flush=True)
 Z.unregister()

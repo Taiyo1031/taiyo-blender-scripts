@@ -131,7 +131,7 @@ def test_distributed_index_metadata(manager):
 
     errors = []
     items = index_data["data"]
-    assert len(items) == 27
+    assert len(items) == 28
     zone = next(item for item in items if item['id'] == 'zone_groups')
     assert zone['name'] == 'Taiyo Object Groups'
     assert zone['blender_version_min'] == '4.5.9'
