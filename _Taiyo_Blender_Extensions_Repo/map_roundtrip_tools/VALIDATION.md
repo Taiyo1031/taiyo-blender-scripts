@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.1.1**（性能の実測は0.1.0。0.1.1はUI・ヒントを更新） / Unreal Bridge Tools **2.3.2**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.2.0**（性能の実測は0.1.0。0.1.1はUI・ヒントを更新） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -72,3 +72,9 @@
 ## 0.1.1 / UBT 2.3.2のUI更新
 
 SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホバーヒントは tools/test_unreal_bridge_zone_registry.py でBlender 4.5.9 / 5.2.2にて確認。標準FBX画面の実UIは tools/ui_test_map_roundtrip_native_fbx.py で、標準ExporterのID、PRESET対応、選択MeshとLinearカラー初期値、キャンセル時の非出力を確認しました。補助機能の個別FBX出力と配置・復元の既存回帰も合格しました。手順は[詳細使用書](WORKFLOW_JA.md)にまとめています。
+
+## 0.2.0の担当整理
+
+ゾーン管理・範囲内Mesh選択・ゾーンCSV出力をMRTへ移しました。UBT 2.3.3は2.2.20相当の元の機能です。本報告の旧UBT Selected/Zone UIの記述と性能表は過去版の記録です。現行手順はWORKFLOW_JA.mdを参照してください。新しい回帰はtools/test_map_roundtrip_tools.py、test_map_roundtrip_zones.py、test_map_roundtrip_zone_registry.py、test_map_roundtrip_zone_migration.pyで検証します。
+
+0.2.0の選択CSVはBlender 4.5.9で6万件0.787秒、最大tick0.085秒でした。MRT単独のゾーン管理・CSV・配置・FBX、旧ゾーンのAdd/Subtract/登録状態、個別/全ゾーンのEmpty選択を4.5.9/5.2.2で回帰確認します。

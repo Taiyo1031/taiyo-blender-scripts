@@ -11,3 +11,5 @@ FBX_ARGUMENTS = dict(fbx_scale='global_scale', fbx_apply_scalings='apply_scale_o
                      fbx_apply_modifiers='use_mesh_modifiers', fbx_smoothing='mesh_smooth_type',
                      fbx_vertex_colors='colors_type', fbx_triangulate='use_triangles',
                      fbx_tangent='use_tspace', fbx_apply_transform='bake_space_transform')
+
+ZONE_NAME_KEY = 'zone'

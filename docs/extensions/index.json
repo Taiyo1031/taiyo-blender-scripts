@@ -189,7 +189,7 @@
       "id": "unreal_bridge_tools",
       "name": "Unreal Bridge Tools",
       "tagline": "Export transforms and collision tags for Unreal Engine PCG",
-      "version": "2.3.2",
+      "version": "2.3.3",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -197,10 +197,10 @@
       ],
       "blender_version_min": "4.5.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./unreal_bridge_tools-2.3.2.zip",
-      "archive_size": 27115,
-      "archive_hash": "sha256:422043325fa7ebf4aef35b06255dcd6678cafd10fe0280d683ec53e95770676a",
-      "taiyo_updated_at": 1794406279
+      "archive_url": "./unreal_bridge_tools-2.3.3.zip",
+      "archive_size": 17423,
+      "archive_hash": "sha256:51f8895900d671c24d1364d068524c068b25f98b360954c8f0e160d904c8ce24",
+      "taiyo_updated_at": 1794410423
     },
     {
       "schema_version": "1.0.0",
@@ -541,7 +541,7 @@
       "id": "map_roundtrip_tools",
       "name": "Map Roundtrip Tools",
       "tagline": "Roundtrip linked map placements and library FBX through Houdini",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -556,10 +556,10 @@
         "Import-Export",
         "Object"
       ],
-      "archive_url": "./map_roundtrip_tools-0.1.1.zip",
-      "archive_size": 125387,
-      "archive_hash": "sha256:c3d000b9735725d185e2da1c659ff51e8a6ed4630fa00fb6d239c1ab9fa7dc30",
-      "taiyo_updated_at": 1794406281
+      "archive_url": "./map_roundtrip_tools-0.2.0.zip",
+      "archive_size": 131991,
+      "archive_hash": "sha256:8a5a7b57db51fbfe3185746f52631b1c6d74d285bd8c3112462af5097c4230ab",
+      "taiyo_updated_at": 1794410425
     }
   ]
 }

@@ -109,6 +109,8 @@ repo/
 - Map RoundtripのPreviewは配置を変更せず、実行時にplanを再作成します。Archiveは全データ内の同じub_zoneを対象にします。復元には元Collection所属・タグ・除外状態も必要です。
 - Blender 4.5.9 / 5.2.2では `wm.fbx_import` とFBX exporterのtemp_override選択上書きを往復テストで確認済みです。Object作成の非線形遅延と最終依存グラフ同期は別々に測定し、Collection link自体と混同しないでください。
 
-- Unreal Bridge Tools 2.3.1の複数Empty Add/Subtract、追加ボタン、保存復元、10万点判定は `blender --background --factory-startup --python-exit-code 1 --python tools/test_unreal_bridge_zones.py` で検証します。Subtractは所属ゾーンだけに作用し、従来EmptyはAddとして扱います。過去のub_zoneタグは範囲編集で自動解除しません。
 
-- Unreal Bridge Tools 2.3.2のSceneゾーン登録・既存Empty登録・登録解除・保存復元は tools/test_unreal_bridge_zone_registry.py。明示登録したCube Emptyは名前の接頭辞によらず対象となり、登録解除はObjectを削除せずubt_zone_enabledをOFFにします。Map Roundtrip 0.1.1は標準FBX画面をメインにし、個別一括出力はAdvanced / Batch Exportへ残します。Exchange Folder / Return Folderは参考欄です。
+
+- Map Roundtrip 0.2.0がゾーン登録・Empty管理・Add/Subtract・Mesh/Empty一括選択・選択CSVを担当します。UBT 2.3.3は2.2.20相当へ復元。ゾーン関連テストはtools/test_map_roundtrip_zones.py、test_map_roundtrip_zone_registry.py、test_map_roundtrip_zone_migration.py。旧UBTのゾーン情報はMRTが互換読取りし、register時のScene走査はしません。CSVは選択Zone名.csvを出力し、成功時のみub_zoneを更新します。
+
+- Blender 5.xの実行時RNAプロパティはdict型ID Property参照だけでは旧値を読めない場合があります。MRTの旧データ移行は非表示の互換スキーマを使い、登録後timer/load_postで登録ゾーン名を引き継ぎます。両アドオンの有効/無効化順はtools/test_map_roundtrip_addon_lifecycle.pyで確認します。

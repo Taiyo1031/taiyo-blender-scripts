@@ -1,138 +1,119 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.1.1 / Unreal Bridge Tools 2.3.2 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.2.0 / Blender 4.5.0以上**
 
-## 1. どのパネルを使う？
+## 1. 担当する機能
 
-| 作業 | パネル |
-|---|---|
-| Zone登録・Emptyで範囲編集・配置CSV出力 | `N > Unreal Bridge Tools` |
-| FBX出力・HoudiniからのMesh取込・CSVから配置を復元 | `N > Map Roundtrip` |
+ゾーン管理・Empty編集・範囲選択・ゾーンCSV・FBX入出力・配置復元は、すべて `N > Map Roundtrip` で行います。**Unreal Bridge Toolsを有効にする必要はありません。**
 
-作業前に.blendを保存してください。大量配置のReplaceはUndo履歴を作りません。ZoneのEmpty追加・登録・解除には通常のUndoがあります。
+Unreal Bridge Tools 2.3.3は2.2.20相当の元の機能へ戻しました。従来のCollection/Scene CSV、Collision Tag、Filters、Presets用です。Selectedスコープ・Zone UI・ゾーンタグ付けはUBTから取り除きました。
 
-## 2. 最初の準備
+作業前に.blendを保存してください。大量配置のReplaceはUndo履歴を作りません。
 
-`Map Roundtrip > Import > Collections`に次を指定します。
+## 2. Zoneを登録する
 
-- **Library**：配置の元になるMesh Objectの保管場所。例 `ForExport_Dirty_1`。
-- **Map**：配置を復元するCollection。例 `Laid_MAP_1`。
-- **New Meshes To**：追加Meshを置くLibrary内の子Collection名。既定 `FromHoudini`。
+1. `Map Roundtrip > Zones > New Zone`を押します。
+2. `Zone Name`に `ZONE_A` などを入力します。
+3. `Zone`一覧で操作するゾーンを選びます。新規登録直後はEmptyがない空のゾーンです。
+4. `Add Empty`で新しい箱を作るか、既存Emptyを選び `Register Selected Empties` で登録します。
 
-名前をそのまま使う必要はありません。実際のCollectionを指定してください。LibraryとMapは別の役割です。
+別ゾーンもNew Zoneで登録します。ゾーン一覧と所属は.blendに保存されます。旧UBTで作ったEmptyと登録済みゾーンも読み取れます。旧UBTのAdd/Subtract・登録解除状態を保持します。旧UBTが無効でも利用できます。
 
-## 3. Zoneはどう指定する？
+### 新しいEmpty
 
-### 新しいZoneをUIに登録する
+Add Emptyは3Dカーソル位置にCube Emptyを作り、選択・アクティブにします。繰り返すと1ゾーンに複数の箱を追加できます。初期display size=1は各軸の半径1です。`G`で移動、`R`で回転、`S`で拡大して範囲を作ります。
 
-1. `Unreal Bridge Tools > Zones > New Zone`を押します。
-2. `Zone Name`へ **ZONE_A** などを入力して確定します。
-3. `Zone`一覧に登録され、そのZoneが選ばれます。この時点では空のZoneです。
-4. `Add Empty`で範囲を作るか、次の「既存Emptyの登録」を行います。
+### 既存のEmpty
 
-別のZoneはもう一度New Zoneで `ZONE_B` などを登録します。Zone一覧は.blendに保存されます。**Zoneを選ぶだけでは、まだMeshの選択もCSV出力も実行しません。**
+Zoneを選び、ビューポート／OutlinerでEmptyを選択してRegister Selected Emptiesを押します。名前は変更せず、Cube表示にします。位置・回転・スケールは保持します。別ZoneのEmptyを登録すると所属が移ります。名前がZONE_から始まらなくても登録できます。
 
-### 新しい範囲Emptyを追加する
+### 一覧の操作
 
-1. `Zone`で登録先を選びます。
-2. `Add Empty`を押します。
-3. 3Dカーソルの位置にCube Emptyが追加され、選択・アクティブになります。
-4. `G`で移動、`S`で拡大、`R`で回転して範囲を調整します。初期display size=1は、各軸の半径1の箱です。
+- **Empty名ボタン**：そのEmptyを選択して編集します。
+- **Add / Subtract**：追加／くり抜きの役割を変更します。
+- **×**：登録のみ解除します。Object本体は削除しません。
 
-Add Emptyを繰り返すと同じZoneに複数の箱を作れます。All Zonesの状態からAdd Emptyを押す従来の作成ダイアログも利用できます。
+## 3. ゾーンをまとめて選択する
 
-### すでにあるEmptyを登録する
+目的によってボタンを分けています。
 
-1. `Zone`で登録先（例ZONE_A）を選びます。
-2. ビューポート／Outlinerで登録したいEmptyを選択します。複数選択できます。
-3. `Register Selected Empties`を押します。
+| ボタン | 選ぶ対象 | All Zonesを選んだ場合 |
+|---|---|---|
+| **Select Zone Empties** | 選択中のゾーンを構成するEmpty | 全ゾーンのEmptyをまとめて選択 |
+| **Select Meshes In Zone** | ゾーン範囲内に原点が入るMesh | 全ゾーンの範囲に入るMeshをまとめて選択 |
 
-Object名は変えません。表示をCubeへ変更し、位置・回転・スケールを保持します。名前が `ZONE_` から始まらなくてもUI登録できます。別Zone所属のEmptyを登録すると所属を変更します。Meshは登録対象になりません。
+箱をまとめて移動・拡大したいときはSelect Zone Emptiesを使います。Houdiniへ送る配置を選ぶときはSelect Meshes In Zoneを使います。非表示・選択禁止のObjectは選択せず、件数を報告します。
 
-### 一覧から編集・登録解除する
+Mesh選択の `Mesh Candidates` は次の2通りです。
 
-- 一覧の**Empty名ボタン**：そのEmptyを選択して編集します。非表示・選択禁止なら先に解除してください。
-- **Add / Subtract**：範囲を足す／くり抜く役割を変更します。
-- **×**：Zone登録だけを解除します。Empty本体は削除しません。再度Register Selected Emptiesで登録できます。
+- **Map Collection**：指定したMapとその子CollectionのMeshを候補にします。
+- **All Scene Meshes**：現在SceneのMeshを候補にします。
 
-明示登録した所属はカスタムプロパティ `zone` に保存します。従来の `ZONE_A` / `ZONE_A.001` のようなCube Emptyは自動検出も継続します。Zone Prefixはこの自動検出に使う接頭辞です。
-
-## 4. AddとSubtractの使い分け
+## 4. AddとSubtract
 
 ```text
 ZONE_A =（Addの箱① ＋ Addの箱②）－（Subtractの箱③ ＋ Subtractの箱④）
 ```
 
-Addの範囲をすべて合成してから、Subtractの合成範囲を引きます。箱の並び順は関係ありません。Subtractは所属Zoneにだけ作用し、別Zoneの範囲を削りません。SubtractしかないZoneは空の範囲です。
+箱の順序は関係ありません。Subtractは同じゾーンだけに作用します。Subtractだけのゾーンは空です。判定するのはMeshの原点で、形状やバウンディングボックスの交差ではありません。Mesh自体を切断するBooleanでもありません。編集後はSelect Meshes In Zoneを実行し直してください。
 
-判定するのは**Mesh Objectの原点**です。形状の一部が箱にかかっていても、原点が外なら選ばれません。Mesh自体を切断するBooleanではありません。範囲の編集後はSelect In Zoneを実行し直します。
+従来のZONE_A / ZONE_A.001というCube Emptyは同じゾーンとして自動検出します。Zone Prefixはこの検出用です。UI登録したEmptyは名前の接頭辞に依存しません。
 
-## 5. Zoneの配置をCSVへ書き出す
+## 5. ゾーンCSVを書き出す
 
-1. `Scope = Recursive`、`Target Collection = Mapの配置Collection`にします。
-2. `Zones > Zone = ZONE_A`を選びます。
-3. `Select In Zone`を押し、選択数を確認します。空のZoneなら先にEmptyを登録してください。
-4. **ScopeをSelectedへ変更**します。SelectedのままSelect In Zoneは実行できません。
-5. `Name Normalize`をLibraryの名前に合う設定にします。通常はRemove Numeric Suffixで配置名末尾の`.001`等を除きます。
-6. `Export CSV`のパスを、例 `//houdini_io/out/ZONE_A.csv`にします。
-7. `Tag Exported Objects (ub_zone)`をONにし、`CSV zone tag: ZONE_A`の表示を確認してExport CSVを実行します。
+1. 個別のZone（例ZONE_A）を選びます。
+2. Mesh CandidatesとMapを指定して **Select Meshes In Zone** を押します。
+3. 必要ならMeshの選択を手動で絞ります。
+4. `CSV Output Folder`を指定します。例 `//houdini_io/out`。
+5. Libraryの名前に合う `Name Normalize` を指定します。通常はRemove Numeric Suffixです。
+6. **Export Selected CSV** を押します。
 
-**重要：ub_zoneはZoneドロップダウンではなく、CSVのファイル名から決まります。** ZONE_Aを選んでも出力先がTest.csvならタグはTestです。Zone名とCSV名を揃えてください。Zoneを切り替えてもファイルパスは自動変更しません。
+選択Meshだけを **ZONE_A.csv** へ出力し、正常終了時だけ `ub_zone=ZONE_A` を付けます。ファイル名とタグは現在のZone名に揃います。CSVは従来と同じ12列、ワールド座標、XYZ回転の度数、小数6桁です。UBTのScope切り替えは不要です。
 
-All Zonesは全Zoneの選択結果をまとめますが、CSV列にZone列は追加しません。Zone別に往復する場合はZONE_A.csv、ZONE_B.csvを別々に出力します。名前順に重なる範囲が解決されます。
+All Zonesは選択用です。ゾーン別CSVを出すときは個別ゾーンを選んでください。選択ゼロ・読み取り専用ObjectなどのエラーやESC中断では、既存CSVと元のタグを保持します。
 
-過去のCSV出力で付いたub_zoneは、Emptyの編集や登録解除では自動で消しません。既に書き出したZoneを縮小した場合、Replace前に旧対象件数も確認してください。
+範囲を変えても過去のub_zoneタグは自動で消しません。既に出力したゾーンを縮小した場合は、Replaceの旧対象件数を確認してください。
 
-## 6. Exchange Folderって何？
+## 6. Exchange Folderとは
 
-**BlenderとHoudiniでファイルを受け渡すフォルダーの参考メモ**です。既定 `//houdini_io` の `//` は、保存した.blendファイルの場所からの相対パスです。
+BlenderとHoudiniで受け渡す場所の**参考メモ**です。変更しても各パスは連動せず、作成・監視・自動取込もしません。Return Folderも同様です。
 
-例：
+`//`は、保存した.blendからの相対パスです。
 
 ```text
 Project/
   map.blend
-  houdini_io/             ← Exchange Folderの参考例
-    out/
-      ZONE_A.csv         ← UBTのExport CSVで指定
-      fbx/               ← 補助FBX出力のOutput Folderで指定
-    in/
-      ZONE_A.csv         ← MRTのPlacement CSVで指定
-      new_meshes.fbx     ← MRTのMesh FBXで指定
+  houdini_io/
+    out/ZONE_A.csv      ← CSV Output Folderで指定する出力
+    out/fbx/           ← 個別一括FBXのOutput Folderの例
+    in/ZONE_A.csv      ← Placement CSVで指定する戻りファイル
+    in/new_meshes.fbx  ← Mesh FBXで指定する追加Mesh
 ```
 
-Exchange Folderを変えても、他のパスは連動しません。この欄だけでフォルダー作成・コピー・ファイル監視・自動取込は行いません。Return Folderも同じく参考欄です。**実際に使うのはExport CSV、標準FBX画面の保存先、補助機能のOutput Folder、Placement CSV、Mesh FBXです。**
+実際に使うパスはCSV Output Folder、標準FBX画面の保存先、補助機能のOutput Folder、Placement CSV、Mesh FBXです。
 
-## 7. FBXはBlender標準UIから書き出す
+## 7. FBXと標準プリセット
 
-1. Libraryの必要なMeshを選択します。Unrealの個別SM用なら、配置Objectではなく原点に置いたLibrary本体を選びます。
-2. `Map Roundtrip > Export > Export FBX (Blender)`を押します。
-3. Blender標準のファイル選択・FBX設定画面が開きます。保存先とファイル名をここで決めます。
-4. 標準UIの設定とプリセットを使って書き出します。初期設定は選択Meshのみ、Vertex Colors=Linearです。
+Libraryの必要なMeshを選択して **Export FBX (Blender)** を押します。Blender標準のファイル画面で保存先・設定・標準プリセットを選べます。既定は選択Meshのみ、頂点カラーLinearです。
 
-PathsのFBX Nameは標準画面の**初期ファイル名**と補助機能Combinedの名前に使います。範囲選択やub_zoneタグを設定する欄ではありません。標準画面での設定変更は、その標準オペレーター側で扱い、補助機能の独自JSONプリセットへは同期しません。
+PathsのFBX Nameは初期ファイル名と補助機能Combinedの名前です。ゾーンの所属や置換タグを変える欄ではありません。
 
-### Objectごとの個別FBXを一括出力したい場合
+Objectごとの個別FBX一括出力は **Advanced / Batch Export** を開き、Files=Per Objectにします。標準Batch ModeにはObjectごとの自動分割がないため、この補助機能を残しています。標準プリセットと補助機能のJSONプリセットは別です。
 
-`Advanced / Batch Export`を開き、Files=Per Object、Output Folder等を指定して内部のExport FBXを押します。こちらは従来の補助機能です。独自のPreset／Advanced設定はこの折りたたみに残しています。
+Unreal用の個別SMなら、配置Objectではなく原点に置いたLibrary本体を選んで出力します。
 
-Blender標準のBatch ModeはScene／Collection単位で、Objectごとの自動分割はありません。標準プリセットと補助機能のJSONプリセットは別です。
+## 8. Houdiniから戻す
 
-## 8. Houdiniから戻して配置を復元する
+1. Import > Collectionsで **Library** と **Map** を指定します。例ForExport_Dirty_1／Laid_MAP_1。名前は自由です。
+2. 新しいMeshがある場合だけMesh FBXを指定し、Import New Meshesを実行します。既定の入れ先はLibrary/FromHoudiniです。
+3. 戻りのPlacement CSVを指定します。
+4. Replace ZoneのZoneを元のタグ（例ZONE_A）に合わせます。CSV出力成功時にはこの欄にもZone名が設定されます。空欄なら戻りCSV名を使用します。
+5. Dry Run ONでPreview Placementを確認し、OFFにしてReplace Zoneを実行します。
 
-1. Houdiniは同じ12列のCSVを返します。CSVはBlenderのワールド座標、XYZ回転の度数です。
-2. 新しいLibrary Meshがある場合だけ、Mesh FBXを指定してImport New Meshesを実行します。
-3. Placement CSVを指定します。Import > Replace ZoneのZoneを**元のCSVタグと同じZONE_A**にします。空欄なら戻りCSVのファイル名を使います。
-4. Dry Run ONでPreview Placementを押します。旧対象、新規件数、未解決名を確認します。
-5. Dry RunをOFFにしてReplace Zoneを実行します。既定Archiveは旧配置を保持して退避します。
+Archiveは旧配置を保持して退避します。Deleteは明示選択時だけ削除します。旧対象はMap配下だけでなく、全データの同じub_zoneを持つObjectです。CSV名をZONE_A_return.csvに変えて返す場合も、置換タグはZONE_Aを維持してください。
 
-戻りファイル名をZONE_A_return.csvへ変えた場合、Zoneは空欄にせずZONE_Aと明示してください。ImportのZoneは**置換タグ**であり、Empty一覧を直接読む欄ではありません。旧対象はMap配下に限らず、全データの同じub_zoneを持つObjectです。
+## 9. ヒント・注意
 
-## 9. ホバーヒントとよくある疑問
+ボタンや入力欄にマウスを置くとヒントが出ます。出ない場合はPreferences > InterfaceのTooltips設定を確認してください。選択操作はObject Modeで実行します。
 
-- ボタンや入力欄にマウスを置くとヒントが出ます。出ない場合はBlenderのPreferences > InterfaceのTooltips設定も確認してください。
-- Zoneに何も選べない：New Zoneで登録し、EmptyをAddまたはRegisterしてください。
-- Select In Zoneが動かない：Object Mode、Scope=Recursive等、候補Collectionの設定を確認してください。
-- 範囲内なのにMeshが選ばれない：原点、Subtract、非表示／選択禁止を確認してください。
-- ImportのZoneを選んだのに範囲が変わらない：ImportのZoneはタグ指定です。EmptyはUnreal Bridge Tools側で編集します。
-- 本格的な大量配置には時間がかかります。0.1.0の実測では6万件Replace約282.5秒でした。UI整理で生成性能の制約を解消したわけではありません。[検証報告](VALIDATION.md)を参照してください。
+性能測定は[検証報告](VALIDATION.md)を参照してください。0.1.0の6万件Replaceは約282.5秒で、生成の非線形性と分割不能な同期が残っています。担当アドオンを移しても、この配置生成の制約が解消したわけではありません。

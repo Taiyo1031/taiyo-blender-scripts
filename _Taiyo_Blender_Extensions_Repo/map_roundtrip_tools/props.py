@@ -1,5 +1,6 @@
 import bpy
-from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
+from bpy.props import BoolProperty, CollectionProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
+from .zones import MRT_ZoneEntry, zone_items
 from .constants import BUILTIN_PRESET
 from .presets import preset_items, apply_selected
 
@@ -9,6 +10,12 @@ def enum(items):
 
 
 class MRT_Props(bpy.types.PropertyGroup):
+    zones: CollectionProperty(type=MRT_ZoneEntry)
+    zone_prefix: StringProperty(name='Zone Prefix', default='ZONE_', description='従来Cube Emptyの自動検出用接頭辞。UI登録したEmptyは接頭辞に依存しません')
+    zone_choice: EnumProperty(name='Zone', items=zone_items, description='操作するゾーン。All Zonesなら全ゾーンをまとめて選択します')
+    zone_result: StringProperty(options={'SKIP_SAVE'})
+    zone_scope: EnumProperty(name='Mesh Candidates', items=[('MAP','Map Collection','Mapと子CollectionのMesh'),('SCENE','All Scene Meshes','現在のSceneのMesh')], default='MAP')
+    zone_csv_dir: StringProperty(name='CSV Output Folder', subtype='DIR_PATH', default='//houdini_io/out', description='選択Meshをゾーン名.csvへ書き出します。ub_zoneも現在のZone名になります')
     exchange_dir: StringProperty(description='BlenderとHoudiniの受け渡しフォルダーを記録する参考欄です。変更してもCSV/FBXの保存先は自動変更されず、フォルダー作成や監視もしません', name='Exchange Folder', subtype='DIR_PATH', default='//houdini_io')
     zone_name: StringProperty(description='標準FBX画面の初期ファイル名と補助機能のCombined FBX名に使います。範囲選択のZoneやCSVのub_zoneタグを変更する欄ではありません', name='FBX Name', default='ZONE_A')
     fbx_preset: EnumProperty(description='FBX Advanced設定のプリセット。組み込みUnreal SMは変更・削除できません', name='Preset', items=preset_items, update=apply_selected)
@@ -31,7 +38,7 @@ class MRT_Props(bpy.types.PropertyGroup):
     return_dir: StringProperty(description='Houdiniから返すファイルの参考フォルダー。Placement CSVやMesh FBXは下で個別指定してください。自動読込はしません', name='Return Folder', subtype='DIR_PATH', default='//houdini_io/in')
     placement_csv: StringProperty(description='実際に読み込む配置CSV。ヘッダー付き12列。Zone空欄時はこのファイル名が置換ゾーンになります', name='Placement CSV', subtype='FILE_PATH')
     mesh_fbx: StringProperty(description='追加のLibrary Meshを含むFBX。追加Meshがなければ指定・取込は不要です', name='Mesh FBX', subtype='FILE_PATH')
-    name_mode: EnumProperty(description='Library Mesh名の照合方式。完全一致を優先し、次に正規化した名前で検索します', name='Name Normalize', items=[('keep_raw', 'Keep Raw', ''), ('numeric_suffix', 'Remove Numeric Suffix (.001+)', ''), ('trim_after_dot', 'Trim After Dot', '')], default='numeric_suffix')
+    name_mode: EnumProperty(description='Library Mesh名の照合方式。CSV書き出しとLibrary照合に使用します。読込は完全一致を優先し、次に正規化した名前で検索します', name='Name Normalize', items=[('keep_raw', 'Keep Raw', ''), ('numeric_suffix', 'Remove Numeric Suffix (.001+)', ''), ('trim_after_dot', 'Trim After Dot', '')], default='numeric_suffix')
     if_exists: EnumProperty(description='Skipは既存同名Meshを保持。UpdateはそのMeshを共有する全Objectを新Meshへ差し替えます', name='If Exists', items=enum(['SKIP', 'UPDATE']), default='SKIP')
     zone_override: StringProperty(description='置換対象ub_zoneの名前。空欄ならPlacement CSV名。書き出し時のCSV名と一致させてください', name='Zone')
     old_mode: EnumProperty(description='Archiveは旧Objectを退避し保持します。Deleteは旧Objectを削除します', name='Old Objects', items=enum(['ARCHIVE', 'DELETE']), default='ARCHIVE')

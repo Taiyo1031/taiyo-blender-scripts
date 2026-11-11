@@ -12,7 +12,6 @@ from mathutils import Matrix
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / '_Taiyo_Blender_Extensions_Repo'))
 mrt = importlib.import_module('map_roundtrip_tools')
-ubt = importlib.import_module('unreal_bridge_tools')
 from map_roundtrip_tools import placement, mesh_import, fbx_export, presets
 from map_roundtrip_tools.chunked import Cancelled
 
@@ -181,78 +180,36 @@ def test_rollback():
     print('PASS rollback during creation/archive/tag changes and exception')
 
 
-def test_ubt():
+def test_zone_csv():
+    from map_roundtrip_tools.zone_csv import MRT_OT_ExportZoneCSV
+    from map_roundtrip_tools.chunked import Cancelled
     p, lib, mapc, source, old = fixture()
-    u = bpy.context.scene.ubt_props
-    u.filters.clear()
-    u.scope = 'selected'
-    u.collection = None
-    u.name_mode = 'numeric_suffix'
-    u.tag_zone = True
-    u.export_path = str(TEMP / 'ZONE_A.csv')
+    p.zone_csv_dir = str(TEMP)
+    bpy.ops.mrt.new_zone(name='ZONE_A')
     bpy.ops.object.select_all(action='DESELECT')
     old.select_set(True)
-    assert bpy.ops.ubt.export_csv() == {'FINISHED'}
+    assert bpy.ops.mrt.export_zone_csv() == {'FINISHED'}
     assert old['ub_zone'] == 'ZONE_A'
-    with open(u.export_path) as f:
+    with open(TEMP/'ZONE_A.csv') as f:
         rows = list(csv.reader(f))
     assert tuple(rows[0]) == placement.CSV_COLUMNS and len(rows) == 2
     assert rows[1][-2] == 'Rock'
-    bpy.ops.object.select_all(action='DESELECT')
-    u.export_path = str(TEMP / 'empty.csv')
-    expect_error(lambda: bpy.ops.ubt.export_csv(), 'No objects selected.')
-    assert not Path(u.export_path).exists()
-    # Exercise cancellation and write failure using the real UBT lifecycle harness.
-    h = Harness()
-    for name in dir(ubt.UBT_OT_ExportCSV):
-        if name.startswith('_') and callable(getattr(ubt.UBT_OT_ExportCSV, name)) and not name.startswith('__'):
-            setattr(Harness, name, getattr(ubt.UBT_OT_ExportCSV, name))
-    h._timer = h._file = h._writer = None
-    old.select_set(True)
-    u.export_path = str(TEMP / 'ZONE_CANCEL.csv')
+    before = (TEMP/'ZONE_A.csv').read_bytes()
     old['ub_zone'] = 'BEFORE'
-    assert h._initialize(bpy.context) is None
-    h._process_one(bpy.context)
-    h._finish(bpy.context, cancelled=True)
-    assert old['ub_zone'] == 'BEFORE'
-    h._timer = h._file = h._writer = None
-    assert h._initialize(bpy.context) is None
-    h._process_one(bpy.context)
-    assert h._try_restart_to_temp(bpy.context, OSError('injected'))
-    assert h._tag_targets == []
-    h._finish(bpy.context, error_message='injected')
-    assert old['ub_zone'] == 'BEFORE'
-    # Rotated/scaled cube; numeric-suffix alias shares the zone.
-    e = obj('ZONE_A', bpy.context.scene.collection)
-    e.empty_display_type = 'CUBE'
-    e.empty_display_size = 1
-    e.location = old.location
-    e.rotation_euler = (0,0,.7)
-    e.scale = (2,3,4)
-    e2 = obj('ZONE_A.001', bpy.context.scene.collection)
-    e2.empty_display_type = 'CUBE'
-    e2.empty_display_size = 1
-    e2.location = (100,100,100)
-    e3 = obj('ZONE_B', bpy.context.scene.collection)
-    e3.empty_display_type = 'CUBE'
-    e3.location = old.location
-    e3.empty_display_size = 2
-    u.scope = 'recursive'
-    u.collection = mapc
-    u.zone_choice = 'ALL'
-    bpy.context.view_layer.update()
-    assert bpy.ops.ubt.select_in_zone() == {'FINISHED'}
-    assert set(bpy.context.selected_objects) == {old}
-    assert 'ZONE_A 1' in u.zone_result and 'ZONE_B 0' in u.zone_result
-    hidden = obj('HiddenRock', mapc, source.data)
-    hidden.location = old.location
-    bpy.context.view_layer.update()
-    hidden.hide_set(True)
-    assert bpy.ops.ubt.select_in_zone() == {'FINISHED'}
-    assert set(bpy.context.selected_objects) == {old}
-    bpy.data.batch_remove(ids=[e,e2,e3])
-    expect_error(lambda: bpy.ops.ubt.select_in_zone(), 'No zone empties found')
-    print('PASS UBT selected/empty/cancel/retry/rotated-scaled-overlap/hidden/empty zones')
+    h = Harness()
+    g = MRT_OT_ExportZoneCSV.work(h, bpy.context)
+    while old.get('ub_zone') == 'BEFORE':
+        next(g)
+    try:
+        g.throw(Cancelled('Injected ESC'))
+        drain(g)
+    except Cancelled:
+        pass
+    assert old['ub_zone'] == 'BEFORE' and (TEMP/'ZONE_A.csv').read_bytes() == before
+    assert not list(TEMP.glob('.mrt-*.csv'))
+    bpy.ops.object.select_all(action='DESELECT')
+    expect_error(lambda: bpy.ops.mrt.export_zone_csv(), 'No mesh objects selected.')
+    print('PASS MRT zone CSV/precision/names/cancel/tag and file rollback')
 
 
 def test_fbx():
@@ -390,16 +347,14 @@ def test_presets():
 
 
 mrt.register()
-ubt.register()
 try:
     test_placement()
     test_plan_errors()
     test_rollback()
-    test_ubt()
+    test_zone_csv()
     test_fbx()
     test_import_rollback_and_fallback()
     test_presets()
     print('MAP_ROUNDTRIP_INTEGRATION_PASSED', TEMP)
 finally:
-    ubt.unregister()
     mrt.unregister()

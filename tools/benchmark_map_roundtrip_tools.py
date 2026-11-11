@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / '_Taiyo_Blender_Extensions_Repo'))
 import map_roundtrip_tools as mrt
 import unreal_bridge_tools as ubt
 from map_roundtrip_tools import placement
-from unreal_bridge_tools.zones import collect_zone_boxes, points_of, inside_mask
+from map_roundtrip_tools.zones import collect_zone_boxes, points_of, inside_mask
 
 spec = importlib.util.spec_from_file_location('bench_scene', ROOT / '_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/tools/bench_make_scene.py')
 bench_scene = importlib.util.module_from_spec(spec)
@@ -40,14 +40,15 @@ def run(n):
     row = {'count':n}
     for o in objects:
         o.select_set(True)
-    u.scope = 'selected'
+    bpy.ops.mrt.new_zone(name=f'ZONE_{n}')
+    p.zone_csv_dir = str(TEMP)
     u.collection = None
     u.filters.clear()
     u.name_mode = 'numeric_suffix'
     u.export_path = str(TEMP / f'ZONE_{n}.csv')
     u.tag_zone = True
     t = time.perf_counter()
-    bpy.ops.ubt.export_csv()
+    bpy.ops.mrt.export_zone_csv()
     row['csv_selected_seconds'] = time.perf_counter()-t
     u.scope = 'recursive'
     u.collection = mapc

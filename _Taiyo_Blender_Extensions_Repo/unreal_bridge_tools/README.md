@@ -8,8 +8,8 @@ Blender上のオブジェクトTransform情報とCollection情報をCSVへ書き
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar (N) > Unreal Bridge Tools`
-- バージョン: `2.3.2`
-- 対応Blender目安: `4.5.0` 以降
+- バージョン: `2.3.3`
+- 対応Blender目安: `4.2.0` 以降
 - カテゴリ: `Import-Export`
 
 ## 使う場面
@@ -59,35 +59,6 @@ id, tx, ty, tz, rx, ry, rz, sx, sy, sz, objname, colname
 ## GitHub仕様書
 - [Unreal_Bridge_Tools_使用書.md](https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md)
 
-## Map Roundtrip対応（2.3.1 / Blender 4.5以上）
+## 2.3.3 の構成
 
-- `Scope = Selected` は開始時の選択だけを書き出します。Target Collectionは不要です。選択ゼロならCSVを作りません。既存Filters／Visible Onlyは適用されます。
-- `Tag Exported Objects (ub_zone)` は既定ONです。CSVが正常に保存されたときだけ、実際に書き出したObjectへCSVファイル名（拡張子なし）を付与します。中断・エラーではタグを変更しません。この設定はプリセットに含めません。
-- `Zones > Select In Zone` は`ZONE_`から始まるCube Emptyの範囲に原点が入るMeshを選択します。Emptyの回転・スケールとdisplay sizeを反映し、同名サフィックス領域は合成します。重複はゾーン名順で決まります。Selectedスコープでは使えません。
-- Zones処理はtimerで分割し、ESCで中断できます。中断時の途中選択は残ります。タグ名はCSVへ追加せず、12列の形式は従来どおりです。
-- 推奨手順：Recursiveでゾーンを選択 → Selectedで`ZONE_A.csv`を出力 → Map Roundtrip ToolsでPreview → Dry RunをOFFにしてReplace Zone。
-
-## 複数Emptyと範囲の引き算（2.3.1）
-
-`Zones`で選んだゾーンのEmpty一覧と、各Emptyの`Add / Subtract`が表示されます。ゾーンの範囲は **（すべてのAddの和集合）から（すべてのSubtractの和集合）を除いた部分**です。Subtractは同じゾーンだけに効き、Addがないゾーンは空の範囲になります。Meshを加工するBooleanではなく、Object原点の選択判定です。回転・スケール・Cubeのdisplay sizeを反映します。
-
-1. `Zone = All Zones`で`Add Empty`を押し、ダイアログで`ZONE_A`などのゾーン名を入力します。新しいゾーンもこの操作で作成できます。
-2. 既存ゾーンを選んだ状態で`Add Empty`を押すと、そのゾーンのCube Emptyを3Dカーソル位置に追加し、選択・アクティブにします。初期サイズは1、OperationはAddです。
-3. 追加したEmptyを移動・回転・拡大して範囲を組み立てます。くり抜く箱は一覧でSubtractに切り替えます。
-4. Recursiveなどの候補スコープで`Select In Zone`を押し、結果を確認してからSelectedでCSVへ出力します。
-
-新規Emptyはシーン直下に追加され、カスタムプロパティ`zone`で所属を保存します。Operationは`ubt_zone_operation`として.blendに保存されます。従来のCube EmptyはAddとして扱い、`.001`などの同名末尾連番による合成も維持します。Empty追加・Operation変更は通常のUndo対象です。
-
-Operationを変更しても、過去にCSV出力で付いた`ub_zone`タグは自動解除しません。すでに書き出したゾーンの範囲を変える場合、ReplaceのPreview件数も確認してください。
-
-### 2.3.1 検証結果
-
-Blender 4.5.9 / 5.2.2で、複数Addの和集合、同一ゾーンだけのSubtract、回転・スケール、Subtractのみの空ゾーン、従来Emptyの互換性、追加ボタンと.blend保存復元を確認しました。10万点・Add 2箱＋Subtract 1箱のnumpy判定は4.5.9で0.0114秒、5.2.2で0.0086秒でした（Object座標取得・選択適用を除く）。既存CSV／プリセットとMap Roundtripの回帰も合格しました。
-
-回帰: `blender --background --factory-startup --python-exit-code 1 --python tools/test_unreal_bridge_zones.py`。実UIのAdd Empty／Undo／Redo: `blender --factory-startup --python-exit-code 1 --python tools/ui_test_unreal_bridge_zones.py`。
-
-## UIからのZone登録（2.3.2）
-
-New Zoneで空のZoneを登録し、Add Emptyで新しい箱を作るか、既存Emptyを選んでRegister Selected Emptiesで登録できます。一覧の名前ボタンで選択し、×で登録だけ解除します。登録解除でObjectは削除しません。各欄・ボタンにはホバーヒントがあります。
-
-Zoneは範囲選択用、CSV zone tagはCSVファイル名由来です。名前を揃えてください。詳しい手順とExchange Folderの説明は[Map Roundtrip 詳細使用書](https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/WORKFLOW_JA.md)をご覧ください。
+機能は2.2.20相当に戻しました。ゾーン管理・範囲選択・ゾーンCSVはMap Roundtrip Tools 0.2.0側へ移動しました。UBTのCollision Tag／Filters／Presets／従来のCollection/Scene CSV出力は維持します。

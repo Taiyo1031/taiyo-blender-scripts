@@ -6,7 +6,7 @@ import bpy
 
 SCHEMA_VERSION = 1
 USER_PRESET_PATH_OVERRIDE = None
-VALID_SCOPES = {"direct", "recursive", "all", "selected"}
+VALID_SCOPES = {"direct", "recursive", "all"}
 VALID_NAME_MODES = {"keep_raw", "numeric_suffix", "trim_after_dot"}
 VALID_FILTER_MODES = {"include", "exclude"}
 VALID_EXPORT_MODES = {"fast_locked", "responsive"}

@@ -14,7 +14,7 @@ class ChunkedOperator:
 
     @classmethod
     def poll(cls, context):
-        return _RUNNING is None and context.mode == 'OBJECT'
+        return _RUNNING is None and context.mode == 'OBJECT' and not context.scene.mrt_props.running
 
     def invoke(self, context, event):
         return self.start(context, bool(context.window))
