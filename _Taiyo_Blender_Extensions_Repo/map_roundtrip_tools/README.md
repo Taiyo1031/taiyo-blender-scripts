@@ -1,8 +1,12 @@
 # Map Roundtrip Tools
 
-**対象version: 0.1.0 / Blender 4.5.0以上**
+**対象version: 0.1.1 / Blender 4.5.0以上**
 
-巨大マップの一部をHoudiniで加工して戻すためのExtensionです。配置CSVはUnreal Bridge Tools 2.3.0で書き出し、戻ったCSVをMesh共有のリンク複製として再生成します。両アドオンは独立して有効化できます。Houdini／Unreal側の実装・座標変換は含みません。
+巨大マップの一部をHoudiniで加工して戻すためのExtensionです。配置CSVはUnreal Bridge Tools 2.3.2で書き出し、戻ったCSVをMesh共有のリンク複製として再生成します。両アドオンは独立して有効化できます。Houdini／Unreal側の実装・座標変換は含みません。
+
+## 詳細使用書
+
+Zoneの登録、既存Emptyの登録、Exchange Folderの意味、標準FBX UIの使い方は[詳細使用書](WORKFLOW_JA.md)を参照してください。
 
 ## 使い方
 
@@ -26,7 +30,9 @@ UTF-8・カンマ区切り、Blenderワールド座標（Z-up）、XYZ回転の�
 
 ## FBX Export
 
-選択MeshだけをPer ObjectまたはCombinedで出力します。Combinedの名前はZone Nameです。ファイル名の英数字・`_`・`-`以外は`_`にし、既存ファイルや衝突には`_2`以降を付けます。中断までに作成したFBXは残ります。
+通常は **Export FBX (Blender)** でBlender標準の設定・プリセット画面を開きます。従来の個別一括出力と独自設定は **Advanced / Batch Export** に折りたたんであります。以下は補助機能の説明です。
+
+選択MeshだけをPer ObjectまたはCombinedで出力します。Combinedの名前はFBX Nameです。ファイル名の英数字・`_`・`-`以外は`_`にし、既存ファイルや衝突には`_2`以降を付けます。中断までに作成したFBXは残ります。
 
 既定はScale=1、FBX Units Scale、Forward=-Z、Up=Y、Apply Modifiers ON、Smoothing=Face、**Vertex Colors=Linear**、Triangulate／Tangent Space／Apply Transform OFFです。Advanced全項目はJSONプリセットへ保存できます。組み込みUnreal SM (Default)は変更・削除できません。保存先はBlender CONFIG/map_roundtrip_tools/presets.jsonです。
 

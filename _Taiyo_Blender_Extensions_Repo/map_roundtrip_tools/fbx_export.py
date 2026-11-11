@@ -27,6 +27,7 @@ def unique_path(folder, name, reserved, next_suffix=None):
 
 
 class MRT_OT_ExportFBX(ChunkedOperator, bpy.types.Operator):
+    bl_description = '選択MeshをFBXへ出力します。出力先はOutput Folder。CSVはUnreal Bridge Toolsで出力してください'
     bl_idname = 'mrt.export_fbx'
     bl_label = 'Export FBX'
 
@@ -85,3 +86,33 @@ class MRT_OT_ExportFBX(ChunkedOperator, bpy.types.Operator):
                 context.view_layer.objects.active = active
             p.last_export = f'{exported} files in {time.perf_counter() - started:.3f}s'
         self.result = 'Exported ' + p.last_export
+
+
+def native_export_settings(context):
+    """Initial settings only; Blender owns the file browser, presets and export."""
+    p = context.scene.mrt_props
+    args = {arg: getattr(p, key) for key, arg in FBX_ARGUMENTS.items()}
+    folder = bpy.path.abspath(p.fbx_out_dir) if p.fbx_out_dir else ''
+    if not os.path.isdir(folder):
+        folder = bpy.path.abspath('//')
+    args.update(filepath=os.path.join(folder, safe_name(p.zone_name) + '.fbx'),
+                object_types={'MESH'}, use_selection=True, add_leaf_bones=False,
+                bake_anim=False, path_mode='AUTO', batch_mode='OFF')
+    return args
+
+
+class MRT_OT_ExportFBXNative(bpy.types.Operator):
+    bl_idname = 'mrt.export_fbx_native'
+    bl_label = 'Export FBX (Blender)'
+    bl_description = 'Blender標準のFBX書き出し画面を開きます。右側の設定と標準プリセットを使用できます。選択Meshのみ、初期Vertex ColorsはLinearです'
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT' and context.window is not None and not context.scene.mrt_props.running
+
+    def execute(self, context):
+        if not any(ob.type == 'MESH' for ob in context.selected_objects):
+            self.report({'ERROR'}, 'No mesh objects selected.')
+            return {'CANCELLED'}
+        result = bpy.ops.export_scene.fbx('INVOKE_DEFAULT', **native_export_settings(context))
+        return {'FINISHED'} if 'RUNNING_MODAL' in result or 'FINISHED' in result else {'CANCELLED'}

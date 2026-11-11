@@ -55,6 +55,8 @@ packages=(
 )
 
 compatibility_archives=(
+  "map_roundtrip_tools-0.1.0.zip"
+  "unreal_bridge_tools-2.3.1.zip"
   "blend_reference_graph-0.1.4.zip"
   "collection_linked_mesh_replacer-1.0.0.zip"
   "collection_linked_mesh_replacer-1.0.1.zip"

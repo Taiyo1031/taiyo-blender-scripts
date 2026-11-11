@@ -185,6 +185,7 @@ def find_layer(root, collection):
 
 
 class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
+    bl_description = 'Dry Run ONなら計画のみ確認。OFFなら同じub_zoneの旧配置を退避または削除して新配置を作ります'
     bl_idname = 'mrt.replace_zone'
     bl_label = 'Preview Placement / Replace Zone'
 

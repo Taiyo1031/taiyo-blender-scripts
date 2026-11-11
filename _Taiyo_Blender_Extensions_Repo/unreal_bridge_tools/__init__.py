@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Unreal Bridge Tools",
     "author": "Overnight Artelier",
-    "version": (2, 3, 1),
+    "version": (2, 3, 2),
     "blender": (4, 5, 0),
     "location": "3D Viewport > N Panel > Unreal Bridge Tools",
     "description": "Export transforms & collision tags from Blender to CSV for Unreal Engine PCG pipeline.",
@@ -21,7 +21,8 @@ from bpy.props import (
 from bpy.types import Operator, Panel, AddonPreferences, PropertyGroup, UIList
 from math import pi
 from .constants import ZONE_KEY
-from .zones import (UBT_OT_SelectInZone, UBT_OT_AddZoneEmpty, zone_items,
+from .zones import (UBT_OT_SelectInZone, UBT_OT_AddZoneEmpty, UBT_ZoneEntry,
+                    UBT_OT_NewZone, UBT_OT_RegisterZoneEmpties, UBT_OT_ZoneEmptyAction, zone_items,
                     register_zone_properties, unregister_zone_properties, draw_zone_controls)
 
 try:
@@ -290,11 +291,11 @@ class UBT_Props(PropertyGroup):
         name="Preset Name",
         default=""
     )
-    collection: PointerProperty(
+    collection: PointerProperty(description='候補Meshが入るMap Collection。Recursiveは子Collectionも含みます。Selected/Allでは指定不要です',
         name="Target Collection",
         type=bpy.types.Collection
     )
-    export_path: StringProperty(
+    export_path: StringProperty(description='配置CSVの保存先。ゾーン名と同じファイル名（例ZONE_A.csv）にすると往復時のタグが揃います',
         name="Export CSV",
         subtype='FILE_PATH',
         default=""
@@ -317,7 +318,7 @@ class UBT_Props(PropertyGroup):
     )
 
     # --- NEW: name_mode (Keep Raw added, legacy Keep removed) ---
-    name_mode: EnumProperty(
+    name_mode: EnumProperty(description='Library Object名と対応する名前をCSVに出します。通常はRemove Numeric Suffixでリンク複製の連番を除きます',
         name="Name Normalize",
         items=[
             ('keep_raw', "Keep Raw (No Change)", "Export name exactly, including .001 or anything."),
@@ -327,7 +328,7 @@ class UBT_Props(PropertyGroup):
         default='keep_raw'
     )
 
-    scope: EnumProperty(
+    scope: EnumProperty(description='候補の範囲。ゾーン選択時はRecursive等、CSV出力時はSelectedに切り替えます。Selectedは現在の選択だけを対象にします',
         name="Scope",
         items=[
             ('direct', "Direct Only", ""),
@@ -338,12 +339,13 @@ class UBT_Props(PropertyGroup):
         default='recursive'
     )
 
-    tag_zone: BoolProperty(name="Tag Exported Objects (ub_zone)", default=True)
-    zone_prefix: StringProperty(name="Zone Prefix", default="ZONE_")
-    zone_choice: EnumProperty(name="Zone", items=zone_items)
+    tag_zone: BoolProperty(name="Tag Exported Objects (ub_zone)", default=True, description="正常出力したObjectにCSVファイル名（拡張子なし）を保存します。Zoneドロップダウンの値を直接保存する設定ではありません")
+    zones: CollectionProperty(type=UBT_ZoneEntry)
+    zone_prefix: StringProperty(name="Zone Prefix", default="ZONE_", description="従来Emptyの自動検出用接頭辞。UIから登録したEmptyは名前が違っていても使えます")
+    zone_choice: EnumProperty(name="Zone", items=zone_items, description="範囲選択に使うゾーン。New Zoneで登録し、Emptyを追加または登録してください。CSVのタグ名は別途ファイル名から決まります")
     zone_result: StringProperty(default="")
 
-    select_visible_only: BoolProperty(
+    select_visible_only: BoolProperty(description='非表示ObjectをCSV出力・候補選択から除外します',
         name="Visible Only",
         default=True
     )
@@ -1188,6 +1190,11 @@ class UBT_PT_Main(Panel):
         box.prop(p, "zone_prefix")
         box.prop(p, "zone_choice")
         draw_zone_controls(box, context)
+        if p.tag_zone:
+            csv_zone = os.path.splitext(os.path.basename(p.export_path))[0]
+            hint = box.row()
+            hint.alert = p.zone_choice not in ('ALL', '') and csv_zone != p.zone_choice
+            hint.label(text="CSV zone tag: " + (csv_zone or "Set CSV filename"), icon='INFO')
         previous = layout.operator_context
         box.operator_context = 'INVOKE_DEFAULT'
         box.operator("ubt.select_in_zone")
@@ -1261,6 +1268,7 @@ classes = (
     UBT_AddonPreferences,
     UBT_FilterItem,
     UBT_UL_Filters,
+    UBT_ZoneEntry,
     UBT_Props,
     UBT_OT_FilterAdd,
     UBT_OT_FilterRemove,
@@ -1277,6 +1285,9 @@ classes = (
     UBT_OT_ExportCSV,
     UBT_OT_SelectInZone,
     UBT_OT_AddZoneEmpty,
+    UBT_OT_NewZone,
+    UBT_OT_RegisterZoneEmpties,
+    UBT_OT_ZoneEmptyAction,
     UBT_PT_Main,
 )
 

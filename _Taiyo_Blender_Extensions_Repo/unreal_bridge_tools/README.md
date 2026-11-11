@@ -8,7 +8,7 @@ Blender上のオブジェクトTransform情報とCollection情報をCSVへ書き
 ## 基本情報
 - 本体ファイル: `__init__.py`
 - 表示場所: `View3D > Sidebar (N) > Unreal Bridge Tools`
-- バージョン: `2.3.1`
+- バージョン: `2.3.2`
 - 対応Blender目安: `4.5.0` 以降
 - カテゴリ: `Import-Export`
 
@@ -85,3 +85,9 @@ Operationを変更しても、過去にCSV出力で付いた`ub_zone`タグは�
 Blender 4.5.9 / 5.2.2で、複数Addの和集合、同一ゾーンだけのSubtract、回転・スケール、Subtractのみの空ゾーン、従来Emptyの互換性、追加ボタンと.blend保存復元を確認しました。10万点・Add 2箱＋Subtract 1箱のnumpy判定は4.5.9で0.0114秒、5.2.2で0.0086秒でした（Object座標取得・選択適用を除く）。既存CSV／プリセットとMap Roundtripの回帰も合格しました。
 
 回帰: `blender --background --factory-startup --python-exit-code 1 --python tools/test_unreal_bridge_zones.py`。実UIのAdd Empty／Undo／Redo: `blender --factory-startup --python-exit-code 1 --python tools/ui_test_unreal_bridge_zones.py`。
+
+## UIからのZone登録（2.3.2）
+
+New Zoneで空のZoneを登録し、Add Emptyで新しい箱を作るか、既存Emptyを選んでRegister Selected Emptiesで登録できます。一覧の名前ボタンで選択し、×で登録だけ解除します。登録解除でObjectは削除しません。各欄・ボタンにはホバーヒントがあります。
+
+Zoneは範囲選択用、CSV zone tagはCSVファイル名由来です。名前を揃えてください。詳しい手順とExchange Folderの説明は[Map Roundtrip 詳細使用書](https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/WORKFLOW_JA.md)をご覧ください。

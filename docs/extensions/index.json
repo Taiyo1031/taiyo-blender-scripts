@@ -189,7 +189,7 @@
       "id": "unreal_bridge_tools",
       "name": "Unreal Bridge Tools",
       "tagline": "Export transforms and collision tags for Unreal Engine PCG",
-      "version": "2.3.1",
+      "version": "2.3.2",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -197,10 +197,10 @@
       ],
       "blender_version_min": "4.5.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./unreal_bridge_tools-2.3.1.zip",
-      "archive_size": 23751,
-      "archive_hash": "sha256:290d76f853a106ec12389d90cc4b8a29ecea034bd9a1cd5c3de1a8e02b04a663",
-      "taiyo_updated_at": 1794396613
+      "archive_url": "./unreal_bridge_tools-2.3.2.zip",
+      "archive_size": 27115,
+      "archive_hash": "sha256:422043325fa7ebf4aef35b06255dcd6678cafd10fe0280d683ec53e95770676a",
+      "taiyo_updated_at": 1794406279
     },
     {
       "schema_version": "1.0.0",
@@ -541,14 +541,14 @@
       "id": "map_roundtrip_tools",
       "name": "Map Roundtrip Tools",
       "tagline": "Roundtrip linked map placements and library FBX through Houdini",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
       "blender_version_min": "4.5.0",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/README.md",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/WORKFLOW_JA.md",
       "permissions": {
         "files": "Read placement CSV and FBX, write FBX files and user presets"
       },
@@ -556,10 +556,10 @@
         "Import-Export",
         "Object"
       ],
-      "archive_url": "./map_roundtrip_tools-0.1.0.zip",
-      "archive_size": 117752,
-      "archive_hash": "sha256:043177ba864a19d621fdacd9ee6114c77e4a31a6e55308c049623b9ad256a833",
-      "taiyo_updated_at": 1794393245
+      "archive_url": "./map_roundtrip_tools-0.1.1.zip",
+      "archive_size": 125387,
+      "archive_hash": "sha256:c3d000b9735725d185e2da1c659ff51e8a6ed4630fa00fb6d239c1ab9fa7dc30",
+      "taiyo_updated_at": 1794406281
     }
   ]
 }

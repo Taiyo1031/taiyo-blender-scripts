@@ -4,6 +4,8 @@ Taiyo用のBlender Extensions配布リポジトリです。
 
 このリポジトリは、GitHub Pagesで `docs/extensions/index.json` を公開し、Blender 4.2以降の Remote Repository として使うことを主目的にしています。
 
+Zone登録・Empty編集・CSV往復・標準FBX画面の手順は、[Map Roundtrip 詳細使用書](_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/WORKFLOW_JA.md)を参照してください。
+
 ## Blenderから使う
 
 Blender側では次のURLをRemote Repositoryとして登録します。
@@ -76,7 +78,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 | `laid_collection_instance_linker` | CW_Laid Collection Instance Linker | Laid_MAPを分割済みCollection Instanceで再構築 |
 | `zone_groups` | Taiyo Object Groups | 手動・空間グループ、複数所属、色分け、表示制御 |
 | `hierarchy_restriction_manager` | Hierarchy Restriction Manager | 階層の表示・選択・レンダー制限、Solo、復元 |
-| `map_roundtrip_tools` | Map Roundtrip Tools 0.1.0 | Houdiniとの配置CSV・FBX往復（Blender 4.5+） |
+| `map_roundtrip_tools` | Map Roundtrip Tools 0.1.1 | Houdiniとの配置CSV・FBX往復（Blender 4.5+） |
 | `map_link_tools` | Map Link Tools | リンク配置・共有Mesh・名前整理 |
 | `mesh_attribute_batch_remover` | Mesh Attribute Batch Remover | 指定したMesh Attributeを多数のObjectから一括削除 |
 | `modular_asset_renamer` | Modular Asset Renamer | モジュール式の命名ルールで一括リネーム |

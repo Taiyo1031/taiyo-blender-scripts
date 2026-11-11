@@ -3,7 +3,7 @@ import re
 import time
 import bpy
 import numpy as np
-from bpy.props import EnumProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, StringProperty
 from .constants import ZONE_NAME_KEY
 
 _ENUM_CACHE = []
@@ -27,19 +27,132 @@ def zone_name(empty):
 
 def zone_empties(scene, prefix):
     return (e for e in scene.objects if e.type == 'EMPTY'
-            and e.empty_display_type == 'CUBE' and e.name.startswith(prefix))
+            and e.empty_display_type == 'CUBE' and e.ubt_zone_enabled
+            and (ZONE_NAME_KEY in e or e.name.startswith(prefix)))
+
+
+class UBT_ZoneEntry(bpy.types.PropertyGroup):
+    name: StringProperty(name='Zone Name', description='ゾーンの識別名。CSVファイル名もこの名前に揃えてください')
+
+
+def ensure_zone(props, name):
+    if name not in props.zones:
+        props.zones.add().name = name
+
+
+def zone_editable(context):
+    return context.mode == 'OBJECT' and not _RUNNING and not context.scene.ubt_props.export_running
+
+
+class UBT_OT_NewZone(bpy.types.Operator):
+    bl_idname = 'ubt.new_zone'
+    bl_label = 'New Zone'
+    bl_description = '空のゾーンを登録します。登録後にAdd Emptyで範囲を作るか、既存Emptyを登録してください'
+    bl_options = {'REGISTER', 'UNDO'}
+    name: StringProperty(name='Zone Name', default='ZONE_A', description='例：ZONE_A。配置CSVのファイル名と同じ名前を推奨します')
+
+    @classmethod
+    def poll(cls, context):
+        return zone_editable(context)
+
+    def invoke(self, context, event):
+        self.name = context.scene.ubt_props.zone_prefix + 'A'
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        name = self.name.strip()
+        if not name or name == 'ALL':
+            self.report({'ERROR'}, 'Choose a nonempty zone name other than ALL.')
+            return {'CANCELLED'}
+        p = context.scene.ubt_props
+        ensure_zone(p, name)
+        p.zone_choice = name
+        p.zone_result = ''
+        return {'FINISHED'}
+
+
+class UBT_OT_RegisterZoneEmpties(bpy.types.Operator):
+    bl_idname = 'ubt.register_zone_empties'
+    bl_label = 'Register Selected Empties'
+    bl_description = '選択した既存Emptyを現在のゾーンに登録します。名前は変えずCube表示にします。別ゾーンのEmptyは所属を変更します'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return zone_editable(context) and context.scene.ubt_props.zone_choice not in ('', 'ALL')
+
+    def execute(self, context):
+        p = context.scene.ubt_props
+        selected = [e for e in context.selected_objects if e.type == 'EMPTY']
+        if not selected:
+            self.report({'ERROR'}, 'Select at least one Empty to register.')
+            return {'CANCELLED'}
+        if any(not e.is_editable for e in selected):
+            self.report({'ERROR'}, 'Selected empties include read-only library objects.')
+            return {'CANCELLED'}
+        name = p.zone_choice
+        ensure_zone(p, name)
+        for e in selected:
+            e[ZONE_NAME_KEY] = name
+            e.empty_display_type = 'CUBE'
+            e.ubt_zone_enabled = True
+        p.zone_choice = name
+        self.report({'INFO'}, f'Registered {len(selected)} empties to {name}.')
+        return {'FINISHED'}
+
+
+class UBT_OT_ZoneEmptyAction(bpy.types.Operator):
+    bl_idname = 'ubt.zone_empty_action'
+    bl_label = 'Zone Empty'
+    bl_options = {'REGISTER', 'UNDO'}
+    object_name: StringProperty(options={'HIDDEN'})
+    action: EnumProperty(items=[('SELECT','Select','一覧のEmptyを選択して移動・拡大を編集します'), ('UNREGISTER','Unregister','登録を解除します。Empty本体は削除しません')])
+
+    @classmethod
+    def description(cls, context, properties):
+        return 'このEmptyのゾーン登録を解除します。Objectは削除しません' if properties.action == 'UNREGISTER' else 'このEmptyを選択・アクティブにして、ビューポートで編集します'
+
+    @classmethod
+    def poll(cls, context):
+        return zone_editable(context)
+
+    def execute(self, context):
+        e = context.scene.objects.get(self.object_name)
+        if e is None or e.type != 'EMPTY':
+            self.report({'ERROR'}, 'Empty no longer exists in this scene.')
+            return {'CANCELLED'}
+        if self.action == 'UNREGISTER':
+            if not e.is_editable:
+                return {'CANCELLED'}
+            choice = context.scene.ubt_props.zone_choice
+            e.ubt_zone_enabled = False
+            if ZONE_NAME_KEY in e:
+                del e[ZONE_NAME_KEY]
+            props = context.scene.ubt_props
+            available = {item[0] for item in zone_items(props, context)}
+            props.zone_choice = choice if choice in available else 'ALL'
+        else:
+            if e.name not in context.view_layer.objects or not e.visible_get() or e.hide_select:
+                self.report({'ERROR'}, 'Empty is hidden or not selectable in this view layer.')
+                return {'CANCELLED'}
+            bpy.ops.object.select_all(action='DESELECT')
+            e.select_set(True)
+            context.view_layer.objects.active = e
+        return {'FINISHED'}
 
 
 def register_zone_properties():
+    bpy.types.Object.ubt_zone_enabled = BoolProperty(name='Zone Enabled', default=True, description='このEmptyをゾーン判定に使用します。Unregisterで解除し、Register Selected Emptiesで再登録できます')
     bpy.types.Object.ubt_zone_operation = EnumProperty(
-        name='Operation', description='Combine this box with its zone',
-        items=[('ADD', 'Add', 'Include this box in the zone'),
-               ('SUBTRACT', 'Subtract', 'Remove this box from its own zone')],
+        name='Operation', description='Addは範囲へ追加、Subtractは同じゾーンのAdd合成範囲からくり抜きます',
+        items=[('ADD', 'Add', 'この箱の範囲をゾーンへ含めます'),
+               ('SUBTRACT', 'Subtract', '同じゾーンのAdd範囲からこの箱の範囲を除外します')],
         default='ADD')
 
 
 def unregister_zone_properties():
     del bpy.types.Object.ubt_zone_operation
+    del bpy.types.Object.ubt_zone_enabled
 
 
 def draw_zone_controls(layout, context):
@@ -47,28 +160,38 @@ def draw_zone_controls(layout, context):
     controls = layout.column()
     controls.enabled = not _RUNNING and not p.export_running
     controls.operator_context = 'INVOKE_DEFAULT'
+    controls.operator('ubt.new_zone', text='New Zone', icon='ADD')
+    controls.operator('ubt.register_zone_empties', icon='IMPORT')
     controls.operator('ubt.add_zone_empty', text='Add Empty', icon='ADD')
     choice = p.zone_choice
     empties = sorted(zone_empties(context.scene, p.zone_prefix), key=lambda e: (zone_name(e), e.name))
     previous = None
+    visible = 0
     for empty in empties:
         name = zone_name(empty)
         if choice != 'ALL' and name != choice:
             continue
+        visible += 1
         if choice == 'ALL' and previous != name:
             controls.label(text=name)
             previous = name
         row = controls.row(align=True)
         row.enabled = empty.is_editable
-        row.label(text=empty.name, icon='EMPTY_AXIS')
+        select = row.operator('ubt.zone_empty_action', text=empty.name, icon='EMPTY_AXIS')
+        select.object_name, select.action = empty.name, 'SELECT'
         row.prop(empty, 'ubt_zone_operation', text='')
+        remove = row.operator('ubt.zone_empty_action', text='', icon='X')
+        remove.object_name, remove.action = empty.name, 'UNREGISTER'
+    if not visible:
+        controls.label(text='No Empty in this zone. Add or register one.', icon='INFO')
 
 
 class UBT_OT_AddZoneEmpty(bpy.types.Operator):
     bl_idname = 'ubt.add_zone_empty'
     bl_label = 'Add Zone Empty'
+    bl_description = '現在のゾーンにCube Emptyを新規追加します。初期位置は3Dカーソル、OperationはAddです'
     bl_options = {'REGISTER', 'UNDO'}
-    zone_name: StringProperty(name='Zone Name')
+    zone_name: StringProperty(name='Zone Name', description='このEmptyの所属ゾーン。CSVのファイル名と揃えてください')
 
     @classmethod
     def poll(cls, context):
@@ -97,10 +220,12 @@ class UBT_OT_AddZoneEmpty(bpy.types.Operator):
             empty.location = context.scene.cursor.location
             empty[ZONE_NAME_KEY] = name
             empty.ubt_zone_operation = 'ADD'
+            empty.ubt_zone_enabled = True
             context.scene.collection.objects.link(empty)
             bpy.ops.object.select_all(action='DESELECT')
             empty.select_set(True)
             context.view_layer.objects.active = empty
+            ensure_zone(p, name)
             p.zone_choice = name
             p.zone_result = ''
         except Exception:
@@ -125,8 +250,8 @@ def collect_zone_boxes(scene, prefix):
 
 def zone_items(self, context):
     global _ENUM_CACHE
-    names = sorted({zone_name(e) for e in zone_empties(context.scene, self.zone_prefix)}) if context else []
-    items = [('ALL', 'All Zones', '', 0)] + [(n, n, '', i + 1) for i, n in enumerate(names) if n != 'ALL']
+    names = sorted({z.name for z in self.zones} | {zone_name(e) for e in zone_empties(context.scene, self.zone_prefix)}) if context else []
+    items = [('ALL', 'All Zones', '全ゾーンの合成結果を選択します。ゾーン別CSVを出すときは個別のゾーンを選んでください', 0)] + [(n, n, 'このゾーンに登録されたAdd/Subtract Emptyで範囲を判定します', i + 1) for i, n in enumerate(names) if n != 'ALL']
     # Retain strings used by Blender's dynamic EnumProperty.
     if items != _ENUM_CACHE:
         _ENUM_RETIRED.append(_ENUM_CACHE)
@@ -155,6 +280,7 @@ def inside_mask(pts, boxes):
 class UBT_OT_SelectInZone(bpy.types.Operator):
     bl_idname = 'ubt.select_in_zone'
     bl_label = 'Select In Zone'
+    bl_description = '現在のZone範囲内に原点があるMeshを選択します。先にRecursive等で候補Collectionを指定し、選択後にSelectedでCSVを書き出してください'
     bl_options = {'REGISTER'}
 
     @classmethod
@@ -173,7 +299,9 @@ class UBT_OT_SelectInZone(bpy.types.Operator):
             raise ValueError(f'No zone empties found (Cube empties named "{p.zone_prefix}*").')
         choice = p.zone_choice
         if choice != 'ALL':
-            zones = {choice: zones[choice]} if choice in zones else {}
+            if choice not in zones:
+                raise ValueError('Selected zone has no Cube empties. Use Add Empty or Register Selected Empties.')
+            zones = {choice: zones[choice]}
         source = _iter_all_scene_objects(context) if p.scope == 'all' else _iter_collection_objects(p.collection, p.scope == 'recursive')
         objects = []
         for i, ob in enumerate(source):

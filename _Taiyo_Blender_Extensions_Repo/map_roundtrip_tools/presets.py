@@ -75,6 +75,7 @@ def apply_selected(self, context):
 
 
 class MRT_OT_SavePreset(bpy.types.Operator):
+    bl_description = '現在のAdvanced設定を名前付きで保存します'
     bl_idname = 'mrt.save_preset'
     bl_label = 'Save FBX Preset'
     preset_name: StringProperty(name='Name')
@@ -100,6 +101,7 @@ class MRT_OT_SavePreset(bpy.types.Operator):
 
 
 class MRT_OT_DeletePreset(bpy.types.Operator):
+    bl_description = '選択したユーザープリセットを削除します。組み込み設定は削除できません'
     bl_idname = 'mrt.delete_preset'
     bl_label = 'Delete FBX Preset'
 

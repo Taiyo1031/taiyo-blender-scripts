@@ -1,6 +1,6 @@
 # Unreal Bridge Tools 使用書
 
-**対象version: 2.3.1**
+**対象version: 2.3.2**
 
 ## 1. このアドオンの目的
 
@@ -168,3 +168,9 @@ id,tx,ty,tz,rx,ry,rz,sx,sy,sz,objname,colname
 新規Emptyはシーン直下に追加され、カスタムプロパティ`zone`で所属を保存します。Operationは`ubt_zone_operation`として.blendに保存されます。従来のCube EmptyはAddとして扱い、`.001`などの同名末尾連番による合成も維持します。Empty追加・Operation変更は通常のUndo対象です。
 
 Operationを変更しても、過去にCSV出力で付いた`ub_zone`タグは自動解除しません。すでに書き出したゾーンの範囲を変える場合、ReplaceのPreview件数も確認してください。
+
+## UIからのZone登録（2.3.2）
+
+New Zoneで空のZoneを登録し、Add Emptyで新しい箱を作るか、既存Emptyを選んでRegister Selected Emptiesで登録できます。一覧の名前ボタンで選択し、×で登録だけ解除します。登録解除でObjectは削除しません。各欄・ボタンにはホバーヒントがあります。
+
+Zoneは範囲選択用、CSV zone tagはCSVファイル名由来です。名前を揃えてください。詳しい手順とExchange Folderの説明は[Map Roundtrip 詳細使用書](https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/WORKFLOW_JA.md)をご覧ください。

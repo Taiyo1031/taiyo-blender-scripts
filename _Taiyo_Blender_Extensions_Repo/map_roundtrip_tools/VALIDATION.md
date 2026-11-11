@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.1.0** / Unreal Bridge Tools **2.3.0** / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.1.1**（性能の実測は0.1.0。0.1.1はUI・ヒントを更新） / Unreal Bridge Tools **2.3.2**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -68,3 +68,7 @@
 仕様書§11を採用しました。追加の実装上の既定は、非有限数値を不正行としてスキップすること、特異なゾーン変換をエラーにすること、復元中の再中断を抑止することです。FBX既定値やCSV列は変更していません。
 
 配布indexは既存27件にMRTを加えた**28件**です。Object Groupsの公開済み内容は保持し、今回のcommitでは変更しません。Manager 1.0.17は公開済みの別名を維持し、MRT検索語と説明を追加します。
+
+## 0.1.1 / UBT 2.3.2のUI更新
+
+SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホバーヒントは tools/test_unreal_bridge_zone_registry.py でBlender 4.5.9 / 5.2.2にて確認。標準FBX画面の実UIは tools/ui_test_map_roundtrip_native_fbx.py で、標準ExporterのID、PRESET対応、選択MeshとLinearカラー初期値、キャンセル時の非出力を確認しました。補助機能の個別FBX出力と配置・復元の既存回帰も合格しました。手順は[詳細使用書](WORKFLOW_JA.md)にまとめています。

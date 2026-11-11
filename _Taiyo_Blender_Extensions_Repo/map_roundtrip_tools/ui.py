@@ -19,29 +19,37 @@ class MRT_PT_Export(bpy.types.Panel):
         box = col.box()
         box.label(text='Paths')
         box.prop(p, 'exchange_dir')
+        box.label(text='Reference only; set actual file paths separately.', icon='INFO')
         box.prop(p, 'zone_name')
         box.label(text='CSV is exported with Unreal Bridge Tools')
         box.label(text='(Scope: Selected).')
         box = col.box()
         box.label(text='FBX Export')
-        box.prop(p, 'fbx_preset')
-        row = box.row(align=True)
-        row.operator('mrt.save_preset', text='', icon='ADD')
-        row.operator('mrt.delete_preset', text='', icon='X')
         box.label(text=f'Selected Meshes  {sum(ob.type == "MESH" for ob in context.selected_objects)}')
-        box.prop(p, 'fbx_files', expand=True)
-        box.prop(p, 'fbx_out_dir')
-        box = col.box()
-        box.label(text='Advanced')
-        for key in FBX_DEFAULTS:
-            if key == 'fbx_axis_forward':
-                row = box.row(align=True)
-                row.prop(p, key)
-                row.prop(p, 'fbx_axis_up')
-            elif key != 'fbx_axis_up':
-                box.prop(p, key)
-        col.operator('mrt.export_fbx')
-        col.label(text='Last export: ' + p.last_export)
+        box.operator('mrt.export_fbx_native', icon='EXPORT')
+        box.label(text='Settings and presets open in Blender file browser.')
+        col.prop(p, 'show_batch_export', icon='TRIA_DOWN' if p.show_batch_export else 'TRIA_RIGHT', emboss=False)
+        if p.show_batch_export:
+            box = col.box()
+            box.label(text='FBX Export')
+            box.prop(p, 'fbx_preset')
+            row = box.row(align=True)
+            row.operator('mrt.save_preset', text='', icon='ADD')
+            row.operator('mrt.delete_preset', text='', icon='X')
+            box.label(text=f'Selected Meshes  {sum(ob.type == "MESH" for ob in context.selected_objects)}')
+            box.prop(p, 'fbx_files', expand=True)
+            box.prop(p, 'fbx_out_dir')
+            box = col.box()
+            box.label(text='Advanced')
+            for key in FBX_DEFAULTS:
+                if key == 'fbx_axis_forward':
+                    row = box.row(align=True)
+                    row.prop(p, key)
+                    row.prop(p, 'fbx_axis_up')
+                elif key != 'fbx_axis_up':
+                    box.prop(p, key)
+            col.operator('mrt.export_fbx')
+            col.label(text='Last export: ' + p.last_export)
         if p.status:
             layout.label(text=p.status)
         if p.running:
@@ -67,6 +75,7 @@ class MRT_PT_Import(bpy.types.Panel):
         box.label(text='New meshes go under Library, at the origin.')
         box = layout.box()
         box.label(text='Return Files')
+        box.label(text='Return Folder is a reference, not an automatic import.')
         for name in ('return_dir', 'placement_csv', 'mesh_fbx', 'name_mode', 'if_exists'):
             box.prop(p, name)
         box = layout.box()
