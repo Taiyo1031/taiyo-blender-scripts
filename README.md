@@ -4,6 +4,8 @@ Taiyo用のBlender Extensions配布リポジトリです。
 
 このリポジトリは、GitHub Pagesで `docs/extensions/index.json` を公開し、Blender 4.2以降の Remote Repository として使うことを主目的にしています。
 
+別PCへの移行・GitHubとの同期・commit/push手順、これまでの要望と作業スタイル、新しいエージェントへの依頼文は、[Linux移行・開発引き継ぎ](PC_MIGRATION_LINUX.md)を参照してください。
+
 Zone登録・Empty編集・CSV往復・標準FBX画面の手順は、[Map Roundtrip 詳細使用書](_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/WORKFLOW_JA.md)を参照してください。
 
 ## Blenderから使う
