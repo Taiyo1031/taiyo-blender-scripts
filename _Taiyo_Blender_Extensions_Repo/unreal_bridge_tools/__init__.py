@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Unreal Bridge Tools",
     "author": "Overnight Artelier",
-    "version": (2, 3, 0),
+    "version": (2, 3, 1),
     "blender": (4, 5, 0),
     "location": "3D Viewport > N Panel > Unreal Bridge Tools",
     "description": "Export transforms & collision tags from Blender to CSV for Unreal Engine PCG pipeline.",
@@ -21,7 +21,8 @@ from bpy.props import (
 from bpy.types import Operator, Panel, AddonPreferences, PropertyGroup, UIList
 from math import pi
 from .constants import ZONE_KEY
-from .zones import UBT_OT_SelectInZone, zone_items
+from .zones import (UBT_OT_SelectInZone, UBT_OT_AddZoneEmpty, zone_items,
+                    register_zone_properties, unregister_zone_properties, draw_zone_controls)
 
 try:
     from . import preset_utils
@@ -1186,6 +1187,7 @@ class UBT_PT_Main(Panel):
         box.label(text="Zones")
         box.prop(p, "zone_prefix")
         box.prop(p, "zone_choice")
+        draw_zone_controls(box, context)
         previous = layout.operator_context
         box.operator_context = 'INVOKE_DEFAULT'
         box.operator("ubt.select_in_zone")
@@ -1274,10 +1276,12 @@ classes = (
     UBT_OT_TestWrite,
     UBT_OT_ExportCSV,
     UBT_OT_SelectInZone,
+    UBT_OT_AddZoneEmpty,
     UBT_PT_Main,
 )
 
 def register():
+    register_zone_properties()
     for c in classes:
         bpy.utils.register_class(c)
     bpy.types.Scene.ubt_props = PointerProperty(type=UBT_Props)
@@ -1286,3 +1290,4 @@ def unregister():
     for c in reversed(classes):
         bpy.utils.unregister_class(c)
     del bpy.types.Scene.ubt_props
+    unregister_zone_properties()

@@ -1,6 +1,6 @@
 # Unreal Bridge Tools 使用書
 
-**対象version: 2.3.0**
+**対象version: 2.3.1**
 
 ## 1. このアドオンの目的
 
@@ -24,7 +24,7 @@
 1. Blenderを開く
 2. `Edit > Preferences > Add-ons` を開く
 3. `Install...` を押す
-4. `unreal_bridge_tools-2.3.0.zip` を選択
+4. `unreal_bridge_tools-2.3.1.zip` を選択
 5. Add-on一覧で **Unreal Bridge Tools** を有効化
 6. 3D Viewの右側サイドバーを開く
 7. `Unreal Bridge Tools` タブを開く
@@ -148,10 +148,23 @@ id,tx,ty,tz,rx,ry,rz,sx,sy,sz,objname,colname
 - 書き出し中に中断したい場合は `Esc` を押してください。中断時は途中までのCSVが残る場合があります。
 - 大量処理前に `.blend` を保存しておくと、名前変更やタグ付けを戻しやすくなります。
 
-## Map Roundtrip対応（2.3.0 / Blender 4.5以上）
+## Map Roundtrip対応（2.3.1 / Blender 4.5以上）
 
 - `Scope = Selected` は開始時の選択だけを書き出します。Target Collectionは不要です。選択ゼロならCSVを作りません。既存Filters／Visible Onlyは適用されます。
 - `Tag Exported Objects (ub_zone)` は既定ONです。CSVが正常に保存されたときだけ、実際に書き出したObjectへCSVファイル名（拡張子なし）を付与します。中断・エラーではタグを変更しません。この設定はプリセットに含めません。
 - `Zones > Select In Zone` は`ZONE_`から始まるCube Emptyの範囲に原点が入るMeshを選択します。Emptyの回転・スケールとdisplay sizeを反映し、同名サフィックス領域は合成します。重複はゾーン名順で決まります。Selectedスコープでは使えません。
 - Zones処理はtimerで分割し、ESCで中断できます。中断時の途中選択は残ります。タグ名はCSVへ追加せず、12列の形式は従来どおりです。
 - 推奨手順：Recursiveでゾーンを選択 → Selectedで`ZONE_A.csv`を出力 → Map Roundtrip ToolsでPreview → Dry RunをOFFにしてReplace Zone。
+
+## 複数Emptyと範囲の引き算（2.3.1）
+
+`Zones`で選んだゾーンのEmpty一覧と、各Emptyの`Add / Subtract`が表示されます。ゾーンの範囲は **（すべてのAddの和集合）から（すべてのSubtractの和集合）を除いた部分**です。Subtractは同じゾーンだけに効き、Addがないゾーンは空の範囲になります。Meshを加工するBooleanではなく、Object原点の選択判定です。回転・スケール・Cubeのdisplay sizeを反映します。
+
+1. `Zone = All Zones`で`Add Empty`を押し、ダイアログで`ZONE_A`などのゾーン名を入力します。新しいゾーンもこの操作で作成できます。
+2. 既存ゾーンを選んだ状態で`Add Empty`を押すと、そのゾーンのCube Emptyを3Dカーソル位置に追加し、選択・アクティブにします。初期サイズは1、OperationはAddです。
+3. 追加したEmptyを移動・回転・拡大して範囲を組み立てます。くり抜く箱は一覧でSubtractに切り替えます。
+4. Recursiveなどの候補スコープで`Select In Zone`を押し、結果を確認してからSelectedでCSVへ出力します。
+
+新規Emptyはシーン直下に追加され、カスタムプロパティ`zone`で所属を保存します。Operationは`ubt_zone_operation`として.blendに保存されます。従来のCube EmptyはAddとして扱い、`.001`などの同名末尾連番による合成も維持します。Empty追加・Operation変更は通常のUndo対象です。
+
+Operationを変更しても、過去にCSV出力で付いた`ub_zone`タグは自動解除しません。すでに書き出したゾーンの範囲を変える場合、ReplaceのPreview件数も確認してください。

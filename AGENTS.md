@@ -108,3 +108,5 @@ repo/
 - Map Roundtrip Tools 0.1.0とUnreal Bridge Tools 2.3.0の回帰は `blender --background --factory-startup --python-exit-code 1 --python tools/test_map_roundtrip_tools.py`。実UIのESC復元は `blender --factory-startup --enable-event-simulate --python tools/ui_test_map_roundtrip_tools.py`、性能測定は `tools/benchmark_map_roundtrip_tools.py`。詳細結果はMap RoundtripのVALIDATION.mdを参照してください。
 - Map RoundtripのPreviewは配置を変更せず、実行時にplanを再作成します。Archiveは全データ内の同じub_zoneを対象にします。復元には元Collection所属・タグ・除外状態も必要です。
 - Blender 4.5.9 / 5.2.2では `wm.fbx_import` とFBX exporterのtemp_override選択上書きを往復テストで確認済みです。Object作成の非線形遅延と最終依存グラフ同期は別々に測定し、Collection link自体と混同しないでください。
+
+- Unreal Bridge Tools 2.3.1の複数Empty Add/Subtract、追加ボタン、保存復元、10万点判定は `blender --background --factory-startup --python-exit-code 1 --python tools/test_unreal_bridge_zones.py` で検証します。Subtractは所属ゾーンだけに作用し、従来EmptyはAddとして扱います。過去のub_zoneタグは範囲編集で自動解除しません。

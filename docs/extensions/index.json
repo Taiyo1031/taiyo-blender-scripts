@@ -189,7 +189,7 @@
       "id": "unreal_bridge_tools",
       "name": "Unreal Bridge Tools",
       "tagline": "Export transforms and collision tags for Unreal Engine PCG",
-      "version": "2.3.0",
+      "version": "2.3.1",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -197,10 +197,10 @@
       ],
       "blender_version_min": "4.5.0",
       "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./unreal_bridge_tools-2.3.0.zip",
-      "archive_size": 21044,
-      "archive_hash": "sha256:afaa5f1d2621a4d17a6cbd8d88276ecf3ff15c7269c598868bd8e334fa8de0be",
-      "taiyo_updated_at": 1794393245
+      "archive_url": "./unreal_bridge_tools-2.3.1.zip",
+      "archive_size": 23751,
+      "archive_hash": "sha256:290d76f853a106ec12389d90cc4b8a29ecea034bd9a1cd5c3de1a8e02b04a663",
+      "taiyo_updated_at": 1794396613
     },
     {
       "schema_version": "1.0.0",

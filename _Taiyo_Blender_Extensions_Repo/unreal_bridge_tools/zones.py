@@ -3,31 +3,129 @@ import re
 import time
 import bpy
 import numpy as np
+from bpy.props import EnumProperty, StringProperty
+from .constants import ZONE_NAME_KEY
 
 _ENUM_CACHE = []
 _ENUM_RETIRED = []
 _RUNNING = False
 
 
+class ZoneBoxes(list):
+    """Union of additive boxes, minus union of subtractive boxes.
+
+    Remains list-compatible for callers of inside_mask and the benchmark.
+    """
+    def __init__(self):
+        super().__init__()
+        self.subtract = []
+
+
+def zone_name(empty):
+    return str(empty[ZONE_NAME_KEY]) if ZONE_NAME_KEY in empty else re.sub(r'\.\d+$', '', empty.name)
+
+
+def zone_empties(scene, prefix):
+    return (e for e in scene.objects if e.type == 'EMPTY'
+            and e.empty_display_type == 'CUBE' and e.name.startswith(prefix))
+
+
+def register_zone_properties():
+    bpy.types.Object.ubt_zone_operation = EnumProperty(
+        name='Operation', description='Combine this box with its zone',
+        items=[('ADD', 'Add', 'Include this box in the zone'),
+               ('SUBTRACT', 'Subtract', 'Remove this box from its own zone')],
+        default='ADD')
+
+
+def unregister_zone_properties():
+    del bpy.types.Object.ubt_zone_operation
+
+
+def draw_zone_controls(layout, context):
+    p = context.scene.ubt_props
+    controls = layout.column()
+    controls.enabled = not _RUNNING and not p.export_running
+    controls.operator_context = 'INVOKE_DEFAULT'
+    controls.operator('ubt.add_zone_empty', text='Add Empty', icon='ADD')
+    choice = p.zone_choice
+    empties = sorted(zone_empties(context.scene, p.zone_prefix), key=lambda e: (zone_name(e), e.name))
+    previous = None
+    for empty in empties:
+        name = zone_name(empty)
+        if choice != 'ALL' and name != choice:
+            continue
+        if choice == 'ALL' and previous != name:
+            controls.label(text=name)
+            previous = name
+        row = controls.row(align=True)
+        row.enabled = empty.is_editable
+        row.label(text=empty.name, icon='EMPTY_AXIS')
+        row.prop(empty, 'ubt_zone_operation', text='')
+
+
+class UBT_OT_AddZoneEmpty(bpy.types.Operator):
+    bl_idname = 'ubt.add_zone_empty'
+    bl_label = 'Add Zone Empty'
+    bl_options = {'REGISTER', 'UNDO'}
+    zone_name: StringProperty(name='Zone Name')
+
+    @classmethod
+    def poll(cls, context):
+        return not _RUNNING and context.mode == 'OBJECT' and not context.scene.ubt_props.export_running
+
+    def invoke(self, context, event):
+        p = context.scene.ubt_props
+        if p.zone_choice != 'ALL':
+            self.zone_name = p.zone_choice
+            return self.execute(context)
+        self.zone_name = p.zone_prefix + 'A'
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        p = context.scene.ubt_props
+        name = self.zone_name.strip() or (p.zone_choice if p.zone_choice != 'ALL' else '')
+        if not name or name == 'ALL':
+            self.report({'ERROR'}, 'Choose a nonempty zone name other than ALL.')
+            return {'CANCELLED'}
+        object_name = name if name.startswith(p.zone_prefix) else p.zone_prefix + name
+        empty = bpy.data.objects.new(object_name, None)
+        try:
+            empty.empty_display_type = 'CUBE'
+            empty.empty_display_size = 1.0
+            empty.show_in_front = True
+            empty.location = context.scene.cursor.location
+            empty[ZONE_NAME_KEY] = name
+            empty.ubt_zone_operation = 'ADD'
+            context.scene.collection.objects.link(empty)
+            bpy.ops.object.select_all(action='DESELECT')
+            empty.select_set(True)
+            context.view_layer.objects.active = empty
+            p.zone_choice = name
+            p.zone_result = ''
+        except Exception:
+            bpy.data.objects.remove(empty, do_unlink=True)
+            raise
+        return {'FINISHED'}
+
+
 def collect_zone_boxes(scene, prefix):
     zones = {}
-    for e in scene.objects:
-        if e.type == 'EMPTY' and e.empty_display_type == 'CUBE' and e.name.startswith(prefix):
-            name = str(e['zone']) if 'zone' in e else re.sub(r'\.\d+$', '', e.name)
-            try:
-                inv = np.array(e.matrix_world.inverted(), dtype=np.float64)
-            except ValueError:
-                raise ValueError(f"Zone has a singular transform: {e.name}")
-            zones.setdefault(name, []).append((inv, float(e.empty_display_size)))
+    for e in zone_empties(scene, prefix):
+        name = zone_name(e)
+        try:
+            inv = np.array(e.matrix_world.inverted(), dtype=np.float64)
+        except ValueError:
+            raise ValueError(f"Zone has a singular transform: {e.name}")
+        boxes = zones.setdefault(name, ZoneBoxes())
+        target = boxes.subtract if e.ubt_zone_operation == 'SUBTRACT' else boxes
+        target.append((inv, float(e.empty_display_size)))
     return zones
 
 
 def zone_items(self, context):
     global _ENUM_CACHE
-    names = sorted({str(e['zone']) if 'zone' in e else re.sub(r'\.\d+$', '', e.name)
-                    for e in context.scene.objects
-                    if e.type == 'EMPTY' and e.empty_display_type == 'CUBE'
-                    and e.name.startswith(self.zone_prefix)}) if context else []
+    names = sorted({zone_name(e) for e in zone_empties(context.scene, self.zone_prefix)}) if context else []
     items = [('ALL', 'All Zones', '', 0)] + [(n, n, '', i + 1) for i, n in enumerate(names) if n != 'ALL']
     # Retain strings used by Blender's dynamic EnumProperty.
     if items != _ENUM_CACHE:
@@ -49,6 +147,8 @@ def inside_mask(pts, boxes):
     for inv, size in boxes:
         local = pts @ inv.T
         mask |= (np.abs(local[:, :3]) <= size).all(axis=1)
+    if getattr(boxes, 'subtract', None) and mask.any():
+        mask &= ~inside_mask(pts, boxes.subtract)
     return mask
 
 
