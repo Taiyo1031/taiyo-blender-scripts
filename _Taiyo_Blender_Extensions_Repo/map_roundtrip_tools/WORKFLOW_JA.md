@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.5.1 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.6.0 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -41,9 +41,10 @@ Zones
 - **原点にEmptyを作る**: 各Meshの原点が範囲に入るEmpty（Add）を作ります。
 - **近ければ1つにまとめる**: `Merge Distance`（既定1 m）の格子で近い原点を1つのEmptyにまとめます。`0`なら1個ずつ作ります。
 - **他のObjectを含めない**: 選択していないMeshの原点がEmptyの範囲に入る場合は、自動でEmptyを分割します。未選択のMeshと原点がほぼ同じで分けられないObjectには、Emptyを作らず警告と件数を出します。
+- **Emptyの置き先**: 作ったEmptyは、元のMeshがいるCollectionへ入ります（ネストしたCollectionも、シーンの最上位も同じ）。近い原点を1つにまとめたEmptyの元のMeshが複数のCollectionにまたがるときは、最も多いCollectionへ入ります。同数なら、シーンの中で先に並ぶCollectionです。まとめたEmptyのうち、複数のCollectionにまたがったものの数が、結果表示の`mixed-collection empties N`に出ます。複数のCollectionに入っているMeshは、シーンの中で最初に見つかる1つを使います。シーンにつながっていないCollectionや、編集できない（リンクされた）Collectionには入れず、シーンの最上位へ入れます。
 - **重複しない**: すでにそのゾーンの範囲に入っているObjectには新しいEmptyを作りません。2回押しても増えません。既存のSubtractで除かれるObjectは `removed by Subtract` として件数に出ます。
 - **判定する相手**: 未選択Meshの判定は`Mesh Candidates`（Map Collection / All Scene Meshes）に従います。
-- **結果表示**: `Added N objects to ZONE_A with M empties; skipped ...; unseparable ...; removed by Subtract ...; ignored non-mesh ...` の形で、状況表示の行に出ます。
+- **結果表示**: `Added N objects to ZONE_A with M empties; skipped ...; unseparable ...; removed by Subtract ...; ignored non-mesh ...; mixed-collection empties ...` の形で、状況表示の行に出ます。
 - **進捗とキャンセル**: 進捗と残り時間が出ます。ESCで中断すると、作ったEmptyをすべて取り消します。Ctrl+Zで元に戻せます。
 - **見え方**: 1つのObjectだけのEmptyは範囲がとても小さく（約2 mm）、3Dビューでは点にしか見えません。確認は`Zone Empties`の一覧、または`Select Zone Empties`で行います。広げたいときはEmptyを選んで`S`で拡大してください。
 
