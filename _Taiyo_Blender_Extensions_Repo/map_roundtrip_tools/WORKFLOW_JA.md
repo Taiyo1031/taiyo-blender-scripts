@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.3.0 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.4.0 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -111,6 +111,8 @@ ZONE_A =（Addの箱① ＋ Addの箱②）－（Subtractの箱③ ＋ Subtract�
 
 0.2.0までの「先にSelect Meshes In Zoneで選んでからExport Selected CSV」は不要になりました。
 
+書き出した各行の`id`（各CSV内の1から始まる通し番号）は、そのMeshのカスタムプロパティ`ub_csv_id`にも保存されます。`ub_zone`と同じく正常終了時だけで、失敗・ESC中断では元の値に戻ります。CSVの列（12列）は変わりません。Houdiniから戻すときの判定に使います（8章）。
+
 ## 6. Exchange Folderとは
 
 BlenderとHoudiniで受け渡す場所の**参考メモ**です。変更しても各パスは連動せず、作成・監視・自動取込もしません。Return Folderも同様です。
@@ -148,6 +150,19 @@ Unreal用の個別SMなら、配置Objectではなく原点に置いたLibrary�
 5. Dry Run ONでPreview Placementを確認し、OFFにしてReplace Zoneを実行します。
 
 Archiveは旧配置を保持して退避します。Deleteは明示選択時だけ削除します。旧対象はMap配下だけでなく、全データの同じub_zoneを持つObjectです。CSV名をZONE_A_return.csvに変えて返す場合も、置換タグはZONE_Aを維持してください。
+
+### idの扱い
+
+戻りのPlacement CSVでは、`id`列を次のように判定します。判定はPreview Placementにも反映されます。
+
+- `id`が**-1**の行は、Houdiniで新しく追加したMeshです。置換ではなく追加として配置します。`objname`がLibraryのMeshと一致する場合だけ配置し、一致しなければ従来どおり「Libraryに無い名前」として報告します。
+- `id`が、書き出し時のどのObjectの`ub_csv_id`にも一致しない行（-1以外）は**使用しません**。Previewとステータスに`unknown id N`として件数が出ます。
+- Houdiniで削除したObjectは、その`id`の行がCSVに無いだけです。従来どおり旧Objectとして扱われ、Archive（既定）なら`_Replaced_ZONE_A`へ退避します。
+- `id`が整数でない行（空欄・文字・1.5など）は`invalid rows`に数えて使いません。`1.0`や`-1.0`は整数として読みます。
+- `id`の照合は、そのゾーンの`ub_zone`を持つObjectの`ub_csv_id`だけで行います。他のゾーンのidは数えません。
+- 対象ゾーンのどのObjectにも`ub_csv_id`が無い場合（`ub_csv_id`を保存する前の版で書き出したゾーン）は、idの判定をせず従来どおり配置します（-1は追加として数えます）。Previewに「ID check off」と表示されます。
+- Previewには`New meshes (id -1): N`が出ます。不明idがあれば`Skipped N rows with an unknown id`も出ます。結果ステータスの末尾には`new meshes N, unknown id N`が付きます。
+- Replace Zoneで作った新しいObjectには`ub_csv_id`は付きません。同じゾーンをもう一度Houdiniへ送るときは、先にExport Zone CSVをやり直してください。
 
 ## 9. ヒント・注意
 

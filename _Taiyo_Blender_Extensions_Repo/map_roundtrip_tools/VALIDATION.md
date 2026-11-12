@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.3.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.4.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱いのみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -118,3 +118,12 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - `Add Selected Objects`は未選択Meshと原点がほぼ同じObject（約2e-5以内）を分離できず、Emptyを作らずに件数で知らせます。
 - 既存のSubtract範囲の判定（`removed by Subtract`）は箱の数が多いと時間がかかり、その区間は分割されません。
 - 本人の制作Scene、Blender 4.5.10・5.x、Linuxでの確認、全16操作の6万件実UI再実行は未実施です。
+
+## 0.4.0の追加（CSVのid判定）
+
+検証日: 2026-11-13（日本時間）。macOS arm64、Blender **4.5.9 LTS**のみ。Houdini・Unrealは未検証です。
+
+- Export Zone CSVが各行の`id`をMeshの`ub_csv_id`へ保存し、Houdiniから戻すPlacement CSVで`id`を判定します（`-1`＝追加Mesh、不明なid＝使用しない、`ub_csv_id`が無いゾーン＝判定なし）。
+- 回帰：`tools/test_map_roundtrip_csv_id.py`（10項目）、既存の`test_map_roundtrip_tools.py` `_zones.py` `_zone_csv.py` `_add_objects.py` `_ui_layout.py` `_zone_registry.py` `_zone_migration.py` `_addon_lifecycle.py`がすべて合格しました。
+- 性能は測っていません。追加した処理は行ごとの整数比較と、書き出し時のプロパティ1つの書き込みだけです。6万件での実測は未実施です。
+- 取り込みパネルの実画面表示は未確認です（UIレイアウトテストのみ）。

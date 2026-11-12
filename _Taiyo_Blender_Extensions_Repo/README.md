@@ -17,7 +17,7 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 - `instance_name_fixer`: Instance Name Fixer
 - `laid_collection_instance_linker`: CW_Laid Collection Instance Linker
 - `hierarchy_restriction_manager`: Hierarchy Restriction Manager
-- `map_roundtrip_tools`: Map Roundtrip Tools 0.3.0（Blender 4.5+、配置CSV・FBX往復）
+- `map_roundtrip_tools`: Map Roundtrip Tools 0.4.0（Blender 4.5+、配置CSV・FBX往復）
 - `map_link_tools`: Map Link Tools
 - `mesh_attribute_batch_remover`: Mesh Attribute Batch Remover
 - `modular_asset_renamer`: Modular Asset Renamer
