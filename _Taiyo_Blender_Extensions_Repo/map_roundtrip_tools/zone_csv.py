@@ -9,7 +9,7 @@ import tempfile
 import bpy
 from .chunked import ChunkedOperator
 from .constants import CSV_COLUMNS, CSV_ID_KEY, ZONE_KEY
-from .placement import normalize
+from .placement import build_parent_index, collection_colname, normalize
 from .zones import zone_members
 
 INVALID_FILENAME_CHARS = '/\\:*?"<>|\0'
@@ -38,14 +38,24 @@ class MRT_OT_ExportZoneCSV(ChunkedOperator, bpy.types.Operator):
         folder = bpy.path.abspath(p.zone_csv_dir)
         os.makedirs(folder, exist_ok=True)
         targets = {ob for objects in groups.values() for ob in objects}
-        colnames = {}
+        owners = {}
         for collection in (*bpy.data.collections, *(s.collection for s in bpy.data.scenes)):
             for i, ob in enumerate(collection.objects):
                 if ob in targets:
-                    colnames.setdefault(ob, collection.name)
+                    owners.setdefault(ob, collection)
                 if i % 512 == 0:
                     yield
             yield
+        # colname = the collection path below the Map collection, so Replace Zone can rebuild the hierarchy.
+        parents, roots = build_parent_index(p.map_coll)
+        by_collection = {}
+        colnames = {}
+        for i, (ob, collection) in enumerate(owners.items()):
+            if collection not in by_collection:
+                by_collection[collection] = collection_colname(collection, p.map_coll, parents, roots)
+            colnames[ob] = by_collection[collection]
+            if i % 4096 == 0:
+                yield
         total = len(targets)
         done = 0
         temps = []  # (temporary path, final path)

@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.4.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱いのみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.5.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -127,3 +127,13 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - 回帰：`tools/test_map_roundtrip_csv_id.py`（10項目）、既存の`test_map_roundtrip_tools.py` `_zones.py` `_zone_csv.py` `_add_objects.py` `_ui_layout.py` `_zone_registry.py` `_zone_migration.py` `_addon_lifecycle.py`がすべて合格しました。
 - 性能は測っていません。追加した処理は行ごとの整数比較と、書き出し時のプロパティ1つの書き込みだけです。6万件での実測は未実施です。
 - 取り込みパネルの実画面表示は未確認です（UIレイアウトテストのみ）。
+
+## 0.5.0の追加（colnameの階層パス）
+
+検証日: 2026-11-13（日本時間）。macOS arm64、Blender **4.5.9 LTS**のみ。Houdini・Unrealは未検証です。
+
+- Export Zone CSVの`colname`が、Mapからの階層パス（例 `Area1/Rocks`）になり、Replace Zoneが`Map`の下に無いCollectionを入れ子のまま作ります。名前だけの旧CSVは、従来どおり名前で探します。
+- 回帰：`tools/test_map_roundtrip_colname_path.py`（7項目：Map基準／Map未指定／`/`を含む名前／解決（既存・新規・途中の階層・旧名・`//`・先頭がMapの名前）／階層の作成と配置／名前の衝突の警告／ESC・例外でのロールバック／書き出し→復元）に加え、既存の9本がすべて合格しました。
+- 6万Objectの書き出し（`tools/benchmark_map_roundtrip_add_objects.py`）：全体6.5〜6.96秒、最長tick 0.477〜0.510秒（0.4.0までは6.48秒、0.473秒）。測定のたびにばらつくため、目標の0.5秒前後です。colnameの計算中は4096件ごとに制御を返します。
+- 数千個のCollectionを持つシーンでの時間は、測っていません。
+- Mapの外にあったCollectionは`Map`の下に新しく作られ、元の場所へは戻りません。名前が既に使われていると`.001`が付きます（警告あり）。
