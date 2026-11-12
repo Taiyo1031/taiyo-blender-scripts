@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.2.0 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.3.0 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -10,14 +10,42 @@ Unreal Bridge Tools 2.3.3は2.2.20相当の元の機能へ戻しました。従�
 
 作業前に.blendを保存してください。大量配置のReplaceはUndo履歴を作りません。
 
-## 2. Zoneを登録する
+## 2. Zoneを登録して範囲を作る
 
-1. `Map Roundtrip > Zones > New Zone`を押します。
-2. `Zone Name`に `ZONE_A` などを入力します。
-3. `Zone`一覧で操作するゾーンを選びます。新規登録直後はEmptyがない空のゾーンです。
-4. `Add Empty`で新しい箱を作るか、既存Emptyを選び `Register Selected Empties` で登録します。
+操作は `N > Map Roundtrip > Zones`（最上部）で行います。上から次の順に並んでいます。
+
+```text
+Zones
+  [ZONE_A ▾] [＋]                      操作するゾーン。＋はNew Zone
+  [Map Collection | All Scene Meshes]  対象Meshの範囲（Map Collectionのときだけ Map 欄）
+  ▾ 1. Define Range   Add Selected Objects / Merge Distance / Add Empty / Register Selected Empties
+  ▸ Zone Empties      Emptyの一覧・検索・選択（折りたたみ）
+  ▸ 2. Check          Select Meshes In Zone（折りたたみ）
+  ▾ 3. Export CSV     CSV Output Folder / Name Normalize / Export ZONE_A.csv
+  ▸ Advanced          Zone Prefix（折りたたみ）
+```
+
+1. `Zones`の`＋`（New Zone）を押し、`Zone Name`に `ZONE_A` などを入力します。
+2. 一番上の`Zone`で操作するゾーンを選びます。新規登録直後はEmptyがない空のゾーンです。
+3. 範囲を作ります。方法は2通りです。
+   - **A. 選択したObjectからまとめて作る（おすすめ）**: ゾーンに入れたいMeshを3Dビューで選択し、`1. Define Range > Add Selected Objects`を押します。
+   - **B. 手で作る**: `Add Empty`で新しい箱を作るか、既存Emptyを選び `Register Selected Empties` で登録します。
 
 別ゾーンもNew Zoneで登録します。ゾーン一覧と所属は.blendに保存されます。旧UBTで作ったEmptyと登録済みゾーンも読み取れます。旧UBTのAdd/Subtract・登録解除状態を保持します。旧UBTが無効でも利用できます。
+
+### Add Selected Objects（選択Meshをまとめてゾーンへ追加）
+
+選択中のMeshの原点にCube Emptyを自動で作り、現在のゾーンへ追加します。`Zone`が`All Zones`の間は押せません。追加先のゾーンを選んでください。
+
+- **対象**: 選択中の**Meshだけ**です。Meshでない選択は無視し、件数を表示します。
+- **原点にEmptyを作る**: 各Meshの原点が範囲に入るEmpty（Add）を作ります。
+- **近ければ1つにまとめる**: `Merge Distance`（既定1 m）の格子で近い原点を1つのEmptyにまとめます。`0`なら1個ずつ作ります。
+- **他のObjectを含めない**: 選択していないMeshの原点がEmptyの範囲に入る場合は、自動でEmptyを分割します。未選択のMeshと原点がほぼ同じで分けられないObjectには、Emptyを作らず警告と件数を出します。
+- **重複しない**: すでにそのゾーンの範囲に入っているObjectには新しいEmptyを作りません。2回押しても増えません。既存のSubtractで除かれるObjectは `removed by Subtract` として件数に出ます。
+- **判定する相手**: 未選択Meshの判定は`Mesh Candidates`（Map Collection / All Scene Meshes）に従います。
+- **結果表示**: `Added N objects to ZONE_A with M empties; skipped ...; unseparable ...; removed by Subtract ...; ignored non-mesh ...` の形で、状況表示の行に出ます。
+- **進捗とキャンセル**: 進捗と残り時間が出ます。ESCで中断すると、作ったEmptyをすべて取り消します。Ctrl+Zで元に戻せます。
+- **見え方**: 1つのObjectだけのEmptyは範囲がとても小さく（約2 mm）、3Dビューでは点にしか見えません。確認は`Zone Empties`の一覧、または`Select Zone Empties`で行います。広げたいときはEmptyを選んで`S`で拡大してください。
 
 ### 新しいEmpty
 
@@ -27,24 +55,28 @@ Add Emptyは3Dカーソル位置にCube Emptyを作り、選択・アクティ�
 
 Zoneを選び、ビューポート／OutlinerでEmptyを選択してRegister Selected Emptiesを押します。名前は変更せず、Cube表示にします。位置・回転・スケールは保持します。別ZoneのEmptyを登録すると所属が移ります。名前がZONE_から始まらなくても登録できます。
 
-### 一覧の操作
+### 一覧の操作（Zone Empties）
 
+`Zone Empties`を開くと、ゾーンを構成するEmptyの一覧と検索欄があります。
+
+- **Search**: 名前で絞り込みます（大小文字は区別しません）。
 - **Empty名ボタン**：そのEmptyを選択して編集します。
 - **Add / Subtract**：追加／くり抜きの役割を変更します。
 - **×**：登録のみ解除します。Object本体は削除しません。
+- 数が多いときは先頭50件だけ表示し、`... and N more` と出ます。Searchで絞り込んでください。
 
-## 3. ゾーンをまとめて選択する
+## 3. ゾーンの中身を確認する・まとめて選択する
 
-目的によってボタンを分けています。
+目的によってボタンを分けています。`Select Meshes In Zone`は`2. Check`にあります。
 
 | ボタン | 選ぶ対象 | All Zonesを選んだ場合 |
 |---|---|---|
-| **Select Zone Empties** | 選択中のゾーンを構成するEmpty | 全ゾーンのEmptyをまとめて選択 |
-| **Select Meshes In Zone** | ゾーン範囲内に原点が入るMesh | 全ゾーンの範囲に入るMeshをまとめて選択 |
+| **Select Zone Empties**（Zone Empties内） | 選択中のゾーンを構成するEmpty | 全ゾーンのEmptyをまとめて選択 |
+| **Select Meshes In Zone**（2. Check） | ゾーン範囲内に原点が入るMesh | 全ゾーンの範囲に入るMeshをまとめて選択 |
 
-箱をまとめて移動・拡大したいときはSelect Zone Emptiesを使います。Houdiniへ送る配置を選ぶときはSelect Meshes In Zoneを使います。非表示・選択禁止のObjectは選択せず、件数を報告します。
+箱をまとめて移動・拡大したいときはSelect Zone Emptiesを使います。範囲の中身を目で確かめたいときはSelect Meshes In Zoneを使います。**CSVの書き出しにこの選択は不要です**（5章）。非表示・選択禁止のObjectは選択せず、件数を報告します。
 
-Mesh選択の `Mesh Candidates` は次の2通りです。
+Mesh選択の `Mesh Candidates` は次の2通りです。`Zones`の上部で切り替え、確認とCSV書き出しの両方に使われます。
 
 - **Map Collection**：指定したMapとその子CollectionのMeshを候補にします。
 - **All Scene Meshes**：現在SceneのMeshを候補にします。
@@ -55,24 +87,29 @@ Mesh選択の `Mesh Candidates` は次の2通りです。
 ZONE_A =（Addの箱① ＋ Addの箱②）－（Subtractの箱③ ＋ Subtractの箱④）
 ```
 
-箱の順序は関係ありません。Subtractは同じゾーンだけに作用します。Subtractだけのゾーンは空です。判定するのはMeshの原点で、形状やバウンディングボックスの交差ではありません。Mesh自体を切断するBooleanでもありません。編集後はSelect Meshes In Zoneを実行し直してください。
+箱の順序は関係ありません。Subtractは同じゾーンだけに作用します。Subtractだけのゾーンは空です。判定するのはMeshの原点で、形状やバウンディングボックスの交差ではありません。Mesh自体を切断するBooleanでもありません。編集後は`2. Check > Select Meshes In Zone`で中身を確認してください。CSVは範囲を直接使います。
 
 従来のZONE_A / ZONE_A.001というCube Emptyは同じゾーンとして自動検出します。Zone Prefixはこの検出用です。UI登録したEmptyは名前の接頭辞に依存しません。
 
 ## 5. ゾーンCSVを書き出す
 
-1. 個別のZone（例ZONE_A）を選びます。
-2. Mesh CandidatesとMapを指定して **Select Meshes In Zone** を押します。
-3. 必要ならMeshの選択を手動で絞ります。
-4. `CSV Output Folder`を指定します。例 `//houdini_io/out`。
-5. Libraryの名前に合う `Name Normalize` を指定します。通常はRemove Numeric Suffixです。
-6. **Export Selected CSV** を押します。
+**一番上の`Zone`で選んだゾーンの範囲内にあるMesh**を書き出します。Meshを選択しておく必要はありません。
 
-選択Meshだけを **ZONE_A.csv** へ出力し、正常終了時だけ `ub_zone=ZONE_A` を付けます。ファイル名とタグは現在のZone名に揃います。CSVは従来と同じ12列、ワールド座標、XYZ回転の度数、小数6桁です。UBTのScope切り替えは不要です。
+1. 一番上の`Zone`で書き出すゾーン（例ZONE_A）を選びます。
+2. `Mesh Candidates`（Map Collection / All Scene Meshes）を確認します。Map Collectionのときは`Map`も指定します。
+3. `3. Export CSV`で`CSV Output Folder`を指定します。例 `//houdini_io/out`。
+4. Libraryの名前に合う `Name Normalize` を指定します。通常はRemove Numeric Suffixです。
+5. **Export ZONE_A.csv**（ボタンにはゾーン名が出ます）を押します。
 
-All Zonesは選択用です。ゾーン別CSVを出すときは個別ゾーンを選んでください。選択ゼロ・読み取り専用ObjectなどのエラーやESC中断では、既存CSVと元のタグを保持します。
+ゾーン範囲内のMeshが **ZONE_A.csv** へ出力され、正常終了時だけ `ub_zone=ZONE_A` が付きます。ファイル名とタグは選んだZone名に揃います。非表示・選択禁止のMeshも出力に含まれます。CSVは従来と同じ12列、ワールド座標、XYZ回転の度数、小数6桁です。
 
-範囲を変えても過去のub_zoneタグは自動で消しません。既に出力したゾーンを縮小した場合は、Replaceの旧対象件数を確認してください。
+- **All Zones**を選ぶと、ボタンは **Export CSV (every zone)** になり、ゾーンごとに別ファイル（ZONE_A.csv、ZONE_B.csv…）を出力します。複数のゾーンの範囲に入るMeshは、名前順で最初のゾーンのCSVだけに入ります。
+- ゾーンの範囲にMeshが1つも入らないときはエラーになり、空のファイルは作りません。
+- 読み取り専用Objectがある場合のエラーや、ESC中断では、既存CSVと元のタグを保持します。
+- 進捗と残り時間が表示されます。ESCで中断できます。
+- 範囲を変えても過去のub_zoneタグは自動で消しません。既に出力したゾーンを縮小した場合は、Replaceの旧対象件数を確認してください。
+
+0.2.0までの「先にSelect Meshes In Zoneで選んでからExport Selected CSV」は不要になりました。
 
 ## 6. Exchange Folderとは
 
@@ -117,3 +154,9 @@ Archiveは旧配置を保持して退避します。Deleteは明示選択時だ�
 ボタンや入力欄にマウスを置くとヒントが出ます。出ない場合はPreferences > InterfaceのTooltips設定を確認してください。選択操作はObject Modeで実行します。
 
 性能測定は[検証報告](VALIDATION.md)を参照してください。0.1.0の6万件Replaceは約282.5秒で、生成の非線形性と分割不能な同期が残っています。担当アドオンを移しても、この配置生成の制約が解消したわけではありません。
+
+## 過去バージョン
+
+CSV出力が「選択Mesh」から「ゾーン範囲内のMesh」へ変わった0.3.0より前の版です。必要なときだけ使用してください。
+
+- [Map Roundtrip Tools 0.2.0（ZIP）](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/map_roundtrip_tools-0.2.0.zip)

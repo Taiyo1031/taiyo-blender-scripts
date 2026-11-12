@@ -186,8 +186,14 @@ def test_zone_csv():
     p, lib, mapc, source, old = fixture()
     p.zone_csv_dir = str(TEMP)
     bpy.ops.mrt.new_zone(name='ZONE_A')
+    p.zone_scope = 'SCENE'
+    bpy.context.view_layer.update()
+    bpy.context.scene.cursor.location = old.matrix_world.translation
+    assert bpy.ops.mrt.add_zone_empty(zone_name='ZONE_A') == {'FINISHED'}
+    zone_box = bpy.context.view_layer.objects.active
+    bpy.context.view_layer.update()
+    # The zone range, not the selection, decides what is exported.
     bpy.ops.object.select_all(action='DESELECT')
-    old.select_set(True)
     assert bpy.ops.mrt.export_zone_csv() == {'FINISHED'}
     assert old['ub_zone'] == 'ZONE_A'
     with open(TEMP/'ZONE_A.csv') as f:
@@ -207,8 +213,9 @@ def test_zone_csv():
         pass
     assert old['ub_zone'] == 'BEFORE' and (TEMP/'ZONE_A.csv').read_bytes() == before
     assert not list(TEMP.glob('.mrt-*.csv'))
-    bpy.ops.object.select_all(action='DESELECT')
-    expect_error(lambda: bpy.ops.mrt.export_zone_csv(), 'No mesh objects selected.')
+    zone_box.location = (1000, 1000, 1000)
+    bpy.context.view_layer.update()
+    expect_error(lambda: bpy.ops.mrt.export_zone_csv(), 'No mesh objects inside the zone.')
     print('PASS MRT zone CSV/precision/names/cancel/tag and file rollback')
 
 

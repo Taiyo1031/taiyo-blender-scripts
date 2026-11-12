@@ -16,6 +16,8 @@ class MRT_Props(bpy.types.PropertyGroup):
     zone_result: StringProperty(options={'SKIP_SAVE'})
     zone_scope: EnumProperty(name='Mesh Candidates', items=[('MAP','Map Collection','Mapと子CollectionのMesh'),('SCENE','All Scene Meshes','現在のSceneのMesh')], default='MAP')
     zone_csv_dir: StringProperty(name='CSV Output Folder', subtype='DIR_PATH', default='//houdini_io/out', description='選択Meshをゾーン名.csvへ書き出します。ub_zoneも現在のZone名になります')
+    merge_distance: FloatProperty(name='Merge Distance', default=1.0, min=0.0, soft_max=100.0, subtype='DISTANCE', description='Add Selected Objectsで、この距離以内の原点を1つのEmptyにまとめます。0なら選択Objectごとに1つ作ります。未選択のObjectが範囲に入る場合は自動で分割します')
+    zone_empty_filter: StringProperty(name='Search', options={'TEXTEDIT_UPDATE', 'SKIP_SAVE'}, description='Zone Emptiesの一覧を名前で絞り込みます。大小文字は区別しません。数が多いときは先頭50件だけ表示します')
     exchange_dir: StringProperty(description='BlenderとHoudiniの受け渡しフォルダーを記録する参考欄です。変更してもCSV/FBXの保存先は自動変更されず、フォルダー作成や監視もしません', name='Exchange Folder', subtype='DIR_PATH', default='//houdini_io')
     zone_name: StringProperty(description='標準FBX画面の初期ファイル名と補助機能のCombined FBX名に使います。範囲選択のZoneやCSVのub_zoneタグを変更する欄ではありません', name='FBX Name', default='ZONE_A')
     fbx_preset: EnumProperty(description='FBX Advanced設定のプリセット。組み込みUnreal SMは変更・削除できません', name='Preset', items=preset_items, update=apply_selected)

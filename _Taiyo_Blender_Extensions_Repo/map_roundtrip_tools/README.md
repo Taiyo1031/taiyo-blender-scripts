@@ -1,6 +1,6 @@
 # Map Roundtrip Tools
 
-**対象version: 0.2.0 / Blender 4.5.0以上**
+**対象version: 0.3.0 / Blender 4.5.0以上**
 
 ゾーン管理・配置CSV・HoudiniとのFBX往復・リンク複製での配置復元を担当するExtensionです。Unreal Bridge Toolsなしで利用できます。
 
@@ -8,13 +8,18 @@
 
 ## 基本操作
 
-`View3D > Sidebar (N) > Map Roundtrip > Zones`でNew Zoneを作り、Add EmptyまたはRegister Selected Emptiesで範囲を登録します。各EmptyのAdd／Subtractで範囲を合成できます。
+`View3D > Sidebar (N) > Map Roundtrip > Zones`（最上部）で、上から順に操作します。
 
-- **Select Zone Empties**：ゾーンを構成するEmptyをまとめて選択。All Zonesなら全ゾーンのEmpty。
-- **Select Meshes In Zone**：ゾーン内に原点が入るMeshをまとめて選択。All Zonesなら全範囲。
-- **Export Selected CSV**：選択Meshをゾーン名.csvへ出力。正常終了時だけ同じ名前のub_zoneタグを付与。
+1. **ゾーンを選ぶ**: 一番上の`Zone`（＋でNew Zone）。
+2. **1. Define Range**: ゾーンに入れたいMeshを選んで **Add Selected Objects**。各Meshの原点にCube Emptyが自動で作られ、近い原点は`Merge Distance`以内で1つにまとまります。未選択のMeshが範囲に入らないよう自動で分割します。手で作るなら`Add Empty`／`Register Selected Empties`。各EmptyのAdd／Subtractで範囲を合成できます。
+3. **2. Check**（折りたたみ）: **Select Meshes In Zone**で範囲内のMeshを確認用に選択。
+4. **3. Export CSV**: **Export ZONE_A.csv**。**選択に関係なく**、`Zone`で選んだゾーンの範囲内のMeshを`ゾーン名.csv`へ出力します。`All Zones`ならゾーンごとに別ファイル。正常終了時だけ同じ名前のub_zoneタグを付与します。
+
+`Zone Empties`（折りたたみ）にはEmptyの一覧・検索・`Select Zone Empties`があります。
 
 CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持します。Mesh CandidatesでMap配下／現在Sceneを選べます。旧UBTの登録ゾーン・EmptyのAdd/Subtract・登録解除状態も読み取れます。
+
+0.2.0からの変更: CSV出力は「選択したMesh」から「ゾーン範囲内のMesh」へ変わりました。Export Selected CSVの前にSelect Meshes In Zoneを押す手順は不要です。[0.2.0のZIP](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/map_roundtrip_tools-0.2.0.zip)
 
 ## FBXとImport
 
@@ -26,10 +31,14 @@ Exchange Folder／Return Folderは参考欄です。パス自動連動やファ�
 
 ## 検証
 
-- 基本配置・FBX・ゾーンCSV：`tools/test_map_roundtrip_tools.py`
+- 基本配置・FBX・ゾーンCSV（旧UBT互換のタグ復元を含む）：`tools/test_map_roundtrip_tools.py`
+- ゾーン範囲のCSV（選択に依存しない・All Zones・復元）：`tools/test_map_roundtrip_zone_csv.py`
+- Add Selected Objects（まとめ・分割・混入防止・ロールバック・座標が大きい場合）：`tools/test_mrt_zone_from_objects.py`、`tools/test_map_roundtrip_add_objects.py`
+- Zones UIの構成・固定行・Empty一覧の上限：`tools/test_map_roundtrip_ui_layout.py`
 - Add/Subtract・10万点判定：`tools/test_map_roundtrip_zones.py`
 - 登録・保存復元：`tools/test_map_roundtrip_zone_registry.py`
 - 旧データ移行・Empty一括選択：`tools/test_map_roundtrip_zone_migration.py`
-- 実UI：`tools/ui_test_map_roundtrip_zones.py`、`tools/ui_test_map_roundtrip_native_fbx.py`
+- 実UI（ESC・Undo/Redo・描画）：`tools/ui_test_map_roundtrip_add_objects.py`、`tools/ui_test_map_roundtrip_zones.py`、`tools/ui_test_map_roundtrip_native_fbx.py`
+- 6万Objectの実測：`tools/benchmark_map_roundtrip_add_objects.py`
 
-[過去の性能測定と制約](VALIDATION.md)。0.1.0では6万件Replace約282.5秒でした。0.2.0でも配置生成アルゴリズムは同じです。
+[過去の性能測定と制約](VALIDATION.md)。0.1.0では6万件Replace約282.5秒でした。0.3.0でも配置生成アルゴリズムは同じです。

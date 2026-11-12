@@ -1,7 +1,6 @@
 import bpy
 from .placement import effective_zone
 from .constants import FBX_DEFAULTS
-from .zones import draw_zone_controls
 
 
 class MRT_PT_Export(bpy.types.Panel):
@@ -102,40 +101,3 @@ class MRT_PT_Import(bpy.types.Panel):
         row = box.row()
         row.alert = p.old_mode == 'DELETE' and not p.dry_run
         row.operator('mrt.replace_zone', text='Preview Placement' if p.dry_run else 'Replace Zone')
-
-
-class MRT_PT_Zones(bpy.types.Panel):
-    bl_label = 'Zones'
-    bl_idname = 'MRT_PT_zones'
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'Map Roundtrip'
-    bl_order = -10
-
-    def draw(self, context):
-        p = context.scene.mrt_props
-        layout = self.layout
-        layout.operator_context = 'INVOKE_DEFAULT'
-        layout.prop(p, 'zone_choice')
-        layout.prop(p, 'zone_prefix')
-        draw_zone_controls(layout, context)
-        box = layout.box()
-        box.label(text='Select meshes inside the zone')
-        box.prop(p, 'zone_scope')
-        if p.zone_scope == 'MAP':
-            box.prop(p, 'map_coll')
-        row = box.row()
-        row.enabled = not p.running
-        row.operator('mrt.select_in_zone', text='Select Meshes In Zone')
-        if p.zone_result:
-            box.label(text=p.zone_result)
-        box = layout.box()
-        box.label(text='Export selected mesh placements')
-        box.prop(p, 'zone_csv_dir')
-        box.prop(p, 'name_mode')
-        row = box.row()
-        row.enabled = not p.running and p.zone_choice not in ('ALL', '')
-        row.operator('mrt.export_zone_csv')
-        box.label(text='CSV filename and ub_zone use the selected Zone.')
-        if p.status:
-            box.label(text=p.status)
