@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.4.0 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.5.0 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -113,6 +113,8 @@ ZONE_A =（Addの箱① ＋ Addの箱②）－（Subtractの箱③ ＋ Subtract�
 
 書き出した各行の`id`（各CSV内の1から始まる通し番号）は、そのMeshのカスタムプロパティ`ub_csv_id`にも保存されます。`ub_zone`と同じく正常終了時だけで、失敗・ESC中断では元の値に戻ります。CSVの列（12列）は変わりません。Houdiniから戻すときの判定に使います（8章）。
 
+CSVの`colname`には、MeshがいるCollectionの**階層パス**が入ります。パスは`Map`に指定したCollectionの下からで、`/`で区切ります（例 `Area1/Rocks`）。Map直下のMeshは空欄です。Mapの外のCollectionにいるMeshは、シーンの最上位からのパス（例 `Other/Deep`）になります。`Map`が未指定のときも、シーンの最上位からのパスです。Collection名に`/`が含まれるときは、曖昧になるため名前だけを書きます。複数のCollectionに入っているMeshは、最初に見つかった1つだけを書きます。
+
 ## 6. Exchange Folderとは
 
 BlenderとHoudiniで受け渡す場所の**参考メモ**です。変更しても各パスは連動せず、作成・監視・自動取込もしません。Return Folderも同様です。
@@ -150,6 +152,21 @@ Unreal用の個別SMなら、配置Objectではなく原点に置いたLibrary�
 5. Dry Run ONでPreview Placementを確認し、OFFにしてReplace Zoneを実行します。
 
 Archiveは旧配置を保持して退避します。Deleteは明示選択時だけ削除します。旧対象はMap配下だけでなく、全データの同じub_zoneを持つObjectです。CSV名をZONE_A_return.csvに変えて返す場合も、置換タグはZONE_Aを維持してください。
+
+### Collectionの階層
+
+戻りCSVの`colname`は、次の順で配置先のCollectionに解決されます。
+
+1. `Map`の下に、その名前のCollectionがあれば、そこへ配置します（階層が無い旧CSVも、この方法で従来どおり動きます）。
+2. そうでなければ`colname`を`/`区切りの階層パスとして読み、`Map`の下で同じ階層をたどります。途中のCollectionが無ければ、入れ子のまま新しく作ります。例えば`Area1/Trees`は、`Area1`が既にあれば、その下に`Trees`だけを作ります。
+3. 空欄は`Map`直下へ配置します。`Map/Area1`のように、先頭が`Map`の名前のパスは、その`Map`を除いて読みます。
+4. `//`のように空の区切りを含む`colname`は、パスではなく1つの名前として扱います。
+
+Previewの`new collections N`は、新しく作るCollectionの数です（途中の階層も数えます）。
+
+- **名前の衝突**: Blenderでは、Collection名は1つのファイル内で重複できません。新しく作る名前が、`Map`の外などで既に使われているときは、Blenderが`.001`などの接尾辞を付けます。Previewと実行時に警告を出します。たとえばMapの外の`Other/Deep`は、`Map`の下に`Other.001/Deep.001`として作られます。
+- **元の場所には戻りません**: Mapの外にあったCollectionは、`Map`の下に作られます。
+- **中断・失敗**: ESCや失敗では、新しく作った入れ子のCollectionもObjectと一緒に全部取り消します。
 
 ### idの扱い
 

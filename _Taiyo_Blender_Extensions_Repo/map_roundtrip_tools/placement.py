@@ -5,7 +5,7 @@ import os
 import re
 from dataclasses import dataclass, field
 import bpy
-from .constants import ZONE_KEY, ARCHIVED_KEY, CSV_COLUMNS, CSV_ID_KEY, NEW_MESH_ID
+from .constants import ZONE_KEY, ARCHIVED_KEY, COLNAME_SEPARATOR, CSV_COLUMNS, CSV_ID_KEY, NEW_MESH_ID
 from .chunked import ChunkedOperator
 
 
@@ -52,6 +52,74 @@ def walk_collections(root):
         pending.extend(reversed(tuple(c.children)))
 
 
+def build_parent_index(map_coll):
+    """First parent of every collection (parents inside the map tree win) and the set of scene root collections."""
+    parents = {}
+    if map_coll is not None:
+        for c in walk_collections(map_coll):
+            for child in c.children:
+                parents.setdefault(child, c)
+    roots = {scene.collection for scene in bpy.data.scenes}
+    for c in (*bpy.data.collections, *roots):
+        for child in c.children:
+            parents.setdefault(child, c)
+    return parents, roots
+
+
+def collection_colname(collection, map_coll, parents, roots):
+    """The CSV colname of a collection: its path below the Map collection (or below the scene root).
+
+    The Map collection and scene roots give an empty name. A name that contains the separator cannot be written as a
+    path without becoming ambiguous, so the plain collection name is used instead.
+    """
+    names, node, seen = [], collection, set()
+    while node is not None and node != map_coll and node not in roots and node not in seen:
+        seen.add(node)
+        names.append(node.name)
+        node = parents.get(node)
+    if any(COLNAME_SEPARATOR in name for name in names):
+        return collection.name
+    return COLNAME_SEPARATOR.join(reversed(names))
+
+
+def map_collection_paths(map_coll):
+    """{(name, ...): collection} for every collection below the Map collection."""
+    index, stack, seen = {}, [(map_coll, ())], set()
+    while stack:
+        c, path = stack.pop()
+        if c in seen:
+            continue
+        seen.add(c)
+        if path:
+            index.setdefault(path, c)
+        stack.extend((child, path + (child.name,)) for child in reversed(tuple(c.children)))
+    return index
+
+
+def resolve_colname(plan, map_coll, colname):
+    """Find the collection for a CSV colname, or record the collections that have to be created.
+
+    1. A collection of that exact name in the Map tree (older CSVs; also the Map collection itself).
+    2. Otherwise colname is a path below Map. Missing collections are planned, parents before children.
+    """
+    if colname in plan.collections or colname in plan.colname_new:
+        return
+    parts = tuple(colname.split(COLNAME_SEPARATOR))
+    if any(not part for part in parts):
+        parts = (colname,)  # not a clean path: treat it as one literal name
+    if len(parts) > 1 and parts[0] == map_coll.name:
+        parts = parts[1:]  # written without a Map collection set: 'Map/Area1' means Area1 below Map
+    existing = next((k for k in range(len(parts), 0, -1) if parts[:k] in plan.path_index), 0)
+    if existing == len(parts):
+        plan.collections[colname] = plan.path_index[parts]
+        return
+    plan.colname_new[colname] = parts
+    for k in range(existing + 1, len(parts) + 1):
+        plan.new_collections.add(parts[:k])
+        if parts[k - 1] in bpy.data.collections:
+            plan.name_conflicts.add(COLNAME_SEPARATOR.join(parts[:k]))
+
+
 def effective_zone(p):
     return p.zone_override.strip() or os.path.splitext(os.path.basename(bpy.path.abspath(p.placement_csv)))[0]
 
@@ -62,7 +130,10 @@ class Plan:
     rows: list = field(default_factory=list)
     old: list = field(default_factory=list)
     collections: dict = field(default_factory=dict)
-    new_collections: set = field(default_factory=set)
+    new_collections: set = field(default_factory=set)  # tuples of names, relative to the Map collection
+    colname_new: dict = field(default_factory=dict)  # colname -> tuple of names that has to be created
+    path_index: dict = field(default_factory=dict)  # tuple of names -> existing collection below Map
+    name_conflicts: set = field(default_factory=set)  # new paths whose name is already used elsewhere
     unmatched: set = field(default_factory=set)
     missing_rows: int = 0
     invalid: int = 0
@@ -103,6 +174,7 @@ def build_plan(p, progress=lambda *args: None):
     for c in walk_collections(p.map_coll):
         plan.collections.setdefault(c.name, c)
         yield
+    plan.path_index = map_collection_paths(p.map_coll)
     # Old objects are needed before the rows so ids can be checked.
     for i, ob in enumerate(bpy.data.objects):
         plan.object_names.add(ob.name)
@@ -153,8 +225,8 @@ def build_plan(p, progress=lambda *args: None):
                         plan.rows.append((mesh, name, (tx, ty, tz), (rx * factor, ry * factor, rz * factor), (sx, sy, sz), colname))
                         if csv_id == NEW_MESH_ID:
                             plan.added += 1
-                        if colname and colname not in plan.collections:
-                            plan.new_collections.add(colname)
+                        if colname:
+                            resolve_colname(plan, p.map_coll, colname)
             if number % 256 == 0:
                 progress('Planning CSV', number, number)
                 yield
@@ -219,6 +291,10 @@ class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
         publish_plan(p, plan)
         if plan.duplicates:
             self.report({'WARNING'}, f'{plan.duplicates} duplicate normalized Library names; first match used.')
+        if plan.name_conflicts:
+            shown = sorted(plan.name_conflicts)
+            self.report({'WARNING'}, 'Collection names already used elsewhere; the new ones get a suffix: '
+                        + ', '.join(shown[:5]) + (f' …and {len(shown) - 5} more' if len(shown) > 5 else ''))
         if p.dry_run:
             self.result = f'Preview {plan.zone}: {len(plan.rows)} instances, {len(plan.old)} old objects, {plan.invalid} invalid rows, new meshes {plan.added}, unknown id {plan.unknown_id_rows}'
             return
@@ -243,12 +319,18 @@ class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
             if i % 512 == 0:
                 yield
         try:
-            for name in sorted(plan.new_collections):
-                c = bpy.data.collections.new(name)
+            made, attach = {}, []
+            for path in sorted(plan.new_collections):  # a parent path sorts before its children
+                c = bpy.data.collections.new(path[-1])
                 collections.append(c)
-                # Fill new collections while detached to avoid view-layer resync.
-                plan.collections[name] = c
+                made[path] = c
+                if path[:-1] in made:
+                    made[path[:-1]].children.link(c)  # both new: link while detached to avoid view-layer resync
+                else:
+                    attach.append((plan.path_index[path[:-1]] if len(path) > 1 else p.map_coll, c))
                 yield
+            for colname, path in plan.colname_new.items():
+                plan.collections[colname] = made[path]
             for i, (mesh, name, loc, rot, scale, colname) in enumerate(plan.rows):
                 ob = bpy.data.objects.new(allocator.take(name), mesh)
                 created.append(ob)
@@ -261,8 +343,8 @@ class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
                 c.objects.link(ob)
                 self.progress('Creating linked instances', i + 1, len(plan.rows))
                 yield
-            for c in collections:
-                p.map_coll.children.link(c)
+            for parent, c in attach:
+                parent.children.link(c)
                 yield
             # A single explicit update, outside the creation loop.
             context.view_layer.update()
