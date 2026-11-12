@@ -90,6 +90,13 @@ class MRT_PT_Import(bpy.types.Panel):
                 plan.label(text='to _Replaced_' + p.plan_zone)
             plan.label(text=f'Create {p.plan_create} linked instances')
             plan.label(text=f'Invalid rows {p.plan_invalid}; new collections {p.plan_collections}')
+            plan.label(text=f'New meshes (id -1): {p.plan_added}')
+            if p.plan_unknown_id:
+                row = plan.row()
+                row.alert = True
+                row.label(text=f'Skipped {p.plan_unknown_id} rows with an unknown id')
+            if not p.plan_id_check:
+                plan.label(text='ID check off: this zone has no ub_csv_id (exported by an older version)')
             if p.plan_missing:
                 row = plan.row()
                 row.alert = True

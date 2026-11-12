@@ -8,7 +8,7 @@ import os
 import tempfile
 import bpy
 from .chunked import ChunkedOperator
-from .constants import CSV_COLUMNS, ZONE_KEY
+from .constants import CSV_COLUMNS, CSV_ID_KEY, ZONE_KEY
 from .placement import normalize
 from .zones import zone_members
 
@@ -50,6 +50,7 @@ class MRT_OT_ExportZoneCSV(ChunkedOperator, bpy.types.Operator):
         done = 0
         temps = []  # (temporary path, final path)
         previous_tags = []
+        csv_ids = {}
         try:
             for name, objects in groups.items():
                 fd, temp = tempfile.mkstemp(dir=folder, prefix='.mrt-', suffix='.csv')
@@ -66,6 +67,7 @@ class MRT_OT_ExportZoneCSV(ChunkedOperator, bpy.types.Operator):
                                          *(round(math.degrees(v), 6) for v in rotation),
                                          *(round(v, 6) for v in scale),
                                          normalize(ob.name, p.name_mode), colnames.get(ob, '')])
+                        csv_ids[ob] = i
                         done += 1
                         self.progress('Exporting zone CSV', done, total)
                         yield
@@ -73,18 +75,23 @@ class MRT_OT_ExportZoneCSV(ChunkedOperator, bpy.types.Operator):
                 for ob in objects:
                     if not ob.is_editable:
                         raise ValueError(f'Cannot tag read-only object: {ob.name}')
-                    previous_tags.append((ob, ZONE_KEY in ob, ob.get(ZONE_KEY)))
+                    previous_tags.append((ob, ZONE_KEY in ob, ob.get(ZONE_KEY), CSV_ID_KEY in ob, ob.get(CSV_ID_KEY)))
                     ob[ZONE_KEY] = name
+                    ob[CSV_ID_KEY] = csv_ids[ob]
                     yield
             # No yielding between replacing the files and committing the tags.
             for temp, final in temps:
                 os.replace(temp, final)
         except BaseException:
-            for ob, existed, value in previous_tags:
+            for ob, existed, value, csv_existed, csv_value in previous_tags:
                 if existed:
                     ob[ZONE_KEY] = value
                 elif ZONE_KEY in ob:
                     del ob[ZONE_KEY]
+                if csv_existed:
+                    ob[CSV_ID_KEY] = csv_value
+                elif CSV_ID_KEY in ob:
+                    del ob[CSV_ID_KEY]
                 yield
             for temp, _final in temps:
                 if os.path.exists(temp):

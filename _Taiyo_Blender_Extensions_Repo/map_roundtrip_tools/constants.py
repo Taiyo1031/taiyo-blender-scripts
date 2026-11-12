@@ -1,5 +1,7 @@
 ZONE_KEY = 'ub_zone'
 ARCHIVED_KEY = 'ub_archived_from'
+CSV_ID_KEY = 'ub_csv_id'  # the CSV id each object had in its last zone CSV export
+NEW_MESH_ID = -1  # a Houdini-added mesh: a CSV row with this id is not a replacement of an exported object
 CSV_COLUMNS = ('id', 'tx', 'ty', 'tz', 'rx', 'ry', 'rz', 'sx', 'sy', 'sz', 'objname', 'colname')
 BUILTIN_PRESET = 'Unreal SM (Default)'
 FBX_DEFAULTS = dict(fbx_scale=1.0, fbx_apply_scalings='FBX_SCALE_UNITS',

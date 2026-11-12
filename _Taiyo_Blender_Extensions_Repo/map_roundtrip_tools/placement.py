@@ -5,7 +5,7 @@ import os
 import re
 from dataclasses import dataclass, field
 import bpy
-from .constants import ZONE_KEY, ARCHIVED_KEY, CSV_COLUMNS
+from .constants import ZONE_KEY, ARCHIVED_KEY, CSV_COLUMNS, CSV_ID_KEY, NEW_MESH_ID
 from .chunked import ChunkedOperator
 
 
@@ -69,6 +69,9 @@ class Plan:
     duplicates: int = 0
     memberships: list = field(default_factory=list)
     object_names: set = field(default_factory=set)
+    added: int = 0            # rows with id -1 whose Library mesh was found
+    unknown_id_rows: int = 0  # rows skipped because their id is unknown
+    id_check: bool = False    # whether ids were checked (the zone has ub_csv_id)
 
 
 def build_plan(p, progress=lambda *args: None):
@@ -100,6 +103,20 @@ def build_plan(p, progress=lambda *args: None):
     for c in walk_collections(p.map_coll):
         plan.collections.setdefault(c.name, c)
         yield
+    # Old objects are needed before the rows so ids can be checked.
+    for i, ob in enumerate(bpy.data.objects):
+        plan.object_names.add(ob.name)
+        if ob.get(ZONE_KEY) == zone:
+            plan.old.append(ob)
+        if i % 1024 == 0:
+            yield
+    # ids the zone's objects had at their last CSV export.
+    known_ids = set()
+    for ob in plan.old:
+        value = ob.get(CSV_ID_KEY)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and float(value).is_integer():
+            known_ids.add(int(value))
+    plan.id_check = bool(known_ids)
     with open(path, newline='', encoding='utf-8-sig') as stream:
         reader = csv.reader(stream)
         header = next(reader, [])
@@ -110,6 +127,10 @@ def build_plan(p, progress=lambda *args: None):
         indices = [columns[n] for n in CSV_COLUMNS[1:10]]
         for number, row in enumerate(reader, 1):
             try:
+                value = float(row[columns['id']])
+                if not value.is_integer():
+                    raise ValueError('Non-integer id')
+                csv_id = int(value)
                 values = tuple(float(row[i]) for i in indices)
                 if not all(math.isfinite(v) for v in values):
                     raise ValueError('Non-finite transform')
@@ -117,27 +138,26 @@ def build_plan(p, progress=lambda *args: None):
             except (ValueError, IndexError):
                 plan.invalid += 1
             else:
-                mesh = exact.get(name)
-                if mesh is None:
-                    mesh = norm.get(normalize(name, p.name_mode))
-                if mesh is None:
-                    plan.unmatched.add(name)
-                    plan.missing_rows += 1
+                if plan.id_check and csv_id != NEW_MESH_ID and csv_id not in known_ids:
+                    plan.unknown_id_rows += 1  # not used, and not counted as a missing Library mesh
                 else:
-                    tx, ty, tz, rx, ry, rz, sx, sy, sz = values
-                    factor = math.pi / 180.0
-                    plan.rows.append((mesh, name, (tx, ty, tz), (rx * factor, ry * factor, rz * factor), (sx, sy, sz), colname))
-                    if colname and colname not in plan.collections:
-                        plan.new_collections.add(colname)
+                    mesh = exact.get(name)
+                    if mesh is None:
+                        mesh = norm.get(normalize(name, p.name_mode))
+                    if mesh is None:
+                        plan.unmatched.add(name)
+                        plan.missing_rows += 1
+                    else:
+                        tx, ty, tz, rx, ry, rz, sx, sy, sz = values
+                        factor = math.pi / 180.0
+                        plan.rows.append((mesh, name, (tx, ty, tz), (rx * factor, ry * factor, rz * factor), (sx, sy, sz), colname))
+                        if csv_id == NEW_MESH_ID:
+                            plan.added += 1
+                        if colname and colname not in plan.collections:
+                            plan.new_collections.add(colname)
             if number % 256 == 0:
                 progress('Planning CSV', number, number)
                 yield
-    for i, ob in enumerate(bpy.data.objects):
-        plan.object_names.add(ob.name)
-        if ob.get(ZONE_KEY) == zone:
-            plan.old.append(ob)
-        if i % 1024 == 0:
-            yield
     # Snapshot membership by collection, never per-object users_collection.
     if not p.map_coll.is_editable:
         raise ValueError('Map collection is not editable.')
@@ -171,6 +191,9 @@ def publish_plan(p, plan):
     p.plan_names = ', '.join(names[:5]) + (f' …and {len(names)-5} more' if len(names) > 5 else '')
     p.plan_zone = plan.zone
     p.plan_collections = len(plan.new_collections)
+    p.plan_added = plan.added
+    p.plan_unknown_id = plan.unknown_id_rows
+    p.plan_id_check = plan.id_check
     p.plan_ready = True
 
 
@@ -197,7 +220,7 @@ class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
         if plan.duplicates:
             self.report({'WARNING'}, f'{plan.duplicates} duplicate normalized Library names; first match used.')
         if p.dry_run:
-            self.result = f'Preview {plan.zone}: {len(plan.rows)} instances, {len(plan.old)} old objects, {plan.invalid} invalid rows'
+            self.result = f'Preview {plan.zone}: {len(plan.rows)} instances, {len(plan.old)} old objects, {plan.invalid} invalid rows, new meshes {plan.added}, unknown id {plan.unknown_id_rows}'
             return
         created, collections, archived, unlinked, remapped_tags = [], [], [], [], []
         archive = None
@@ -319,4 +342,4 @@ class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
             raise
         self.result = (f'Replaced {plan.zone}: created {len(created)}, '
                        f'{"archived" if old_mode == "ARCHIVE" else "deleted"} {len(plan.old)}, '
-                       f'skipped {plan.missing_rows} (not in Library), invalid rows {plan.invalid}')
+                       f'skipped {plan.missing_rows} (not in Library), invalid rows {plan.invalid}, new meshes {plan.added}, unknown id {plan.unknown_id_rows}')
