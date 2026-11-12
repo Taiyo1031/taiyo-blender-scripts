@@ -132,6 +132,16 @@ assert bpy.ops.mrt.add_objects_to_zone() == {'FINISHED'}
 assert len(empties()) == 1 and 'unseparable 1' in p.status, p.status
 assert meshes_in_zone() == {free}
 
+# --- every selected object is unseparable: no empty, no crash, still reported.
+reset()
+new_zone('ZONE_A')
+only = mk('OnlyChosen', (7, 7, 7))
+mk('Twin', (7, 7, 7))
+select([only])
+p.merge_distance = 0.0
+assert bpy.ops.mrt.add_objects_to_zone() == {'FINISHED'}, p.status
+assert not empties() and 'Added 0 objects' in p.status and 'unseparable 1' in p.status, p.status
+
 # --- non-mesh selection is ignored; nothing selected is an error.
 reset()
 new_zone('ZONE_A')

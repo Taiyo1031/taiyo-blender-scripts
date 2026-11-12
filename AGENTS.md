@@ -121,3 +121,5 @@ repo/
 - Undo(`ed.undo`)後はData blockが読み込み直されるため、UIテストでは`scene`や`props`の参照を保持せず、都度`bpy.context.scene`から取得します。
 - パネルは登録順に並びます。Zonesとそのサブパネルを`__init__.py`の`classes`でExport/Importより前に登録してください(`bl_order`だけでは先頭になりません)。
 - macOSのBashには`timeout`コマンドがありません。GUIのBlenderテストはスクリプト内のタイムアウトで終了させます。
+- `zone_choice`の読み取りコストはゾーン内Emptyの数に比例します(実測 5,000個で4.5ms、3万個で27ms。Blender 4.5.9 / M1 Pro)。Add Selected Objectsで3万個を超えるEmptyを作る使い方では、パネル再描画ごとに複数回読まれて重くなります。必要になったら`zone_items`のキャッシュ(Empty数・登録数・接頭辞をキーに、短い有効期限つき)を検討してください。
+- LM Studioの委譲でレビューだけを任せる場合は、レポートMarkdownを`target`にしたタスクとして実行できます。ただし指摘は仕様と食い違う断定や存在しない問題が混ざります(2026-11-12の実績: 16件中、実バグ0件)。必ず実コードと再現で確認してから修正してください。
