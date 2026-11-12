@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.5.0 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.5.1 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -152,6 +152,23 @@ Unreal用の個別SMなら、配置Objectではなく原点に置いたLibrary�
 5. Dry Run ONでPreview Placementを確認し、OFFにしてReplace Zoneを実行します。
 
 Archiveは旧配置を保持して退避します。Deleteは明示選択時だけ削除します。旧対象はMap配下だけでなく、全データの同じub_zoneを持つObjectです。CSV名をZONE_A_return.csvに変えて返す場合も、置換タグはZONE_Aを維持してください。
+
+### Houdiniで変えた内容の扱い
+
+Replace Zoneは、既存のObjectをその場で更新しません。戻りCSVの各行から**新しいObjectを作り直し**、旧Objectを`Old Objects`の設定（Archive／Delete）で扱います。
+
+| Houdiniでの操作 | 結果 |
+|---|---|
+| 位置・回転・拡大を変えた | CSVの行に新しい値が入るので、新しい値で新Objectが作られます。旧Objectは退避（または削除）されます。 |
+| Objectを削除した | その`id`の行がCSVにありません。新しい配置に含まれず、旧Objectだけが退避（または削除）されます。 |
+| 別のMeshに差し替えた（`objname`が変わった） | 新しい`objname`に合うLibraryのMeshで作ります。Libraryに無い名前は作られず、`names not found in Library`と報告されます。 |
+| 新しいMeshを追加した（`id`が-1） | Libraryに同名のMeshがあれば配置します。先にMesh FBXで`Import New Meshes`を実行しておきます。 |
+| 書き出し後にBlenderで手で動かした | 戻りCSVの値が優先されます。手で動かした位置は、退避した旧Objectにだけ残ります。 |
+
+- **追加Meshの置き先**: 追加Meshの行にも、通常の行と同じ`colname`の階層パスが使えます。たとえば`Area2/NewRocks`なら、`Map`の下に`Area2`と`NewRocks`を入れ子で作り、そこへ配置します。
+- **追加Meshの取り込み先**: `Import New Meshes`で取り込んだMeshは、Libraryの下の`FromHoudini`（`New Meshes To`で変更可）に並びます。FBXの階層は作られません。
+- **引き継がれないもの**: 新しいObjectに入るのは、位置・回転・拡大、`ub_zone`タグ、配置先のCollectionだけです。旧Objectに付けたモディファイア、Custom Properties、親子関係、Materialの上書きは引き継がれません。必要なものは、退避した旧Objectから取り出してください。
+- **名前**: `objname`から付けます。旧Objectと重なるときは、`.001`などの接尾辞が付きます。
 
 ### Collectionの階層
 

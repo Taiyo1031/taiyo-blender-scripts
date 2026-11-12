@@ -228,9 +228,40 @@ def test_export_then_restore_hierarchy():
     print('PASS export -> restore: the Map hierarchy comes back')
 
 
+def test_houdini_edits_moved_removed_and_added():
+    """What comes back from Houdini: moved row = new transform, missing row = old object retired, id -1 = added mesh."""
+    mapc, area, rocks, legacy, outside = import_fixture()
+    from_houdini = make('FromHoudini', bpy.data.collections['Library'])
+    new_rock_mesh = new_mesh()
+    from_houdini.objects.link(bpy.data.objects.new('NewRock', new_rock_mesh))
+    olds = []
+    for i, csv_id in enumerate((1, 2)):  # exported ids 1 and 2
+        o = bpy.data.objects.new(f'Rock.{i:03d}', bpy.data.objects['Rock'].data)
+        o.location = (i * 10, 0, 0)
+        o['ub_zone'] = 'ZONE_X'
+        o['ub_csv_id'] = csv_id
+        area.objects.link(o)
+        olds.append(o)
+    # Houdini: id 1 moved to x=100, id 2 deleted (no row), a new mesh added (-1) under a new path, id 99 is unknown.
+    write_csv(p.placement_csv, [row(1, 100, 'Area1'), row(-1, 200, 'Area2/NewRocks', 'NewRock'), row(99, 300, 'Area1')])
+    p.dry_run = False
+    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
+    new = {round(o.location.x): o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_X'}
+    assert sorted(new) == [100, 200], sorted(new)  # moved + added; the unknown id was not used
+    assert new[100].users_collection[0] == area and new[100].data == olds[0].data
+    area2, new_rocks = bpy.data.collections['Area2'], bpy.data.collections['NewRocks']
+    assert area2 in mapc.children[:] and new_rocks in area2.children[:]
+    assert new[200].users_collection[0] == new_rocks and new[200].data == new_rock_mesh
+    archive = bpy.context.scene.collection.children['_Replaced_ZONE_X']
+    assert all(o.name in archive.objects and 'ub_zone' not in o for o in olds)  # moved and deleted ones both retired
+    assert 'new meshes 1' in p.status and 'unknown id 1' in p.status, p.status
+    print('PASS Houdini edits: moved -> new transform, removed -> retired, id -1 + colname path -> nested collection')
+
+
 for test in (test_export_path_relative_to_map, test_export_path_without_map, test_resolution,
              test_replace_builds_hierarchy, test_name_conflict_is_reported,
-             test_rollback_removes_new_collections, test_export_then_restore_hierarchy):
+             test_rollback_removes_new_collections, test_export_then_restore_hierarchy,
+             test_houdini_edits_moved_removed_and_added):
     test()
 mrt.unregister()
 print('MRT_COLNAME_PATH_PASSED')

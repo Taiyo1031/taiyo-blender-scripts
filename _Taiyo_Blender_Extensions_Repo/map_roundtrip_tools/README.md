@@ -1,6 +1,6 @@
 # Map Roundtrip Tools
 
-**対象version: 0.5.0 / Blender 4.5.0以上**
+**対象version: 0.5.1 / Blender 4.5.0以上**
 
 ゾーン管理・配置CSV・HoudiniとのFBX往復・リンク複製での配置復元を担当するExtensionです。Unreal Bridge Toolsなしで利用できます。
 
@@ -18,6 +18,8 @@
 `Zone Empties`（折りたたみ）にはEmptyの一覧・検索・`Select Zone Empties`があります。
 
 CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持します。Mesh CandidatesでMap配下／現在Sceneを選べます。旧UBTの登録ゾーン・EmptyのAdd/Subtract・登録解除状態も読み取れます。
+
+0.5.0からの変更: コードの動作は同じで、使用書に「Houdiniで変えた内容の扱い」（移動・削除・追加Mesh・引き継がれないもの）を追記しました。
 
 0.4.0からの変更: CSVの`colname`が、Map Collectionからの階層パス（例 `Area1/Rocks`）になりました。Replace Zoneは、Mapの下に無いCollectionを入れ子のまま作り、元の階層へ戻します。パスの無い旧CSVは従来どおり名前だけで探します。詳しくは[詳細使用書](WORKFLOW_JA.md)の「Collectionの階層」。
 
@@ -47,4 +49,4 @@ Exchange Folder／Return Folderは参考欄です。パス自動連動やファ�
 - 実UI（ESC・Undo/Redo・描画）：`tools/ui_test_map_roundtrip_add_objects.py`、`tools/ui_test_map_roundtrip_zones.py`、`tools/ui_test_map_roundtrip_native_fbx.py`
 - 6万Objectの実測：`tools/benchmark_map_roundtrip_add_objects.py`
 
-[過去の性能測定と制約](VALIDATION.md)。0.1.0では6万件Replace約282.5秒でした。0.5.0でも配置生成アルゴリズムは同じです（idの判定とCollection階層の復元を追加しただけです）。
+[過去の性能測定と制約](VALIDATION.md)。0.1.0では6万件Replace約282.5秒でした。0.5.1でも配置生成アルゴリズムは同じです（idの判定とCollection階層の復元を追加しただけです）。
