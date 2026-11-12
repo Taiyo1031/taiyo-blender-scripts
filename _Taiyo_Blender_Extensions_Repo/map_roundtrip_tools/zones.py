@@ -214,38 +214,6 @@ def migrate_legacy_zone_registry(_unused=None):
     return None
 
 
-def draw_zone_controls(layout, context):
-    p = context.scene.mrt_props
-    controls = layout.column()
-    controls.enabled = not _RUNNING and not p.running
-    controls.operator_context = 'INVOKE_DEFAULT'
-    controls.operator('mrt.new_zone', text='New Zone', icon='ADD')
-    controls.operator('mrt.register_zone_empties', icon='IMPORT')
-    controls.operator('mrt.add_zone_empty', text='Add Empty', icon='ADD')
-    controls.operator('mrt.select_zone_empties', text='Select Zone Empties', icon='RESTRICT_SELECT_OFF')
-    choice = p.zone_choice
-    empties = sorted(zone_empties(context.scene, p.zone_prefix), key=lambda e: (zone_name(e), e.name))
-    previous = None
-    visible = 0
-    for empty in empties:
-        name = zone_name(empty)
-        if choice != 'ALL' and name != choice:
-            continue
-        visible += 1
-        if choice == 'ALL' and previous != name:
-            controls.label(text=name)
-            previous = name
-        row = controls.row(align=True)
-        row.enabled = empty.is_editable
-        select = row.operator('mrt.zone_empty_action', text=empty.name, icon='EMPTY_AXIS')
-        select.object_name, select.action = empty.name, 'SELECT'
-        row.prop(empty, 'mrt_zone_operation', text='')
-        remove = row.operator('mrt.zone_empty_action', text='', icon='X')
-        remove.object_name, remove.action = empty.name, 'UNREGISTER'
-    if not visible:
-        controls.label(text='No Empty in this zone. Add or register one.', icon='INFO')
-
-
 class MRT_OT_AddZoneEmpty(bpy.types.Operator):
     bl_idname = 'mrt.add_zone_empty'
     bl_label = 'Add Zone Empty'
@@ -337,10 +305,67 @@ def inside_mask(pts, boxes):
     return mask
 
 
+def resolve_zones(context, choice):
+    """Validated zone boxes (name-sorted) for one zone, or every zone for 'ALL'. Raises ValueError."""
+    p = context.scene.mrt_props
+    if p.zone_scope == 'MAP' and p.map_coll is None:
+        raise ValueError('Select the Map collection, or choose All Scene Meshes.')
+    zones = collect_zone_boxes(context.scene, p.zone_prefix)
+    if not zones:
+        raise ValueError(f'No zone empties found (Cube empties named "{p.zone_prefix}*").')
+    if choice != 'ALL':
+        if choice not in zones:
+            raise ValueError('Selected zone has no Cube empties. Use Add Empty or Register Selected Empties.')
+        zones = {choice: zones[choice]}
+    return {name: zones[name] for name in sorted(zones)}
+
+
+def collect_candidate_meshes(context):
+    """Generator: yields periodically, returns the candidate Mesh objects (use `yield from`)."""
+    objects = []
+    for i, ob in enumerate(zone_candidates(context)):
+        if ob.type == 'MESH':
+            objects.append(ob)
+        if i % 1024 == 0:
+            yield
+    return objects
+
+
+def assign_batch(batch, zones):
+    """First zone (name order) containing each origin wins. Returns (owner index or -1, overlap count)."""
+    pts = points_of(batch)
+    owner = np.full(len(batch), -1, dtype=np.int32)
+    hits = np.zeros(len(batch), dtype=np.int32)
+    for k, name in enumerate(zones):
+        mask = inside_mask(pts, zones[name])
+        hits += mask
+        owner[mask & (owner < 0)] = k
+    return owner, int(np.count_nonzero(hits > 1))
+
+
+def zone_members(context, choice):
+    """Generator: Mesh objects whose origin lies in each zone, independent of selection.
+
+    Returns ({zone name: [objects]}, overlap count) via `yield from`.
+    """
+    zones = resolve_zones(context, choice)
+    objects = yield from collect_candidate_meshes(context)
+    groups = {name: [] for name in zones}
+    overlap = 0
+    for start in range(0, len(objects), 2048):
+        batch = objects[start:start + 2048]
+        owner, extra = assign_batch(batch, zones)
+        overlap += extra
+        for k, name in enumerate(zones):
+            groups[name].extend(batch[i] for i in np.flatnonzero(owner == k))
+        yield
+    return groups, overlap
+
+
 class MRT_OT_SelectInZone(bpy.types.Operator):
     bl_idname = 'mrt.select_in_zone'
     bl_label = 'Select In Zone'
-    bl_description = '現在のZone範囲内に原点があるMeshを選択します。Map CollectionまたはAll Scene Meshesを指定し、選択後にExport Selected CSVで書き出してください'
+    bl_description = '現在のZone範囲内に原点があるMeshを選択します。Map CollectionまたはAll Scene Meshesを指定します。CSV出力は選択に関係なくZone範囲を使うため、この操作は確認用です'
     bl_options = {'REGISTER'}
 
     @classmethod
@@ -349,38 +374,19 @@ class MRT_OT_SelectInZone(bpy.types.Operator):
 
     def work(self, context):
         p = context.scene.mrt_props
-        if p.zone_scope == 'MAP' and p.map_coll is None:
-            raise ValueError('Select the Map collection, or choose All Scene Meshes.')
-        zones = collect_zone_boxes(context.scene, p.zone_prefix)
-        if not zones:
-            raise ValueError(f'No zone empties found (Cube empties named "{p.zone_prefix}*").')
-        choice = p.zone_choice
-        if choice != 'ALL':
-            if choice not in zones:
-                raise ValueError('Selected zone has no Cube empties. Use Add Empty or Register Selected Empties.')
-            zones = {choice: zones[choice]}
-        source = zone_candidates(context)
-        objects = []
-        for i, ob in enumerate(source):
-            if ob.type == 'MESH':
-                objects.append(ob)
-            if i % 1024 == 0:
-                yield
+        zones = resolve_zones(context, p.zone_choice)
+        objects = yield from collect_candidate_meshes(context)
         # All validation precedes selection changes.
         bpy.ops.object.select_all(action='DESELECT')
-        counts = dict.fromkeys(sorted(zones), 0)
+        counts = dict.fromkeys(zones, 0)
         hidden = overlap = 0
         layer_objects = set(context.view_layer.objects)
         for start in range(0, len(objects), 2048):
             batch = objects[start:start + 2048]
-            pts = points_of(batch)
-            assigned = np.zeros(len(batch), dtype=bool)
-            hits = np.zeros(len(batch), dtype=np.int32)
-            for name in counts:
-                mask = inside_mask(pts, zones[name])
-                hits += mask
-                selected = np.flatnonzero(mask & ~assigned)
-                for hit_index, index in enumerate(selected):
+            owner, extra = assign_batch(batch, zones)
+            overlap += extra
+            for k, name in enumerate(zones):
+                for hit_index, index in enumerate(np.flatnonzero(owner == k)):
                     ob = batch[index]
                     if ob not in layer_objects or ob.hide_select or not ob.visible_get():
                         hidden += 1
@@ -389,9 +395,7 @@ class MRT_OT_SelectInZone(bpy.types.Operator):
                         counts[name] += 1
                     if hit_index % 64 == 0:
                         yield
-                assigned |= mask
                 yield
-            overlap += int(np.count_nonzero(hits > 1))
             p.zone_result = f'Selecting {min(start + 2048, len(objects))}/{len(objects)} | ESC cancels'
             yield
         p.zone_result = 'Result: ' + ' / '.join(f'{n} {v}' for n, v in counts.items())

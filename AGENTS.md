@@ -111,6 +111,13 @@ repo/
 
 
 
-- Map Roundtrip 0.2.0がゾーン登録・Empty管理・Add/Subtract・Mesh/Empty一括選択・選択CSVを担当します。UBT 2.3.3は2.2.20相当へ復元。ゾーン関連テストはtools/test_map_roundtrip_zones.py、test_map_roundtrip_zone_registry.py、test_map_roundtrip_zone_migration.py。旧UBTのゾーン情報はMRTが互換読取りし、register時のScene走査はしません。CSVは選択Zone名.csvを出力し、成功時のみub_zoneを更新します。
+- Map Roundtrip 0.3.0がゾーン登録・Empty管理・Add/Subtract・Mesh/Empty一括選択・ゾーンCSV・選択ObjectからのEmpty自動作成(Add Selected Objects)を担当します。UBT 2.3.3は2.2.20相当へ復元。旧UBTのゾーン情報はMRTが互換読取りし、register時のScene走査はしません。CSVは`Zone`で選んだゾーン範囲内のMeshを選択に関係なく`<Zone>.csv`へ出力し(All Zonesはゾーンごと、名前順で先勝ち)、成功時のみub_zoneを更新します。
 
 - Blender 5.xの実行時RNAプロパティはdict型ID Property参照だけでは旧値を読めない場合があります。MRTの旧データ移行は非表示の互換スキーマを使い、登録後timer/load_postで登録ゾーン名を引き継ぎます。両アドオンの有効/無効化順はtools/test_map_roundtrip_addon_lifecycle.pyで確認します。
+
+- Map Roundtrip 0.3.0の回帰: `blender --background --factory-startup --python-exit-code 1 --python` で `tools/test_mrt_zone_from_objects.py`(純numpy)、`test_map_roundtrip_add_objects.py`、`test_map_roundtrip_zone_csv.py`、`test_map_roundtrip_ui_layout.py`、既存の`test_map_roundtrip_tools.py` `_zones.py` `_zone_registry.py` `_zone_migration.py` `_addon_lifecycle.py`。実UIは`blender --factory-startup --enable-event-simulate --python tools/ui_test_map_roundtrip_add_objects.py`(`MRT_SHOT_DIR`でスクリーンショット保存)、6万件の実測は`tools/benchmark_map_roundtrip_add_objects.py`。
+- Blenderの行列(`matrix_world`と`inverted()`)はfloat32です。ゾーン箱の端にある点は、座標が大きいほど(約490で5e-6相当の誤差)範囲外へ落ちます。箱を作るときは`zone_from_objects.float32_margin`のように座標の大きさに比例する余白を足してください。`pad`を固定値にしないこと。
+- `scene.mrt_props.zone_choice`はEnumPropertyの動的itemsで、**読むたびに全Emptyを走査します**。UIの描画やループの中で何度も読まず、ローカル変数へ1回だけ代入してください(5,000個で1回22秒かかった実例あり)。
+- Undo(`ed.undo`)後はData blockが読み込み直されるため、UIテストでは`scene`や`props`の参照を保持せず、都度`bpy.context.scene`から取得します。
+- パネルは登録順に並びます。Zonesとそのサブパネルを`__init__.py`の`classes`でExport/Importより前に登録してください(`bl_order`だけでは先頭になりません)。
+- macOSのBashには`timeout`コマンドがありません。GUIのBlenderテストはスクリプト内のタイムアウトで終了させます。

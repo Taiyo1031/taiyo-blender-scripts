@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.2.0**（性能の実測は0.1.0。0.1.1はUI・ヒントを更新） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.3.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -78,3 +78,43 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 ゾーン管理・範囲内Mesh選択・ゾーンCSV出力をMRTへ移しました。UBT 2.3.3は2.2.20相当の元の機能です。本報告の旧UBT Selected/Zone UIの記述と性能表は過去版の記録です。現行手順はWORKFLOW_JA.mdを参照してください。新しい回帰はtools/test_map_roundtrip_tools.py、test_map_roundtrip_zones.py、test_map_roundtrip_zone_registry.py、test_map_roundtrip_zone_migration.pyで検証します。
 
 0.2.0の選択CSVはBlender 4.5.9で6万件0.787秒、最大tick0.085秒でした。MRT単独のゾーン管理・CSV・配置・FBX、旧ゾーンのAdd/Subtract/登録状態、個別/全ゾーンのEmpty選択を4.5.9/5.2.2で回帰確認します。
+
+## 0.3.0の追加（Add Selected Objects・ゾーン範囲CSV・Zones UI再構成）
+
+検証日: 2026-11-12（日本時間）。macOS arm64（Apple M1 Pro）、Blender **4.5.9 LTS**のみ。Blender 5.x・Linux・Houdini・Unrealは未検証です。
+
+### 実測（6万Object）
+
+2mの格子に並べた60,025個のMesh（共有Mesh）のうち、左半分の29,890個を選択して`tools/benchmark_map_roundtrip_add_objects.py`で測定しました。`Merge Distance`は5 m。シーン生成は11.78秒です。
+
+| 操作 | 全体（秒） | 最長tick（秒） | 結果 |
+|---|---:|---:|---|
+| Add Selected Objects | 3.50（`bpy.ops`呼び出し込みで4.95） | 0.335 | 29,890個を4,802個のEmptyへ。分離不能0 |
+| Select Meshes In Zone（確認用） | 6.30 | - | ゾーンの中身が選択と**完全一致**（欠落0・余分0） |
+| Export Zone CSV | 6.48 | 0.473 | 29,890行。選択は使わない |
+
+- 「全体」はオペレーターの状態表示の値です。括弧内の差は`bpy.ops`呼び出しとUndo保存の時間です。最長tickはタイマー1回分の最大実行時間（目標0.5秒以内）です。
+- 1つの箱にまとめた数は、格子と`Merge Distance`に依存します。実際のシーンでは変わります。
+- 6万件のReplace（配置生成）の性能は0.1.0から変わっていません（上表）。
+
+### 実測で見つけて直した不具合
+
+- **座標が大きいと箱の端のMeshが範囲から落ちる**: Blenderは行列をfloat32で持ち、逆行列の平行移動項に誤差が出ます。座標約490で、29,890個中4,324個が欠落しました。箱の余白を座標の大きさに比例させて解消し、座標490・5,000・50,000の回帰テストを追加しました（余白を0にすると490でテストが失敗します）。
+- **最後の検証が1つのtickに固まっていた**（最長2.8秒）: 箱と点の比較を分割してyieldし、最長tickを0.335秒にしました。
+
+### 実UI（Blender 4.5.9、`--enable-event-simulate`）
+
+6,000個のMeshのうち3,000個を選択して確認しました。いずれも合格です。
+
+- 作成の途中でESCを物理イベントで送ると、作ったEmptyをすべて取り消す。選択とMeshは変わらず、`Cancelled`と表示される。
+- 通常完了後、ゾーンの中身がちょうど選択したMeshと一致する。評価済み（描画用）のEmptyも取得できる。
+- Undoで追加したEmptyが消え、Redoで戻る。Meshは変わらない。
+
+3Dビューのスクリーンショットでサイドバーを確認し、Zonesパネルが最上部に出ること、折りたたみ、`Merge Distance`、`Export ZONE_A.csv`のボタン名、日本語のホバーヒントが出ることを確認しました。
+
+### 制約・未検証
+
+- 1つのObjectだけのEmptyは範囲が約2 mmで、3Dビューでは点にしか見えません（`Zone Empties`の一覧から選択できます）。
+- `Add Selected Objects`は未選択Meshと原点がほぼ同じObject（約2e-5以内）を分離できず、Emptyを作らずに件数で知らせます。
+- 既存のSubtract範囲の判定（`removed by Subtract`）は箱の数が多いと時間がかかり、その区間は分割されません。
+- 本人の制作Scene、Blender 4.5.10・5.x、Linuxでの確認、全16操作の6万件実UI再実行は未実施です。
