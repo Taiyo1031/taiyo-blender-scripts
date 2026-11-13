@@ -111,11 +111,11 @@ repo/
 
 
 
-- Map Roundtrip 0.5.0がゾーン登録・Empty管理・Add/Subtract・Mesh/Empty一括選択・ゾーンCSV・選択ObjectからのEmpty自動作成(Add Selected Objects)を担当します。UBT 2.3.3は2.2.20相当へ復元。旧UBTのゾーン情報はMRTが互換読取りし、register時のScene走査はしません。CSVは`Zone`で選んだゾーン範囲内のMeshを選択に関係なく`<Zone>.csv`へ出力し(All Zonesはゾーンごと、名前順で先勝ち)、成功時のみub_zoneを更新します。
+- Map Roundtrip 0.6.0がゾーン登録・Empty管理・Add/Subtract・Mesh/Empty一括選択・ゾーンCSV・選択ObjectからのEmpty自動作成(Add Selected Objects)を担当します。UBT 2.3.3は2.2.20相当へ復元。旧UBTのゾーン情報はMRTが互換読取りし、register時のScene走査はしません。CSVは`Zone`で選んだゾーン範囲内のMeshを選択に関係なく`<Zone>.csv`へ出力し(All Zonesはゾーンごと、名前順で先勝ち)、成功時のみub_zoneを更新します。
 
 - Blender 5.xの実行時RNAプロパティはdict型ID Property参照だけでは旧値を読めない場合があります。MRTの旧データ移行は非表示の互換スキーマを使い、登録後timer/load_postで登録ゾーン名を引き継ぎます。両アドオンの有効/無効化順はtools/test_map_roundtrip_addon_lifecycle.pyで確認します。
 
-- Map Roundtrip 0.5.0の回帰: `blender --background --factory-startup --python-exit-code 1 --python` で `tools/test_mrt_zone_from_objects.py`(純numpy)、`test_map_roundtrip_add_objects.py`、`test_map_roundtrip_zone_csv.py`、`test_map_roundtrip_ui_layout.py`、既存の`test_map_roundtrip_tools.py` `_zones.py` `_zone_registry.py` `_zone_migration.py` `_addon_lifecycle.py`。実UIは`blender --factory-startup --enable-event-simulate --python tools/ui_test_map_roundtrip_add_objects.py`(`MRT_SHOT_DIR`でスクリーンショット保存)、6万件の実測は`tools/benchmark_map_roundtrip_add_objects.py`。
+- Map Roundtrip 0.6.0の回帰: `blender --background --factory-startup --python-exit-code 1 --python` で `tools/test_mrt_zone_from_objects.py`(純numpy)、`test_map_roundtrip_add_objects.py`、`test_map_roundtrip_zone_csv.py`、`test_map_roundtrip_ui_layout.py`、既存の`test_map_roundtrip_tools.py` `_zones.py` `_zone_registry.py` `_zone_migration.py` `_addon_lifecycle.py`。実UIは`blender --factory-startup --enable-event-simulate --python tools/ui_test_map_roundtrip_add_objects.py`(`MRT_SHOT_DIR`でスクリーンショット保存)、6万件の実測は`tools/benchmark_map_roundtrip_add_objects.py`。
 - Blenderの行列(`matrix_world`と`inverted()`)はfloat32です。ゾーン箱の端にある点は、座標が大きいほど(約490で5e-6相当の誤差)範囲外へ落ちます。箱を作るときは`zone_from_objects.float32_margin`のように座標の大きさに比例する余白を足してください。`pad`を固定値にしないこと。
 - `scene.mrt_props.zone_choice`はEnumPropertyの動的itemsで、**読むたびに全Emptyを走査します**。UIの描画やループの中で何度も読まず、ローカル変数へ1回だけ代入してください(5,000個で1回22秒かかった実例あり)。
 - Undo(`ed.undo`)後はData blockが読み込み直されるため、UIテストでは`scene`や`props`の参照を保持せず、都度`bpy.context.scene`から取得します。
@@ -125,3 +125,4 @@ repo/
 - LM Studioの委譲でレビューだけを任せる場合は、レポートMarkdownを`target`にしたタスクとして実行できます。ただし指摘は仕様と食い違う断定や存在しない問題が混ざります(2026-11-12の実績: 16件中、実バグ0件)。必ず実コードと再現で確認してから修正してください。
 - Map Roundtrip 0.4.0: CSV書き出しは各行の`id`をObjectの`ub_csv_id`(ub_zoneと同じトランザクション)へ保存します。戻りCSVでは`id=-1`が追加Mesh、対象ゾーンのub_csv_idに無いidは使用しません。ゾーンにub_csv_idが無ければ判定しません。`tools/test_map_roundtrip_csv_id.py`は`-- import` / `-- export`で片側だけ実行できます。LM Studioのクロスレビューは、無関係な行の書き換えや節の削除を入れることがあるため、必ずdiffを確認してください。
 - Map Roundtrip 0.5.0: CSVの`colname`はMap Collectionからの階層パス(`/`区切り、例 `Area1/Rocks`。Map直下は空欄、Map外はシーン最上位から)。取り込みは、Mapの下の同名Collection(旧CSV)→階層パスの順に解決し、無い階層を入れ子で作ります(`placement.resolve_colname`)。新しいCollection名が他で使われていると`.001`が付くため警告します。`tools/test_map_roundtrip_colname_path.py`で確認します。
+- Map Roundtrip 0.6.0: Add Selected Objectsは新しいEmptyを元のMeshのCollection(シーンにつながるCollectionのうち、子→シーンルートの順で最初に見つかるもの)へ入れます。まとめたEmptyは多数決(同数はシーン順)。Collectionの所属は`_owners`でCollection単位に読みます(Objectごとの`users_collection`は6万件で遅いため避ける)。`tools/test_map_roundtrip_empty_collection.py`で確認します。

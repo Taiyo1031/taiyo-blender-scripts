@@ -21,6 +21,37 @@ def _origins(objects, chunk=4096):
     return points
 
 
+def _owners(scene, targets, chunk=4096):
+    """Generator: the collection each target object lives in, and the scene order of the collections.
+
+    Only collections reachable from the scene count, in scene order (children before the scene root), and the first
+    one wins for an object in several collections. Reads membership per collection, never per object.
+    """
+    wanted = set(targets)
+    owners, order = {}, {}
+    for rank, collection in enumerate((*scene.collection.children_recursive, scene.collection)):
+        order[collection] = rank
+        for i, ob in enumerate(collection.objects):
+            if ob in wanted:
+                owners.setdefault(ob, collection)
+            if i % chunk == chunk - 1:
+                yield
+        yield
+    return owners, order
+
+
+def _box_collection(indices, targets, owners, order, fallback):
+    """(collection, mixed): the collection most of the box's objects are in (ties: first in the scene)."""
+    counts = {}
+    for i in indices:
+        collection = owners.get(targets[i], fallback)
+        counts[collection] = counts.get(collection, 0) + 1
+    best = min(counts, key=lambda c: (-counts[c], order.get(c, len(order))))
+    if not best.is_editable:
+        best = fallback
+    return best, len(counts) > 1
+
+
 def _intruders(other_points, centers, halves, budget=1_500_000):
     """Generator: how many unselected origins fall inside any new box.
 
@@ -42,7 +73,7 @@ def _intruders(other_points, centers, halves, budget=1_500_000):
 class MRT_OT_AddObjectsToZone(ChunkedOperator, bpy.types.Operator):
     bl_idname = 'mrt.add_objects_to_zone'
     bl_label = 'Add Selected Objects'
-    bl_description = '選択したMeshの原点にCube Emptyを作り、現在のZoneへまとめて追加します。近い原点はMerge Distance以内で1つにまとめます。未選択のMeshが範囲に入る場合は自動で分割します'
+    bl_description = '選択したMeshの原点にCube Emptyを作り、現在のZoneへまとめて追加します。Emptyは元のMeshがいるCollectionへ入ります。近い原点はMerge Distance以内で1つにまとめます。未選択のMeshが範囲に入る場合は自動で分割します'
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -84,7 +115,12 @@ class MRT_OT_AddObjectsToZone(ChunkedOperator, bpy.types.Operator):
         self.progress('Grouping origins', 0, 1)
         boxes, bad = yield from build_boxes_iter(sel_pts, other_pts, p.merge_distance)
 
+        self.progress('Finding collections', 0, 1)
+        owners, order = yield from _owners(context.scene, targets)
+        root = context.scene.collection
+
         created = []
+        mixed = 0
         try:
             # Create empties
             object_name = zone if zone.startswith(p.zone_prefix) else p.zone_prefix + zone
@@ -98,7 +134,9 @@ class MRT_OT_AddObjectsToZone(ChunkedOperator, bpy.types.Operator):
                 e[ZONE_NAME_KEY] = zone
                 e.mrt_zone_operation = 'ADD'
                 e.mrt_zone_enabled = True
-                context.scene.collection.objects.link(e)
+                collection, is_mixed = _box_collection(indices, targets, owners, order, root)
+                collection.objects.link(e)
+                mixed += is_mixed
                 created.append(e)
 
                 if i % 128 == 0:
@@ -132,7 +170,7 @@ class MRT_OT_AddObjectsToZone(ChunkedOperator, bpy.types.Operator):
 
             p.zone_result = ''
             added = len(targets) - len(bad)
-            self.result = f'Added {added} objects to {zone} with {len(boxes)} empties; skipped {skipped_count} already inside; unseparable {len(bad)}; removed by Subtract {removed}; ignored non-mesh {ignored}'
+            self.result = f'Added {added} objects to {zone} with {len(boxes)} empties; skipped {skipped_count} already inside; unseparable {len(bad)}; removed by Subtract {removed}; ignored non-mesh {ignored}; mixed-collection empties {mixed}'
 
             if bad:
                 names = [targets[i].name for i in bad[:5]]

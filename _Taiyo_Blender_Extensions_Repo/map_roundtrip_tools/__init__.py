@@ -1,5 +1,5 @@
 bl_info = {
-    'name': 'Map Roundtrip Tools', 'author': 'Taiyo', 'version': (0, 5, 0),
+    'name': 'Map Roundtrip Tools', 'author': 'Taiyo', 'version': (0, 6, 0),
     'blender': (4, 5, 0), 'location': 'View3D > Sidebar > Map Roundtrip',
     'description': 'Roundtrip linked map placements and library FBX meshes through Houdini',
     'category': 'Import-Export',

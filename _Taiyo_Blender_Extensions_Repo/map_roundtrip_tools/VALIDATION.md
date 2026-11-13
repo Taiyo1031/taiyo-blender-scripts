@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.5.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.6.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -137,3 +137,16 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - 6万Objectの書き出し（`tools/benchmark_map_roundtrip_add_objects.py`）：全体6.5〜6.96秒、最長tick 0.477〜0.510秒（0.4.0までは6.48秒、0.473秒）。測定のたびにばらつくため、目標の0.5秒前後です。colnameの計算中は4096件ごとに制御を返します。
 - 数千個のCollectionを持つシーンでの時間は、測っていません。
 - Mapの外にあったCollectionは`Map`の下に新しく作られ、元の場所へは戻りません。名前が既に使われていると`.001`が付きます（警告あり）。
+
+## 0.5.1の追加（使用書のみ）
+
+コードの動作は0.5.0と同じです。「Houdiniで変えた内容の扱い」を使用書へ追記し、その動作（移動＝新しい値で作り直し、削除＝旧Objectだけ退避、`id=-1`＋`colname`の階層パス＝入れ子のCollectionへ配置、不明idは未使用）を`tools/test_map_roundtrip_colname_path.py`の項目として追加しました。Blender 4.5.9で合格しました。Houdini実機は未検証です。
+
+## 0.6.0の追加（EmptyをMeshのCollectionへ）
+
+検証日: 2026-11-13（日本時間）。macOS arm64、Blender **4.5.9 LTS**のみ。
+
+- Add Selected Objectsで作るEmptyを、シーンのルートではなく、元のMeshがいるCollectionへ入れます。まとめたEmptyは多数決（同数はシーンで先のCollection）で、複数のCollectionにまたがった数を`mixed-collection empties N`として出します。
+- 回帰：`tools/test_map_roundtrip_empty_collection.py`（各Collection・ネスト・ルート／多数決と報告／同数／複数所属・シーン外Collection／ESCでの取り消し）に加え、既存の10本が合格しました。実UI（`tools/ui_test_map_roundtrip_add_objects.py`：ESC取り消し・完了・Undo・Redo・描画）も合格しました。
+- 6万Object（すべてシーンのルート）の測定：Add Selected Objects 4.75〜4.84秒、最長tick 0.326〜0.329秒（0.3.0の実測は4.95秒、0.335秒）。ゾーンの中身は選択と完全一致です。Collectionが多数あるシーンでの時間は測っていません。
+- 読み取り専用（リンクされた）Collectionの実機での挙動は、未確認です。編集できないときの退避先をシーンの最上位にしてあります。

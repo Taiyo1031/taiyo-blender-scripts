@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.5.0 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.6.0 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -41,9 +41,10 @@ Zones
 - **原点にEmptyを作る**: 各Meshの原点が範囲に入るEmpty（Add）を作ります。
 - **近ければ1つにまとめる**: `Merge Distance`（既定1 m）の格子で近い原点を1つのEmptyにまとめます。`0`なら1個ずつ作ります。
 - **他のObjectを含めない**: 選択していないMeshの原点がEmptyの範囲に入る場合は、自動でEmptyを分割します。未選択のMeshと原点がほぼ同じで分けられないObjectには、Emptyを作らず警告と件数を出します。
+- **Emptyの置き先**: 作ったEmptyは、元のMeshがいるCollectionへ入ります（ネストしたCollectionも、シーンの最上位も同じ）。近い原点を1つにまとめたEmptyの元のMeshが複数のCollectionにまたがるときは、最も多いCollectionへ入ります。同数なら、シーンの中で先に並ぶCollectionです。まとめたEmptyのうち、複数のCollectionにまたがったものの数が、結果表示の`mixed-collection empties N`に出ます。複数のCollectionに入っているMeshは、シーンの中で最初に見つかる1つを使います。シーンにつながっていないCollectionや、編集できない（リンクされた）Collectionには入れず、シーンの最上位へ入れます。
 - **重複しない**: すでにそのゾーンの範囲に入っているObjectには新しいEmptyを作りません。2回押しても増えません。既存のSubtractで除かれるObjectは `removed by Subtract` として件数に出ます。
 - **判定する相手**: 未選択Meshの判定は`Mesh Candidates`（Map Collection / All Scene Meshes）に従います。
-- **結果表示**: `Added N objects to ZONE_A with M empties; skipped ...; unseparable ...; removed by Subtract ...; ignored non-mesh ...` の形で、状況表示の行に出ます。
+- **結果表示**: `Added N objects to ZONE_A with M empties; skipped ...; unseparable ...; removed by Subtract ...; ignored non-mesh ...; mixed-collection empties ...` の形で、状況表示の行に出ます。
 - **進捗とキャンセル**: 進捗と残り時間が出ます。ESCで中断すると、作ったEmptyをすべて取り消します。Ctrl+Zで元に戻せます。
 - **見え方**: 1つのObjectだけのEmptyは範囲がとても小さく（約2 mm）、3Dビューでは点にしか見えません。確認は`Zone Empties`の一覧、または`Select Zone Empties`で行います。広げたいときはEmptyを選んで`S`で拡大してください。
 
@@ -152,6 +153,23 @@ Unreal用の個別SMなら、配置Objectではなく原点に置いたLibrary�
 5. Dry Run ONでPreview Placementを確認し、OFFにしてReplace Zoneを実行します。
 
 Archiveは旧配置を保持して退避します。Deleteは明示選択時だけ削除します。旧対象はMap配下だけでなく、全データの同じub_zoneを持つObjectです。CSV名をZONE_A_return.csvに変えて返す場合も、置換タグはZONE_Aを維持してください。
+
+### Houdiniで変えた内容の扱い
+
+Replace Zoneは、既存のObjectをその場で更新しません。戻りCSVの各行から**新しいObjectを作り直し**、旧Objectを`Old Objects`の設定（Archive／Delete）で扱います。
+
+| Houdiniでの操作 | 結果 |
+|---|---|
+| 位置・回転・拡大を変えた | CSVの行に新しい値が入るので、新しい値で新Objectが作られます。旧Objectは退避（または削除）されます。 |
+| Objectを削除した | その`id`の行がCSVにありません。新しい配置に含まれず、旧Objectだけが退避（または削除）されます。 |
+| 別のMeshに差し替えた（`objname`が変わった） | 新しい`objname`に合うLibraryのMeshで作ります。Libraryに無い名前は作られず、`names not found in Library`と報告されます。 |
+| 新しいMeshを追加した（`id`が-1） | Libraryに同名のMeshがあれば配置します。先にMesh FBXで`Import New Meshes`を実行しておきます。 |
+| 書き出し後にBlenderで手で動かした | 戻りCSVの値が優先されます。手で動かした位置は、退避した旧Objectにだけ残ります。 |
+
+- **追加Meshの置き先**: 追加Meshの行にも、通常の行と同じ`colname`の階層パスが使えます。たとえば`Area2/NewRocks`なら、`Map`の下に`Area2`と`NewRocks`を入れ子で作り、そこへ配置します。
+- **追加Meshの取り込み先**: `Import New Meshes`で取り込んだMeshは、Libraryの下の`FromHoudini`（`New Meshes To`で変更可）に並びます。FBXの階層は作られません。
+- **引き継がれないもの**: 新しいObjectに入るのは、位置・回転・拡大、`ub_zone`タグ、配置先のCollectionだけです。旧Objectに付けたモディファイア、Custom Properties、親子関係、Materialの上書きは引き継がれません。必要なものは、退避した旧Objectから取り出してください。
+- **名前**: `objname`から付けます。旧Objectと重なるときは、`.001`などの接尾辞が付きます。
 
 ### Collectionの階層
 
