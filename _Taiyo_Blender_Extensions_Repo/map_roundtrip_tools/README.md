@@ -1,6 +1,6 @@
 # Map Roundtrip Tools
 
-**対象version: 0.6.0 / Blender 4.5.0以上**
+**対象version: 0.7.0 / Blender 4.5.0以上**
 
 ゾーン管理・配置CSV・HoudiniとのFBX往復・リンク複製での配置復元を担当するExtensionです。Unreal Bridge Toolsなしで利用できます。
 
@@ -19,6 +19,14 @@
 
 CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持します。Mesh CandidatesでMap配下／現在Sceneを選べます。旧UBTの登録ゾーン・EmptyのAdd/Subtract・登録解除状態も読み取れます。
 
+0.6.0からの変更（動作が変わります）:
+- **Replace Zoneは差分更新**になりました。`ub_csv_id`で元のObjectと対応づけ、変わっていないObjectは触らず、動いたObjectはその場で更新し、使わなくなったObjectは`_Replaced_ZONE_A`へ元の階層のまま退避し、新しいものだけ作ります。`Delete`は廃止しました。`ub_csv_id`の無いゾーンは、先にExport Zone CSVをやり直します。
+- **Restore Original Map / Re-apply Imported Map**で、最初のマップと取り込み後のマップを切り替えられます。
+- **追加Mesh**: `New Meshes To`で取り込み先を選べます。`Placement CSV`を先に指定すると、`colname`の階層を取り込み先の中に再現します。
+- **Previewのエラー**を、CSVの行・列・値・理由まで出します。全件は`MRT Placement Report`（Textエディター）に書きます。
+- **Helperパネル**を追加しました。Library/FromHoudiniのObjectがMapでどう使われているかを調べ、選択できます。
+詳しくは[詳細使用書](WORKFLOW_JA.md)の8章と10章。0.6.0のZIPは詳細使用書の「過去バージョン」にあります。
+
 0.5.1からの変更: Add Selected Objectsで作るEmptyが、シーンのルートではなく、元のMeshがいるCollectionへ入ります。まとめたEmptyの元のMeshが複数のCollectionにまたがるときは、多いほう（同数ならシーンで先のCollection）へ入り、件数をステータスに出します。詳しくは[詳細使用書](WORKFLOW_JA.md)。
 
 0.5.0からの変更: コードの動作は同じで、使用書に「Houdiniで変えた内容の扱い」（移動・削除・追加Mesh・引き継がれないもの）を追記しました。
@@ -33,7 +41,7 @@ CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持
 
 通常はExport FBX (Blender)でBlender標準の設定・プリセット画面を使用します。個別一括出力はAdvanced / Batch Exportにあります。
 
-ImportではLibrary（元Mesh）とMap（配置先）を指定します。追加Meshがある場合だけImport New Meshesを実行し、Placement CSVをPreviewしてからReplace Zoneを実行します。既定Archiveは旧配置を保持します。作業前に.blendを保存してください。大量処理のUndo履歴は作りません。
+ImportではLibrary（元Mesh）とMap（配置先）を指定します。追加Meshがある場合だけImport New Meshesを実行し、Placement CSVをPreviewしてからReplace Zoneを実行します。動いたObjectはその場で更新し、使わなくなったObjectは退避し、いつでも最初のマップへ戻せます。作業前に.blendを保存してください。大量処理のUndo履歴は作りません。
 
 Exchange Folder／Return Folderは参考欄です。パス自動連動やファイル監視はありません。
 
@@ -41,6 +49,10 @@ Exchange Folder／Return Folderは参考欄です。パス自動連動やファ�
 
 - 基本配置・FBX・ゾーンCSV（旧UBT互換のタグ復元を含む）：`tools/test_map_roundtrip_tools.py`
 - ゾーン範囲のCSV（選択に依存しない・All Zones・復元）：`tools/test_map_roundtrip_zone_csv.py`
+- Replace Zoneの差分更新・復元・Previewのエラー詳細・Importパネル：`tools/test_map_roundtrip_restore.py`
+- 追加Meshの取り込み先とcolname階層：`tools/test_map_roundtrip_mesh_import_paths.py`
+- Helperパネル：`tools/test_map_roundtrip_helper.py`
+- 実UI（物理ESC・Replace・Restore・Re-apply）：`tools/ui_test_map_roundtrip_tools.py`、60k実測：`tools/benchmark_map_roundtrip_diff.py`
 - Add Selected ObjectsのEmptyの置き先Collection（各Collection・多数決・同数・複数所属・ESC取り消し）：`tools/test_map_roundtrip_empty_collection.py`
 - colnameの階層パス（書き出し・解決・入れ子の作成・名前の衝突・ロールバック・往復）：`tools/test_map_roundtrip_colname_path.py`
 - CSVのid（`ub_csv_id`保存・`-1`・不明id・旧版ゾーン・往復）：`tools/test_map_roundtrip_csv_id.py`（`-- import` / `-- export`で片側だけ実行）
@@ -52,4 +64,4 @@ Exchange Folder／Return Folderは参考欄です。パス自動連動やファ�
 - 実UI（ESC・Undo/Redo・描画）：`tools/ui_test_map_roundtrip_add_objects.py`、`tools/ui_test_map_roundtrip_zones.py`、`tools/ui_test_map_roundtrip_native_fbx.py`
 - 6万Objectの実測：`tools/benchmark_map_roundtrip_add_objects.py`
 
-[過去の性能測定と制約](VALIDATION.md)。0.1.0では6万件Replace約282.5秒でした。0.6.0でも配置生成アルゴリズムは同じです（idの判定とCollection階層の復元を追加しただけです）。
+[過去の性能測定と制約](VALIDATION.md)。0.1.0では6万件Replace約282.5秒でした。0.7.0では、Replace Zoneを差分更新にして処理の流れを変えました（6万件の実測は検証報告）。

@@ -1,11 +1,14 @@
 """FBX library import with deferred destructive cleanup and reversible remaps."""
+import csv
 import os
 import re
 import bpy
 from .chunked import ChunkedOperator
-from .placement import normalize, walk_collections
+from .mirror import mirror_path
+from .placement import colname_parts, normalize, walk_collections
 
 LAST_IMPORTER = ''
+DEFAULT_NEW_MESHES = 'FromHoudini'
 
 
 def fbx_import(path):
@@ -37,6 +40,37 @@ def remove_imported(snapshot):
             bpy.data.batch_remove(ids=extra)
 
 
+def csv_colnames(path, name_mode):
+    """{normalized objname: [colname, ...]} in file order. Missing file/columns and unreadable rows are ignored."""
+    result = {}
+    try:
+        with open(path, newline='', encoding='utf-8-sig') as stream:
+            reader = csv.reader(stream)
+            header = next(reader, [])
+            columns = {name: i for i, name in enumerate(header)}
+            if 'objname' not in columns or 'colname' not in columns:
+                return result
+            need = max(columns['objname'], columns['colname']) + 1
+            for row in reader:
+                if len(row) >= need and row[columns['objname']].strip():
+                    result.setdefault(normalize(row[columns['objname']], name_mode), []).append(row[columns['colname']])
+    except (OSError, UnicodeError, csv.Error):
+        pass
+    return result
+
+
+def choose_colname(colnames):
+    """(the most common colname, number of different colnames); a tie goes to the one that appears first."""
+    if not colnames:
+        return '', 0
+    counts = {}
+    for name in colnames:
+        counts[name] = counts.get(name, 0) + 1
+    best = max(counts.values())
+    chosen = next(name for name in colnames if counts[name] == best)
+    return chosen, len(counts)
+
+
 class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
     bl_description = '指定したMesh FBXをLibraryへ取り込みます。配置を置換する操作ではありません'
     bl_idname = 'mrt.import_meshes'
@@ -49,8 +83,6 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
         path = bpy.path.abspath(p.mesh_fbx)
         if not p.mesh_fbx or not os.path.isfile(path):
             raise ValueError('Mesh FBX does not exist.')
-        if not p.new_mesh_coll_name.strip():
-            raise ValueError('New Meshes To is empty.')
         exact, norm = {}, {}
         for c in walk_collections(p.library_coll):
             for ob in c.objects:
@@ -62,8 +94,6 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
         # Name sets are captured before import; pointers also survive renaming.
         original_names = {kind: {item.name for item in items} for kind, items in snapshot.items()}
         selected, active = tuple(context.selected_objects), context.view_layer.objects.active
-        target = None
-        target_created = False
         updates, kept, discard = [], [], []
         remapped = []
         old_mesh_names = {}
@@ -116,11 +146,26 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
             for old_mesh, new_mesh in updates:
                 if old_mesh.library or new_mesh.library:
                     raise ValueError('Cannot update a linked-library mesh.')
-            target = p.library_coll.children.get(p.new_mesh_coll_name)
-            if kept and target is None:
-                target = bpy.data.collections.new(p.new_mesh_coll_name)
-                target_created = True
-                p.library_coll.children.link(target)
+            root = p.new_mesh_coll or p.library_coll.children.get(DEFAULT_NEW_MESHES)
+            if kept and root is None:
+                root = bpy.data.collections.new(DEFAULT_NEW_MESHES)
+                p.library_coll.children.link(root)
+            # Where each new mesh goes: the colname path of the CSV rows that use it, rebuilt below the destination.
+            csv_path = bpy.path.abspath(p.placement_csv) if p.placement_csv else ''
+            colnames_of = csv_colnames(csv_path, p.name_mode) if csv_path and os.path.isfile(csv_path) else {}
+            map_name = p.map_coll.name if p.map_coll else ''
+            created_collections, destination, from_csv = [], {}, 0
+            for ob in kept:
+                rows = (colnames_of.get(ob.name) or colnames_of.get(re.sub(r'\.\d+$', '', ob.name))
+                        or colnames_of.get(normalize(ob.name, p.name_mode)) or [])
+                colname, distinct = choose_colname(rows)
+                if distinct > 1:
+                    shown = ', '.join(list(dict.fromkeys(rows))[:3])
+                    self.report({'WARNING'}, f'{ob.name}: used with {distinct} different collection paths ({shown}); '
+                                f'using {colname or "(root)"}')
+                parts = colname_parts(colname, map_name) if colname else ()
+                destination[ob] = mirror_path(root, parts, root.name, created_collections) if parts else root
+                from_csv += bool(parts)
             existing_mats = {m.name: m for m in snapshot['materials']}
             material_meshes = {ob.data for ob in meshes} | {mesh for _, mesh in updates}
             for mesh in material_meshes:
@@ -141,13 +186,11 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
                 yield
             kept_set = set(kept)
             for ob in kept:
-                target.objects.link(ob)
+                destination[ob].objects.link(ob)
                 yield
             for c, members in memberships.items():
-                if c == target:
-                    continue
                 for ob in members:
-                    if ob in kept_set:
+                    if ob in kept_set and c != destination[ob]:
                         c.objects.unlink(ob)
                     yield
             for old_mesh, new_mesh in updates:
@@ -168,7 +211,7 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
                 unused = [item for item in getattr(bpy.data, kind) if item not in snapshot[kind] and item.users == 0]
                 if unused:
                     bpy.data.batch_remove(ids=unused)
-            empty_collections = [c for c in bpy.data.collections if c not in snapshot['collections'] and c != target and not c.objects and not c.children]
+            empty_collections = [c for c in bpy.data.collections if c not in snapshot['collections'] and c != root and c not in created_collections and not c.objects and not c.children]
             if empty_collections:
                 bpy.data.batch_remove(ids=empty_collections)
             committed = True
@@ -176,7 +219,7 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
             p.plan_new_meshes_imported += imported
             if off_origin:
                 self.report({'WARNING'}, f'{off_origin} imported meshes are not at the origin; transforms preserved.')
-            self.result = f'Imported {imported} meshes (skipped {skipped}, updated {updated}); importer {LAST_IMPORTER}'
+            self.result = f'Imported {imported} meshes (skipped {skipped}, updated {updated}); importer {LAST_IMPORTER}; collection paths from CSV {from_csv}'
         except BaseException as exc:
             if not committed:
                 for old_mesh, new_mesh in reversed(remapped):

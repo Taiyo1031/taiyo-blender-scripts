@@ -57,7 +57,6 @@ def run(n):
     row['csv_collection_seconds'] = time.perf_counter()-t
     p.placement_csv = u.export_path
     p.zone_override = ''
-    p.old_mode = 'ARCHIVE'
     p.dry_run = True
     t = time.perf_counter()
     plan = drain(placement.build_plan(p))

@@ -1,5 +1,6 @@
 ZONE_KEY = 'ub_zone'
 ARCHIVED_KEY = 'ub_archived_from'
+RUN_KEY = 'ub_run'  # JSON: how a Replace Zone changed this object (before / after states)
 CSV_ID_KEY = 'ub_csv_id'  # the CSV id each object had in its last zone CSV export
 NEW_MESH_ID = -1  # a Houdini-added mesh: a CSV row with this id is not a replacement of an exported object
 COLNAME_SEPARATOR = '/'  # colname is the collection path below the Map collection, e.g. Area1/Rocks

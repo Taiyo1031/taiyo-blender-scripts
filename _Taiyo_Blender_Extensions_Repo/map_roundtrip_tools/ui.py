@@ -1,6 +1,10 @@
 import bpy
+from . import placement_report
 from .placement import effective_zone
 from .constants import FBX_DEFAULTS
+from .journal import STATE_AFTER, STATE_BEFORE, map_state
+
+MAX_ISSUE_ROWS = 5
 
 
 class MRT_PT_Export(bpy.types.Panel):
@@ -69,7 +73,7 @@ class MRT_PT_Import(bpy.types.Panel):
         layout.enabled = not p.running
         box = layout.box()
         box.label(text='Collections')
-        for name in ('library_coll', 'map_coll', 'new_mesh_coll_name'):
+        for name in ('library_coll', 'map_coll', 'new_mesh_coll'):
             box.prop(p, name)
         box.label(text='New meshes go under Library, at the origin.')
         box = layout.box()
@@ -80,31 +84,41 @@ class MRT_PT_Import(bpy.types.Panel):
         box = layout.box()
         box.label(text='Replace Zone')
         box.prop(p, 'zone_override')
-        box.label(text=effective_zone(p) + (' from CSV name' if not p.zone_override else ''))
-        box.prop(p, 'old_mode', expand=True)
+        zone = effective_zone(p)
+        box.label(text=zone + (' from CSV name' if not p.zone_override else ''))
         box.prop(p, 'dry_run')
         plan = box.box()
         if p.plan_ready:
-            plan.label(text=f'{p.old_mode.title()} {p.plan_archive} objects tagged ub_zone={p.plan_zone}')
-            if p.old_mode == 'ARCHIVE':
-                plan.label(text='to _Replaced_' + p.plan_zone)
-            plan.label(text=f'Create {p.plan_create} linked instances')
+            plan.label(text=f'Unchanged {p.plan_unchanged}; Moved {p.plan_moved}')
+            plan.label(text=f'Retire {p.plan_archive} to _Replaced_{p.plan_zone}; Add {p.plan_create}')
             plan.label(text=f'Invalid rows {p.plan_invalid}; new collections {p.plan_collections}')
             plan.label(text=f'New meshes (id -1): {p.plan_added}')
             if p.plan_unknown_id:
                 row = plan.row()
                 row.alert = True
                 row.label(text=f'Skipped {p.plan_unknown_id} rows with an unknown id')
-            if not p.plan_id_check:
-                plan.label(text='ID check off: this zone has no ub_csv_id (exported by an older version)')
             if p.plan_missing:
                 row = plan.row()
                 row.alert = True
                 row.label(text=f'{p.plan_missing} names not found in Library: {p.plan_names}')
+            if p.plan_errors or p.plan_warnings:
+                row = plan.row()
+                row.alert = bool(p.plan_errors)
+                row.label(text=f'{p.plan_errors} errors (row not used), {p.plan_warnings} warnings')
+                for message in placement_report.first_lines(placement_report.LAST_ISSUES, MAX_ISSUE_ROWS):
+                    plan.label(text=message if len(message) <= 110 else message[:107] + '...')
+                plan.label(text=f'Full list: Text "{placement_report.REPORT_TEXT}"')
         else:
             plan.label(text='Run Preview Placement to see the plan.')
         plan.label(text=f'Imported {p.plan_new_meshes_imported} meshes this session' if p.plan_new_meshes_imported else 'No meshes imported yet')
         box.operator('mrt.import_meshes')
+        state = map_state(zone)
         row = box.row()
-        row.alert = p.old_mode == 'DELETE' and not p.dry_run
+        row.enabled = state != STATE_BEFORE
         row.operator('mrt.replace_zone', text='Preview Placement' if p.dry_run else 'Replace Zone')
+        if state:
+            showing_imported = state == STATE_AFTER
+            box.label(text='Map shows: ' + ('the imported map' if showing_imported else 'the ORIGINAL map (Replace is off)'))
+            op = box.operator('mrt.switch_map_state', text='Restore Original Map' if showing_imported else 'Re-apply Imported Map')
+            op.target = 'BEFORE' if showing_imported else 'AFTER'
+            op.zone = zone
