@@ -1,6 +1,6 @@
 # Map Roundtrip Tools
 
-**対象version: 0.7.0 / Blender 4.5.0以上**
+**対象version: 0.7.1 / Blender 4.5.0以上**
 
 ゾーン管理・配置CSV・HoudiniとのFBX往復・リンク複製での配置復元を担当するExtensionです。Unreal Bridge Toolsなしで利用できます。
 
@@ -18,6 +18,8 @@
 `Zone Empties`（折りたたみ）にはEmptyの一覧・検索・`Select Zone Empties`があります。
 
 CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持します。Mesh CandidatesでMap配下／現在Sceneを選べます。旧UBTの登録ゾーン・EmptyのAdd/Subtract・登録解除状態も読み取れます。
+
+0.7.0からの変更（不具合の修正）: `New Meshes To`を`Library`の外のCollection（例 `NewOBJs`）にしたとき、取り込んだMeshがPreview/Replaceで「Libraryに無い」と判定され、`added 0`になる問題を直しました。`New Meshes To`もLibraryと同じ検索対象です（Mapの中は対象外）。HelperもそのCollectionを含めて調べ、大規模シーンでの照合も高速にしました。
 
 0.6.0からの変更（動作が変わります）:
 - **Replace Zoneは差分更新**になりました。`ub_csv_id`で元のObjectと対応づけ、変わっていないObjectは触らず、動いたObjectはその場で更新し、使わなくなったObjectは`_Replaced_ZONE_A`へ元の階層のまま退避し、新しいものだけ作ります。`Delete`は廃止しました。`ub_csv_id`の無いゾーンは、先にExport Zone CSVをやり直します。

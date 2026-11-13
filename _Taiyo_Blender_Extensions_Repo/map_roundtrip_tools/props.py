@@ -36,7 +36,7 @@ class MRT_Props(bpy.types.PropertyGroup):
     fbx_apply_transform: BoolProperty(description='FBXの軸変換をMeshへ焼き込みます。既定OFF', name='Apply Transform', default=False)
     library_coll: PointerProperty(description='配置の元となるMesh Objectの保管場所。例ForExport_Dirty_1。子Collectionも名前検索します', name='Library', type=bpy.types.Collection)
     map_coll: PointerProperty(description='CSVから再生成した配置を入れるCollection。例Laid_MAP_1。Libraryとは役割が異なります', name='Map', type=bpy.types.Collection)
-    new_mesh_coll: PointerProperty(description='追加FBXのMeshを入れるCollection。空欄ならLibraryの下に FromHoudini を作って使います。Placement CSVを指定してあれば、その中にcolnameの階層を作ります', name='New Meshes To', type=bpy.types.Collection)
+    new_mesh_coll: PointerProperty(description='追加FBXのMeshを入れるCollection。空欄ならLibraryの下に FromHoudini を作って使います。Library の外のCollectionでも、Libraryと同じようにMesh名の検索対象になります(Mapの中は対象外)。Placement CSVを指定してあれば、その中にcolnameの階層を作ります', name='New Meshes To', type=bpy.types.Collection)
     return_dir: StringProperty(description='Houdiniから返すファイルの参考フォルダー。Placement CSVやMesh FBXは下で個別指定してください。自動読込はしません', name='Return Folder', subtype='DIR_PATH', default='//houdini_io/in')
     placement_csv: StringProperty(description='実際に読み込む配置CSV。ヘッダー付き12列。Zone空欄時はこのファイル名が置換ゾーンになります', name='Placement CSV', subtype='FILE_PATH')
     mesh_fbx: StringProperty(description='追加のLibrary Meshを含むFBX。追加Meshがなければ指定・取込は不要です', name='Mesh FBX', subtype='FILE_PATH')

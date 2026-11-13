@@ -59,6 +59,21 @@ def walk_collections(root):
         pending.extend(reversed(tuple(c.children)))
 
 
+def walk_library(p):
+    """Collections searched for meshes: Library plus the New Meshes To collection (it may sit outside Library).
+
+    A destination inside the Map is ignored: placed objects must never count as Library meshes.
+    """
+    seen = set(walk_collections(p.map_coll)) if p.map_coll else set()
+    for root in (p.library_coll, p.new_mesh_coll):
+        if root is None or root in seen:
+            continue
+        for c in walk_collections(root):
+            if c not in seen:
+                seen.add(c)
+                yield c
+
+
 def build_parent_index(map_coll):
     """First parent of every collection (parents inside the map tree win) and the set of scene root collections."""
     parents = {}
@@ -228,7 +243,7 @@ def build_plan(p, progress=lambda *args: None):
     issues = plan.issues
     exact, norm, seen, non_mesh = {}, {}, set(), {}
     first_of = {}
-    for c in walk_collections(p.library_coll):
+    for c in walk_library(p):
         for i, ob in enumerate(c.objects):
             if ob in seen:
                 continue
