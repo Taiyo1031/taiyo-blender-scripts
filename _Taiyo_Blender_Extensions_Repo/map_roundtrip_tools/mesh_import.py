@@ -3,6 +3,7 @@ import csv
 import os
 import re
 import bpy
+from mathutils import Matrix
 from .chunked import ChunkedOperator
 from .mirror import mirror_path
 from .placement import colname_parts, normalize, walk_library
@@ -40,6 +41,10 @@ def remove_imported(snapshot):
             bpy.data.batch_remove(ids=extra)
 
 
+def _is_identity(matrix, tolerance=1e-6):
+    return all(abs(matrix[r][c] - (r == c)) <= tolerance for r in range(4) for c in range(4))
+
+
 def csv_colnames(path, name_mode):
     """{normalized objname: [colname, ...]} in file order. Missing file/columns and unreadable rows are ignored."""
     result = {}
@@ -74,6 +79,7 @@ def choose_colname(colnames):
 class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
     bl_description = '指定したMesh FBXをLibraryへ取り込みます。配置を置換する操作ではありません'
     bl_idname = 'mrt.import_meshes'
+    undo_push = True
     bl_label = 'Import New Meshes'
 
     def work(self, context):
@@ -97,7 +103,7 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
         updates, kept, discard = [], [], []
         remapped = []
         old_mesh_names = {}
-        off_origin = skipped = updated = 0
+        off_origin = skipped = updated = transformed = 0
         committed = False
         try:
             fbx_import(path)
@@ -177,12 +183,27 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
                         if previous is not None and previous != mat:
                             mesh.materials[index] = previous
                 yield
+            baked = set()
             for ob in meshes:
                 # Keep imported world transforms when removing FBX parent empties.
                 if ob.parent:
                     world = ob.matrix_world.copy()
                     ob.parent = None
                     ob.matrix_world = world
+                # A Y-up / centimetre FBX (Houdini) arrives as an object with rotation 90 deg and scale 0.01 over raw
+                # mesh data. Placement only uses the mesh, so that transform is baked into it: the mesh then matches
+                # the Library (Z-up, metres, identity object) and a CSV row's transform puts it in the right place.
+                world = ob.matrix_basis.copy()  # the parent is gone; matrix_world can be stale right after an import
+                if ob.data not in baked and not _is_identity(world):
+                    ob.data.transform(world)
+                    if world.determinant() < 0:
+                        ob.data.flip_normals()
+                    ob.data.update()
+                    baked.add(ob.data)
+                    transformed += 1
+                    ob.matrix_basis = Matrix.Identity(4)
+                elif ob.data in baked:
+                    ob.matrix_basis = Matrix.Identity(4)
                 yield
             kept_set = set(kept)
             for ob in kept:
@@ -219,7 +240,7 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
             p.plan_new_meshes_imported += imported
             if off_origin:
                 self.report({'WARNING'}, f'{off_origin} imported meshes are not at the origin; transforms preserved.')
-            self.result = f'Imported {imported} meshes (skipped {skipped}, updated {updated}); importer {LAST_IMPORTER}; collection paths from CSV {from_csv}'
+            self.result = f'Imported {imported} meshes (skipped {skipped}, updated {updated}); importer {LAST_IMPORTER}; collection paths from CSV {from_csv}; FBX transform baked into {transformed} meshes'
         except BaseException as exc:
             if not committed:
                 for old_mesh, new_mesh in reversed(remapped):

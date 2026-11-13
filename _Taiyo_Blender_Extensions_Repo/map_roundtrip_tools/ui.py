@@ -87,6 +87,17 @@ class MRT_PT_Import(bpy.types.Panel):
         zone = effective_zone(p)
         box.label(text=zone + (' from CSV name' if not p.zone_override else ''))
         box.prop(p, 'dry_run')
+        box.operator('mrt.import_meshes')
+        state = map_state(zone)
+        row = box.row()
+        row.enabled = state != STATE_BEFORE
+        row.operator('mrt.replace_zone', text='Preview Placement' if p.dry_run else 'Replace Zone')
+        if state:
+            showing_imported = state == STATE_AFTER
+            box.label(text='Map shows: ' + ('the imported map' if showing_imported else 'the ORIGINAL map (Replace is off)'))
+            op = box.operator('mrt.switch_map_state', text='Restore Original Map' if showing_imported else 'Re-apply Imported Map')
+            op.target = 'BEFORE' if showing_imported else 'AFTER'
+            op.zone = zone
         plan = box.box()
         if p.plan_ready:
             plan.label(text=f'Unchanged {p.plan_unchanged}; Moved {p.plan_moved}')
@@ -111,14 +122,3 @@ class MRT_PT_Import(bpy.types.Panel):
         else:
             plan.label(text='Run Preview Placement to see the plan.')
         plan.label(text=f'Imported {p.plan_new_meshes_imported} meshes this session' if p.plan_new_meshes_imported else 'No meshes imported yet')
-        box.operator('mrt.import_meshes')
-        state = map_state(zone)
-        row = box.row()
-        row.enabled = state != STATE_BEFORE
-        row.operator('mrt.replace_zone', text='Preview Placement' if p.dry_run else 'Replace Zone')
-        if state:
-            showing_imported = state == STATE_AFTER
-            box.label(text='Map shows: ' + ('the imported map' if showing_imported else 'the ORIGINAL map (Replace is off)'))
-            op = box.operator('mrt.switch_map_state', text='Restore Original Map' if showing_imported else 'Re-apply Imported Map')
-            op.target = 'BEFORE' if showing_imported else 'AFTER'
-            op.zone = zone

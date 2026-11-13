@@ -11,6 +11,10 @@ class Cancelled(Exception):
 
 class ChunkedOperator:
     bl_options = {'REGISTER'}
+    undo_push = False  # True: one Undo step is pushed when the task finishes without error
+
+    def wants_undo(self, context):
+        return self.undo_push
 
     @classmethod
     def poll(cls, context):
@@ -126,6 +130,11 @@ class ChunkedOperator:
         p.status = (self._error or getattr(self, 'result', 'Completed')) + f' ({elapsed:.3f} s; max tick {self.max_tick:.3f} s)'
         p.progress = 0 if self._error else 1
         _RUNNING = None
+        if not self._error and self.wants_undo(context):
+            try:
+                bpy.ops.ed.undo_push(message=self.bl_label)
+            except RuntimeError:
+                pass  # no UI (background run): there is nothing to undo
         if context.area:
             context.area.tag_redraw()
         level = 'WARNING' if self._cancelling else 'ERROR'

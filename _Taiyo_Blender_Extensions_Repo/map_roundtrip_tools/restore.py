@@ -9,6 +9,7 @@ from .placement import build_parent_index, collection_colname, colname_parts, ef
 
 class MRT_OT_SwitchMapState(ChunkedOperator, bpy.types.Operator):
     bl_idname = 'mrt.switch_map_state'
+    undo_push = True
     bl_label = 'Switch Map State'
     bl_description = ('ゾーンの状態を、最初のマップ（Replace Zone の前）とHoudiniから戻したマップの間で切り替えます。'
                       '動かしたObjectは元の位置へ、退避したObjectは元のCollectionへ、新しく作ったObjectは退避用Collectionへ移します。何度でも切り替えられます')

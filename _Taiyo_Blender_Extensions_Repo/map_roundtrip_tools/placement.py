@@ -442,6 +442,10 @@ class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
     bl_description = ('Dry Run ONなら計画だけ確認します。OFFなら、CSVと照らして、動いたObjectはその場で移動し、'
                       '使わなくなったObjectは退避用Collectionへ階層のまま移し、新しいObjectを作ります。元のマップへ復元できます')
     bl_idname = 'mrt.replace_zone'
+    undo_push = True
+
+    def wants_undo(self, context):
+        return not context.scene.mrt_props.dry_run  # Preview changes nothing
     bl_label = 'Preview Placement / Replace Zone'
 
     def work(self, context):

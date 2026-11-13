@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 import bpy
+from mathutils import Euler, Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / '_Taiyo_Blender_Extensions_Repo'))
@@ -163,6 +164,37 @@ def test_destination_outside_library_is_searched(fbx):
     print('PASS meshes imported outside Library are found by the plan; a destination inside Map is ignored')
 
 
+def test_fbx_object_transform_is_baked_into_the_mesh(fbx):
+    """A Y-up/cm FBX (Houdini) arrives as rotation 90 deg / scale 0.01 over raw mesh data; placement only uses the mesh."""
+    lib, mapc = fixture(fbx)
+    original = mesh_import.fbx_import
+
+    def fake_import(path):
+        for name, shift in (('HouA', 0.0), ('HouB', 500.0)):
+            m = bpy.data.meshes.new(name)
+            m.from_pydata([(shift, 0, 0), (shift + 100, 0, 0), (shift, 0, 300)], [], [(0, 1, 2)])  # 3 m tall after scaling
+            ob = bpy.data.objects.new(name, m)
+            ob.rotation_euler = Euler((1.5707963, 0, 0))
+            ob.scale = (0.01, 0.01, 0.01)
+            bpy.context.scene.collection.objects.link(ob)
+        return {'FINISHED'}
+
+    mesh_import.fbx_import = fake_import
+    try:
+        h = run()
+    finally:
+        mesh_import.fbx_import = original
+    a, b = bpy.data.objects['HouA'], bpy.data.objects['HouB']
+    for ob in (a, b):
+        assert ob.matrix_basis == Matrix.Identity(4) and tuple(ob.scale) == (1, 1, 1), (ob.name, ob.rotation_euler, ob.scale)
+    # raw (0,0,300) -> rotate X 90 deg -> (0,-300,0) -> scale 0.01 -> (0,-3,0)
+    assert (a.data.vertices[2].co - Vector((0, -3, 0))).length < 1e-4, a.data.vertices[2].co
+    assert (b.data.vertices[0].co - Vector((5, 0, 0))).length < 1e-4, b.data.vertices[0].co
+    assert 'baked into 2 meshes' in h.result, h.result
+    # An identity FBX object is left alone
+    print('PASS the FBX object transform (rotation, scale) is baked into the imported mesh data')
+
+
 def test_cancel_removes_new_collections(fbx):
     lib, mapc = fixture(fbx)
     write_csv([('NewA', 'Area2/NewRocks'), ('NewB', 'Area9/Deep/Er')])
@@ -183,7 +215,7 @@ def test_cancel_removes_new_collections(fbx):
 
 fbx = build_fbx()
 for test in (test_default_destination_and_no_csv, test_user_chosen_destination, test_structure_follows_colname,
-             test_existing_structure_is_reused_and_conflicts_warn, test_destination_outside_library_is_searched,
+             test_existing_structure_is_reused_and_conflicts_warn, test_destination_outside_library_is_searched, test_fbx_object_transform_is_baked_into_the_mesh,
              test_cancel_removes_new_collections):
     test(fbx)
 mrt.unregister()
