@@ -84,7 +84,7 @@ def fixture():
 def write_csv(path, rows=None, header=None):
     with open(path, 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
-        w.writerow(header or mrt.placement.CSV_COLUMNS)
+        w.writerow(header or [*mrt.placement.CSV_COLUMNS, 'use'])
         w.writerows(rows if rows is not None else [[1,3,4,5,math.degrees(.1),math.degrees(.2),math.degrees(.3),1,2,3,'Rock','Rocks']])
 
 
@@ -121,8 +121,8 @@ def test_placement():
     assert len(new) == 1 and new[0].data == source.data and new[0].parent is None and new[0].rotation_mode == 'XYZ'
     assert tuple(old.location) == (10, 0, 0) and old.users_collection == (rocks,) and new[0].users_collection == (rocks,)
     assert tuple(new[0].location) == (20, 0, 0) and tuple(old.scale) == (1, 1, 1)
-    # Houdini removed the object: it is retired into the excluded archive, hierarchy kept.
-    write_csv(p.placement_csv, [[-1, 20, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks']])
+    # Houdini removed the object (use = 0): it is retired into the excluded archive, hierarchy kept.
+    write_csv(p.placement_csv, [[1, 10, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks', 0], [-1, 20, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks']])
     assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
     archive = bpy.context.scene.collection.children['_Replaced_ZONE_A']
     mirror = archive.children['Rocks [ZONE_A]']
@@ -160,7 +160,8 @@ def test_rollback():
         old2['ub_zone'] = 'ZONE_A'
         old2['ub_csv_id'] = 2
         bpy.context.view_layer.update()
-        write_csv(p.placement_csv, [[1, 10, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks'], [-1, 20, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks']])
+        write_csv(p.placement_csv, [[1, 10, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks'], [2, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks', 0],
+                                    [-1, 20, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks']])
         p.dry_run = False
         old.select_set(True)
         old.hide_set(True)

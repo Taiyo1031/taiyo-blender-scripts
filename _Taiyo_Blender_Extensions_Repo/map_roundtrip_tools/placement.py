@@ -165,7 +165,10 @@ class Plan:
     unchanged: list = field(default_factory=list)   # objects that stay exactly as they are
     moved: list = field(default_factory=list)       # row indices whose object changes
     collection_moves: set = field(default_factory=set)  # row indices that also change collection
-    retired: list = field(default_factory=list)     # zone objects without a row
+    retired: list = field(default_factory=list)     # zone objects whose row says use = 0
+    remove_marks: dict = field(default_factory=dict)  # zone object -> first CSV line with use = 0
+    not_in_csv: list = field(default_factory=list)  # zone objects without any row: left exactly as they are
+    unused_rows: int = 0      # rows with use = 0 (they place nothing)
     adds: list = field(default_factory=list)        # row indices that create a new object
     kept_unresolved: set = field(default_factory=set)   # zone objects whose row names a mesh that is not in Library
     owners: dict = field(default_factory=dict)      # zone object -> its collections, in export order
@@ -189,7 +192,9 @@ class Plan:
 
 
 def _parse_row(row, header, columns, line):
-    """(values, csv_id, name, colname) or an Issue for the first problem in the row."""
+    """(values, csv_id, name, colname, use) or an Issue for the first problem in the row.
+
+    The optional column `use` is 1 (or empty / missing) to use the row and 0 to remove the object with that id."""
     need = max(columns[n] for n in CSV_COLUMNS) + 1
     if len(row) < need:
         return Issue('short_row', f'Line {line}: the row has {len(row)} columns, but the header has {len(header)}; '
@@ -215,7 +220,17 @@ def _parse_row(row, header, columns, line):
     name = row[columns['objname']]
     if not name.strip():
         return Issue('empty_objname', f'Line {line}: objname is empty.', line=line, column='objname')
-    return tuple(values), csv_id, name, row[columns['colname']]
+    use = 1
+    if 'use' in columns and columns['use'] < len(row) and row[columns['use']].strip():
+        raw = row[columns['use']]
+        try:
+            number = float(raw)
+        except ValueError:
+            number = None
+        if number not in (0.0, 1.0):
+            return Issue('bad_use', f'Line {line}: column use = {raw!r} must be 0 (remove) or 1 (use).', line=line, column='use', value=raw)
+        use = int(number)
+    return tuple(values), csv_id, name, row[columns['colname']], use
 
 
 def _transform_differs(ob, loc, rot, scale):
@@ -314,7 +329,16 @@ def build_plan(p, progress=lambda *args: None):
                 plan.invalid += 1
                 issues.append(parsed)
             else:
-                values, csv_id, name, colname = parsed
+                values, csv_id, name, colname, use = parsed
+                if not use:
+                    plan.unused_rows += 1
+                    matched = known.get(csv_id) if plan.id_check and csv_id != NEW_MESH_ID else None
+                    if matched is not None:
+                        plan.remove_marks.setdefault(matched, line)
+                    if number % 256 == 0:
+                        progress('Planning CSV', number, number)
+                        yield
+                    continue
                 if csv_id == NEW_MESH_ID:
                     plan.new_rows += 1
                 matched = None
@@ -404,13 +428,12 @@ def build_plan(p, progress=lambda *args: None):
         return colname_parts(colname, map_name) if colname else ()
 
     claimed_obs = {ob for ob in plan.row_ob if ob is not None} | plan.kept_unresolved
-    plan.retired = [ob for ob in plan.old if ob not in claimed_obs]
-    # Add the many_retired warning after calculating retired.
-    if len(plan.retired) >= 10 and len(plan.retired) * 2 >= len(plan.old) and plan.old:
-        percent = round(100 * len(plan.retired) / len(plan.old))
-        issues.append(Issue('many_retired', f'{len(plan.retired)} of {len(plan.old)} zone objects ({percent}%) have no row in the CSV '
-                            f'and will be moved to _Replaced_{plan.zone}. Is the returned CSV complete? Restore Original Map undoes this.',
-                            severity='warning'))
+    for ob, line in plan.remove_marks.items():
+        if ob in claimed_obs:
+            issues.append(Issue('use_conflict', f'Line {line}: {ob.name} has use = 0 here, but another row with use = 1 uses the same id; '
+                                f'the object was kept.', severity='warning', line=line, column='use', value='0'))
+    plan.retired = [ob for ob in plan.old if ob in plan.remove_marks and ob not in claimed_obs]
+    plan.not_in_csv = [ob for ob in plan.old if ob not in claimed_obs and ob not in plan.remove_marks]
 
     for i, ob in enumerate(plan.row_ob):
         if ob is None:
@@ -431,6 +454,7 @@ def build_plan(p, progress=lambda *args: None):
         if i % 1024 == 0:
             yield
     plan.unchanged.extend(ob for ob in plan.old if ob in plan.kept_unresolved)
+    plan.unchanged.extend(plan.not_in_csv)
     for path_text in sorted('/'.join(parts) for parts in plan.new_collections if '/'.join(parts) in plan.name_conflicts):
         issues.append(Issue('name_conflict', f'Collection {path_text!r}: the name {path_text.split(COLNAME_SEPARATOR)[-1]!r} is already used '
                             f'by another collection in this file, so Blender names the new one with a suffix (.001).', severity='warning'))
@@ -442,6 +466,8 @@ def publish_plan(p, plan):
     p.plan_unchanged = len(plan.unchanged)
     p.plan_moved = len(plan.moved)
     p.plan_archive = len(plan.retired)
+    p.plan_not_in_csv = len(plan.not_in_csv)
+    p.plan_unused_rows = plan.unused_rows
     p.plan_create = len(plan.adds)
     p.plan_invalid = plan.invalid
     p.plan_missing_rows = plan.missing_rows
@@ -460,14 +486,14 @@ def publish_plan(p, plan):
 
 
 def plan_summary(plan):
-    return (f'{plan.zone}: unchanged {len(plan.unchanged)}, moved {len(plan.moved)}, retired {len(plan.retired)}, '
+    return (f'{plan.zone}: unchanged {len(plan.unchanged)} (not in CSV {len(plan.not_in_csv)}), moved {len(plan.moved)}, retired {len(plan.retired)} (use 0 rows {plan.unused_rows}), '
             f'added {len(plan.adds)}, skipped {plan.missing_rows} (not in Library), invalid rows {plan.invalid}, '
             f'new meshes {plan.added} of {plan.new_rows} rows with id -1, unknown id {plan.unknown_id_rows}')
 
 
 class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
     bl_description = ('Dry Run ONなら計画だけ確認します。OFFなら、CSVと照らして、動いたObjectはその場で移動し、'
-                      '使わなくなったObjectは退避用Collectionへ階層のまま移し、新しいObjectを作ります。元のマップへ復元できます')
+                      'CSVの`use`列が0のObjectは退避用Collectionへ階層のまま移し、新しいObjectを作ります。CSVに行が無いObjectは動かしません。元のマップへ復元できます')
     bl_idname = 'mrt.replace_zone'
     undo_push = True
 

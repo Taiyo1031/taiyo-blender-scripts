@@ -50,13 +50,18 @@ def write_csv(rows):
     path = TEMP / 'ZONE_A.csv'
     with open(path, 'w', newline='') as f:
         w = csv.writer(f)
-        w.writerow(placement.CSV_COLUMNS)
+        w.writerow([*placement.CSV_COLUMNS, 'use'])
         w.writerows(rows)
     p.placement_csv = str(path)
 
 
 def row(i, x, col='', name='Rock'):
     return [i, x, 0, 0, 0, 0, 0, 1, 1, 1, name, col]
+
+
+def gone(i):
+    """A row with use = 0: the object with this id is removed from the map."""
+    return [i, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', '', 0]
 
 
 def fixture():
@@ -107,7 +112,7 @@ def imported_objects(olds):
 def scenario():
     """id1 unchanged, id2 moved, id3 removed, id4 moved to a new collection, two new objects (one is a repeated id)."""
     mapc, area, olds = fixture()
-    write_csv([row(1, 0, 'Area1'), row(2, 100, 'Area1'), row(4, 30, 'Area2'), row(-1, 200, 'Area1'), row(1, 300, 'Area1')])
+    write_csv([row(1, 0, 'Area1'), row(2, 100, 'Area1'), gone(3), row(4, 30, 'Area2'), row(-1, 200, 'Area1'), row(1, 300, 'Area1')])
     replace()
     return mapc, area, olds
 
@@ -167,7 +172,7 @@ def test_restore_and_reapply():
 
 def test_second_replace_keeps_the_first_original():
     mapc, area, olds = scenario()
-    write_csv([row(1, 0, 'Area1'), row(2, 500, 'Area1'), row(4, 30, 'Area2')])  # id2 moves again, id3 stays retired, fresh ids gone
+    write_csv([row(1, 0, 'Area1'), row(2, 500, 'Area1'), gone(3), row(4, 30, 'Area2')])  # id2 moves again, id3 stays retired, fresh ids gone
     # the new objects were exported again in a real flow; here they simply have no ids, so they are retired
     replace()
     assert tuple(olds[2].location) == (500, 0, 0)

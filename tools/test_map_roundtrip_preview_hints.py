@@ -48,13 +48,14 @@ def fixture(zone_objects=30):
     p.name_mode = 'numeric_suffix'
 
 
-def plan_for(rows):
+def plan_for(rows, use_column=True):
+    """rows are (id, objname) or (id, objname, use); `use` is written as given."""
     path = TEMP / 'Z.csv'
     with open(path, 'w', newline='') as f:
         w = csv.writer(f)
-        w.writerow(['id', 'tx', 'ty', 'tz', 'rx', 'ry', 'rz', 'sx', 'sy', 'sz', 'objname', 'colname'])
-        for csv_id, name in rows:
-            w.writerow([csv_id, 0, 0, 0, 0, 0, 0, 1, 1, 1, name, ''])
+        w.writerow(['id', 'tx', 'ty', 'tz', 'rx', 'ry', 'rz', 'sx', 'sy', 'sz', 'objname', 'colname', *(['use'] if use_column else [])])
+        for csv_id, name, *use in rows:
+            w.writerow([csv_id, 0, 0, 0, 0, 0, 0, 1, 1, 1, name, '', *use])
     p.placement_csv = str(path)
     return drain(placement.build_plan(p))
 
@@ -109,25 +110,70 @@ def test_duplicate_library_names_are_one_warning_per_name():
     print('PASS a duplicated Library name gives one warning that lists every object')
 
 
-def test_large_retire_warning():
+def names(objects):
+    return sorted(ob.name for ob in objects)
+
+
+def other_issues(plan):
+    """Issues except the Library duplicate-name warnings that this fixture always has."""
+    return [i.message for i in plan.issues if i.kind != 'duplicate_library_name']
+
+
+def test_use_zero_retires_only_marked_objects():
+    fixture(5)  # ids 0..4
+    plan = plan_for([(0, 'Rock_Def_1'), (1, 'Rock_Def_1', 0), (2, 'Rock_Def_1', 1), (3, 'Rock_Def_1', 0)])  # id 4 has no row
+    assert len(plan.rows) == 2 and plan.unused_rows == 2, (len(plan.rows), plan.unused_rows)
+    assert names(plan.retired) == ['Rock_Def_1.001', 'Rock_Def_1.003'], names(plan.retired)
+    assert names(plan.not_in_csv) == ['Rock_Def_1.004'], names(plan.not_in_csv)
+    assert 'Rock_Def_1.004' in names(plan.unchanged), names(plan.unchanged)
+    assert not kinds(plan, 'many_retired') and not other_issues(plan), other_issues(plan)
+    placement.publish_plan(p, plan)
+    assert (p.plan_archive, p.plan_not_in_csv, p.plan_unused_rows, p.plan_unchanged) == (2, 1, 2, 3), \
+        (p.plan_archive, p.plan_not_in_csv, p.plan_unused_rows, p.plan_unchanged)
+    summary = placement.plan_summary(plan)
+    assert 'retired 2 (use 0 rows 2)' in summary and 'not in CSV 1' in summary, summary
+    print('PASS use = 0 retires only the marked objects; objects without a row stay as they are')
+
+
+def test_use_zero_rows_place_nothing_and_say_nothing():
+    fixture(3)
+    plan = plan_for([(99, 'NoSuchMesh', 0), (-1, 'NoSuchMesh', 0), (0, 'Rock_Def_1', 1)])
+    assert plan.unused_rows == 2 and len(plan.rows) == 1 and plan.new_rows == 0 and plan.unknown_id_rows == 0
+    assert plan.missing_rows == 0 and not other_issues(plan), other_issues(plan)
+    assert plan.retired == [] and len(plan.not_in_csv) == 2
+    print('PASS a use = 0 row with an unknown id or a missing mesh is ignored without a warning')
+
+
+def test_bad_use_value_and_empty_use():
+    fixture(3)
+    plan = plan_for([(0, 'Rock_Def_1', 'x'), (1, 'Rock_Def_1', 2), (2, 'Rock_Def_1', '')])
+    bad = kinds(plan, 'bad_use')
+    assert len(bad) == 2 and plan.invalid == 2, [i.message for i in plan.issues]
+    assert 'must be 0' in bad[0].message and bad[0].line == 2 and bad[0].column == 'use' and bad[0].value == 'x', bad[0]
+    assert len(plan.rows) == 1 and plan.unused_rows == 0  # an empty use cell means 1
+    print('PASS use accepts only 0 or 1 (empty = 1); other values are invalid rows')
+
+
+def test_use_zero_loses_to_a_use_one_row_of_the_same_id():
+    fixture(3)
+    plan = plan_for([(1, 'Rock_Def_1', 0), (1, 'Rock_Def_1', 1)])
+    assert plan.retired == [] and len(kinds(plan, 'use_conflict')) == 1, [i.message for i in plan.issues]
+    print('PASS the same id with use = 0 and use = 1: the object is kept and a warning says so')
+
+
+def test_without_a_use_column_nothing_is_retired():
     fixture(30)
-    plan = plan_for([(0, 'Rock_Def_1'), (1, 'Rock_Def_1')])  # 28 of 30 zone objects have no row
-    warnings = kinds(plan, 'many_retired')
-    assert len(warnings) == 1, [i.message for i in plan.issues]
-    assert warnings[0].severity == 'warning' and '28 of 30' in warnings[0].message and '93%' in warnings[0].message, warnings[0].message
-    assert 'CSV' in warnings[0].message and 'Restore Original Map' in warnings[0].message
-    fixture(30)
-    assert not kinds(plan_for([(i, 'Rock_Def_1') for i in range(29)]), 'many_retired')  # only 1 of 30 retired
-    fixture(8)
-    assert not kinds(plan_for([(0, 'Rock_Def_1')]), 'many_retired')  # 7 of 8, but too few objects to matter
-    fixture(0)
-    assert not kinds(plan_for([(-1, 'Rock_Def_1')]), 'many_retired')  # an empty zone retires nothing
-    print('PASS retiring most of a zone (at least 10 objects, half or more) is warned about')
+    plan = plan_for([(0, 'Rock_Def_1'), (1, 'Rock_Def_1')], use_column=False)
+    assert plan.retired == [] and len(plan.not_in_csv) == 28 and plan.unused_rows == 0
+    assert not kinds(plan, 'many_retired')
+    print('PASS a CSV without a use column keeps every object that has no row (no mass retire)')
 
 
 for test in (test_new_mesh_hint_survives_similar_names, test_new_mesh_rows_are_counted_even_when_the_mesh_is_not_in_the_library,
              test_new_mesh_hint_without_similar_names,
-             test_duplicate_library_names_are_one_warning_per_name, test_large_retire_warning):
+             test_duplicate_library_names_are_one_warning_per_name, test_use_zero_retires_only_marked_objects,
+             test_use_zero_rows_place_nothing_and_say_nothing, test_bad_use_value_and_empty_use,
+             test_use_zero_loses_to_a_use_one_row_of_the_same_id, test_without_a_use_column_nothing_is_retired):
     test()
 mrt.unregister()
 print('MRT_PREVIEW_HINTS_PASSED')

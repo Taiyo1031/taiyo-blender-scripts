@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.8.1 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.9.0 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -168,12 +168,14 @@ Replace Zoneは、戻りCSVの各行を、書き出し時に保存した`ub_csv_
 |---|---|
 | 変わっていない（位置・回転・拡大・Mesh・Collectionが同じ） | 何もしません。モディファイア・Custom Properties・親子関係はそのまま残ります。 |
 | Houdiniで**動かした**（位置・回転・拡大）／Meshを差し替えた／別のCollectionへ移した | **同じObjectをその場で更新します**（Custom Propertiesなどは残ります）。更新前の状態は保存されます。 |
-| Houdiniで**削除した**（その`id`の行がCSVにない） | 退避用のCollection`_Replaced_ZONE_A`へ、**元と同じ階層のまま**移します。 |
+| Houdiniで**削除した**（その`id`の行の`use`列が`0`） | 退避用のCollection`_Replaced_ZONE_A`へ、**元と同じ階層のまま**移します。 |
+| 戻りCSVに**行が無い**`id`（`use`列が無いCSVも同じ） | **何もしません**。元の位置にそのまま残り、動いていないものとして数えます（0.9.0）。 |
 | 新しく追加した（`id`が-1）／`id`が重複した行（Houdiniで複製した） | 新しいObjectを作ります。 |
 | `id`が書き出し時に無かった行 | 使いません（件数を警告します）。 |
 | `objname`がLibraryに無い行で、既存のObjectを指す | そのObjectは**変えずに残し**、エラーとして報告します（削除扱いにはしません）。 |
 
-- **削除はしません**。`Delete`の選択肢はなくなり、使わなくなったObjectはいつも退避されます。
+- **削除はしません**。`Delete`の選択肢はなくなり、`use`が`0`のObjectは退避されます。
+- **`use`列（0.9.0）**: 戻りCSVに`use`という列を足すと、行ごとに使うか消すかを決められます。`1`（または空欄）は使う、`0`は、その`id`のObjectを元のマップから消す（退避する）という意味です。`use`が`0`の行は何も置かず、`objname`がLibraryに無くても、`id`が-1や不明でも、警告は出しません（Previewの`use 0 rows`に数えます）。`use`が`0`と`1`以外の値（`x`・`2`など）の行は、使わない行として`bad_use`のエラーで報告します。同じ`id`に`0`の行と`1`の行があるときは、`1`を優先してObjectを残し、警告します（`use_conflict`）。`use`列が無い古いCSVでも使えますが、その場合はObjectを退避しません。
 - **ub_csv_idが必要です**。ゾーンのObjectに`ub_csv_id`が1つも無いときは、`Run Export Zone CSV with this version first.`というエラーになります。先に**Export Zone CSV**をやり直してください。ゾーンに1つもObjectが無いときは、すべての行を新しいObjectとして作ります。
 - **退避用のCollection**: `_Replaced_ZONE_A`は、既定では`Scene Collection`の直下に作られ、View Layerから除外されます。**場所は`Import`パネルの`Archive To`で指定できます**（0.8.0）。空欄ならシーンの最上位、Collectionを選ぶと、その中に作ります。`Map`と`Library`の中、このシーンに無いCollectionは選べません（選ぶとReplaceが止まります）。既に`_Replaced_ZONE_A`がある場合は、`Archive To`を変えても、その場所のまま使います。中は、元のCollectionと同じ階層を`名前 [ZONE_A]`というCollectionで再現します（Blenderは同じ名前のCollectionを持てないためです）。`ub_zone`タグは外れ、`ub_archived_from=ZONE_A`が付きます。
 - **進捗とキャンセル**: 進捗と残り時間が出ます。ESCで中断すると、すべて元に戻ります。
@@ -238,7 +240,7 @@ Preview Placementは、CSVの**行・列・値・理由**を出します。パ�
 | 不明な`id`／重複した`id` | 警告。どの行の`id`で、どの行と重なるかを出します。 |
 | `colname`の問題 | 空の区切りを含む（警告）、名前が衝突する（警告）。 |
 | Libraryで名前が重複 | 正規化した名前が複数のObjectに一致し、最初を使ったこと（警告。名前ごとに1件で、該当するObjectをすべて並べます）。 |
-| ゾーンの大半が退避される | ゾーンのObjectが10個以上で、その半分以上にCSVの行が無いとき（警告 `many_retired`）。「戻りのCSVは全部入っていますか」と確認します。Houdiniで意図して結合・削除した場合は、そのまま続けて構いません。 |
+| `use`の値 | `0`と`1`以外（エラー`bad_use`。行は使いません）／同じ`id`に`use = 0`と`use = 1`の行がある（警告`use_conflict`。Objectは残します）。0.9.0で、CSVに行が無いだけでは退避しなくなったため、旧`many_retired`警告はなくなりました。 |
 
 ファイル全体の問題は、エラーで止まります: CSVが空／列が足りない（見つかった列も表示）／ファイルが無い（パスも表示）／`Library`・`Map`が未設定／編集できないObjectやCollection／`ub_csv_id`が無い／元のマップを表示中。
 
