@@ -15,6 +15,17 @@ from .journal import (Journal, STATE_AFTER, STATE_BEFORE, STATE_KEY, apply_absen
                       ensure_archive, find_layer, map_state, read_run, write_run)  # noqa: F401 (find_layer is re-exported)
 from .placement_report import Issue
 
+INTENDED_NAME_KEY = 'mrt_intended_name'  # the name the CSV asked for, when Blender added a suffix (UNI -> UNI.001)
+ACTUAL_NAME_KEY = 'mrt_actual_name'      # the suffixed name at creation; the tag is ignored once the collection is renamed
+
+
+def collection_label(collection):
+    """The name a collection has in a CSV colname: the requested name for a collection that Replace created with a suffix."""
+    intended = collection.get(INTENDED_NAME_KEY)
+    if intended and collection.get(ACTUAL_NAME_KEY) == collection.name:
+        return intended
+    return collection.name
+
 
 def normalize(name, mode):
     if mode == 'numeric_suffix':
@@ -97,24 +108,29 @@ def collection_colname(collection, map_coll, parents, roots):
     names, node, seen = [], collection, set()
     while node is not None and node != map_coll and node not in roots and node not in seen:
         seen.add(node)
-        names.append(node.name)
+        names.append(collection_label(node))
         node = parents.get(node)
     if any(COLNAME_SEPARATOR in name for name in names):
-        return collection.name
+        return collection_label(collection)
     return COLNAME_SEPARATOR.join(reversed(names))
 
 
 def map_collection_paths(map_coll):
     """{(name, ...): collection} for every collection below the Map collection."""
-    index, stack, seen = {}, [(map_coll, ())], set()
+    index, stack, seen, suffixed = {}, [(map_coll, ())], set(), []
     while stack:
         c, path = stack.pop()
         if c in seen:
             continue
         seen.add(c)
         if path:
-            index.setdefault(path, c)
-        stack.extend((child, path + (child.name,)) for child in reversed(tuple(c.children)))
+            if path[-1] == c.name:
+                index.setdefault(path, c)
+            else:
+                suffixed.append((path, c))  # a collection found by the name that was asked for, not its own: second choice
+        stack.extend((child, path + (collection_label(child),)) for child in reversed(tuple(c.children)))
+    for path, c in suffixed:
+        index.setdefault(path, c)
     return index
 
 
@@ -239,7 +255,9 @@ def _transform_differs(ob, loc, rot, scale):
     for a, b in zip((*ob_loc, *ob_scale), (*loc, *scale)):
         if abs(a - b) > 1e-5 + 1e-6 * abs(b):
             return True
-    return ob_rot.rotation_difference(Euler(rot, 'XYZ').to_quaternion()).angle > 1e-4
+    angle = ob_rot.rotation_difference(Euler(rot, 'XYZ').to_quaternion()).angle
+    # q and -q are the same rotation: the difference then comes out as 2*pi instead of 0
+    return min(angle, 2 * math.pi - angle) > 1e-4
 
 
 def build_plan(p, progress=lambda *args: None):
@@ -311,6 +329,14 @@ def build_plan(p, progress=lambda *args: None):
     if plan.old and not known:
         raise ValueError(f'{zone} has {len(plan.old)} objects but none has ub_csv_id. Run Export Zone CSV with this version first.')
     plan.id_check = bool(known)
+    fresh = {}  # mesh -> objects that an earlier Replace made from id -1 rows (no exported id yet), in name order
+    for ob in plan.old:
+        if ob.get(CSV_ID_KEY) is None:
+            spec = read_run(ob)
+            if spec and spec.get('zone') == zone and 'before' in spec and spec['before'] is None and 'after' not in spec:
+                fresh.setdefault(ob.data, []).append(ob)
+    for objects in fresh.values():
+        objects.sort(key=lambda o: o.name)
     claimed = {}  # csv id -> first line that used it
     hints = {}
     with open(path, newline='', encoding='utf-8-sig') as stream:
@@ -387,7 +413,13 @@ def build_plan(p, progress=lambda *args: None):
                     else:
                         tx, ty, tz, rx, ry, rz, sx, sy, sz = values
                         factor = math.pi / 180.0
-                        plan.rows.append((mesh, name, (tx, ty, tz), (rx * factor, ry * factor, rz * factor), (sx, sy, sz), colname))
+                        rot = (rx * factor, ry * factor, rz * factor)
+                        if csv_id == NEW_MESH_ID and fresh.get(mesh):
+                            # Replace was run before with this row: update that object instead of making another one
+                            candidates = fresh[mesh]
+                            matched = next((ob for ob in candidates if not _transform_differs(ob, (tx, ty, tz), rot, (sx, sy, sz))), candidates[0])
+                            candidates.remove(matched)
+                        plan.rows.append((mesh, name, (tx, ty, tz), rot, (sx, sy, sz), colname))
                         plan.row_ob.append(matched)
                         plan.row_line.append(line)
                         if csv_id == NEW_MESH_ID:
@@ -428,6 +460,10 @@ def build_plan(p, progress=lambda *args: None):
         return colname_parts(colname, map_name) if colname else ()
 
     claimed_obs = {ob for ob in plan.row_ob if ob is not None} | plan.kept_unresolved
+    left = sum(len(objects) for objects in fresh.values())
+    if left:
+        issues.append(Issue('unmatched_added', f'{left} objects made by an earlier Replace have no matching id -1 row in this CSV; '
+                            f'they were left as they are.', severity='warning'))
     for ob, line in plan.remove_marks.items():
         if ob in claimed_obs:
             issues.append(Issue('use_conflict', f'Line {line}: {ob.name} has use = 0 here, but another row with use = 1 uses the same id; '
@@ -542,6 +578,9 @@ class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
             made, attach = {}, []
             for path in sorted(plan.new_collections):  # a parent path sorts before its children
                 c = bpy.data.collections.new(path[-1])
+                if c.name != path[-1]:  # Blender added a suffix: remember the name the CSV asked for
+                    c[INTENDED_NAME_KEY] = path[-1]
+                    c[ACTUAL_NAME_KEY] = c.name
                 journal.created_collection(c)
                 made[path] = c
                 if path[:-1] in made:
