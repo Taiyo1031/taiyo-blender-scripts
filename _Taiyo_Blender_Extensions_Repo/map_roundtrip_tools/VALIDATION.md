@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.8.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.8.1**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -204,3 +204,11 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - 回帰: `tools/test_map_roundtrip_zone_rename.py` `_archive_dest.py` `_preview_hints.py` `_mesh_import_paths.py`（OFF/ON）`_zone_registry.py`（Empty削除）。
 - LM Studioの使用: Previewの案内3点（`placement.py`）は1回目で合格しました（ただし重複名の警告に最初のObject名が抜けていたのと、新しいMeshの案内が二重に出る場合があったため、手で直しました）。Rename Zone（`zone_rename.py`）は5回の試行で合格せず、Objectの数え方と余分な未使用変数・空行を手で直しました。
 - 未確認: 他の`.blend`で`Archive To`に既存の`_Replaced_*`がある場合の移動、複数シーンにまたがるゾーン名の変更、Blender 5.x、Linux、Houdini/Unrealでの実行。
+
+## 0.8.1の追加（`id`が-1の行の数の表示）
+
+- 実シーンのコピーで確認しました。Import New Meshesの前のPreviewは、`id`が-1の行が8行あるのに`New meshes (id -1): 0`でした（置けるMeshの数だけを数えていたため）。修正後は`0 of 8 rows`と、赤字の案内が出ます（Blender 4.5.9の画面）。取り込み後は`8 of 8 rows`です。
+- 回帰: `tools/test_map_roundtrip_preview_hints.py`（3行のうち1行だけMeshがLibraryにあるとき`1 of 3`）。
+- **見つけたが、直していない動き**（実シーンのコピー、Blender 4.5.9）:
+  - Replace Zoneの後で、もう一度Previewすると`unchanged 500, moved 139, retired 8, added 8`になります。`retired 8`は、前のReplaceで追加した新しい8個です。`id`が-1の行は毎回新しいObjectを作るため、Replaceを繰り返すと、前に追加したObjectが退避され、同じ数が作り直されます。
+  - `moved 139`は、`UNI`のように、他で既に使われている名前のCollectionが`UNI.001`として作られたため、`colname`の階層と名前が合わず、毎回「移動した」と判定されたものと考えられます（原因の特定は未確認）。

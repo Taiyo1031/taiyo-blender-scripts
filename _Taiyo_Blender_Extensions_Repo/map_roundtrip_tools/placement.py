@@ -180,6 +180,7 @@ class Plan:
     duplicates: int = 0
     object_names: set = field(default_factory=set)
     added: int = 0            # rows with id -1 whose Library mesh was found
+    new_rows: int = 0         # all rows with id -1, found in the Library or not
     unknown_id_rows: int = 0  # rows skipped because their id is unknown
     duplicate_id_rows: int = 0  # rows whose id was already used by an earlier row (added as new objects)
     id_check: bool = False    # whether ids were checked (the zone already has objects)
@@ -314,6 +315,8 @@ def build_plan(p, progress=lambda *args: None):
                 issues.append(parsed)
             else:
                 values, csv_id, name, colname = parsed
+                if csv_id == NEW_MESH_ID:
+                    plan.new_rows += 1
                 matched = None
                 skip = False
                 if plan.id_check and csv_id != NEW_MESH_ID:
@@ -448,6 +451,7 @@ def publish_plan(p, plan):
     p.plan_zone = plan.zone
     p.plan_collections = len(plan.new_collections)
     p.plan_added = plan.added
+    p.plan_new_rows = plan.new_rows
     p.plan_unknown_id = plan.unknown_id_rows
     p.plan_id_check = plan.id_check
     p.plan_errors = errors
@@ -458,7 +462,7 @@ def publish_plan(p, plan):
 def plan_summary(plan):
     return (f'{plan.zone}: unchanged {len(plan.unchanged)}, moved {len(plan.moved)}, retired {len(plan.retired)}, '
             f'added {len(plan.adds)}, skipped {plan.missing_rows} (not in Library), invalid rows {plan.invalid}, '
-            f'new meshes {plan.added}, unknown id {plan.unknown_id_rows}')
+            f'new meshes {plan.added} of {plan.new_rows} rows with id -1, unknown id {plan.unknown_id_rows}')
 
 
 class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
