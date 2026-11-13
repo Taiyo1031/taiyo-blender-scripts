@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.9.0 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.9.1 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -171,6 +171,7 @@ Replace Zoneは、戻りCSVの各行を、書き出し時に保存した`ub_csv_
 | Houdiniで**削除した**（その`id`の行の`use`列が`0`） | 退避用のCollection`_Replaced_ZONE_A`へ、**元と同じ階層のまま**移します。 |
 | 戻りCSVに**行が無い**`id`（`use`列が無いCSVも同じ） | **何もしません**。元の位置にそのまま残り、動いていないものとして数えます（0.9.0）。 |
 | 新しく追加した（`id`が-1）／`id`が重複した行（Houdiniで複製した） | 新しいObjectを作ります。 |
+| `id`が-1の行で、**前のReplace Zoneで作ったObjectがある**（同じMeshで、まだ書き出し直していない） | 新しくは作らず、そのObjectを更新します（0.9.1）。位置が同じなら何もしません。Mesh・位置が同じものを優先して対応づけ、足りなければ名前順です。対応する行が無くなった前回のObjectは、そのまま残し、警告`unmatched_added`を出します。 |
 | `id`が書き出し時に無かった行 | 使いません（件数を警告します）。 |
 | `objname`がLibraryに無い行で、既存のObjectを指す | そのObjectは**変えずに残し**、エラーとして報告します（削除扱いにはしません）。 |
 
@@ -238,7 +239,7 @@ Preview Placementは、CSVの**行・列・値・理由**を出します。パ�
 | `id = -1`の行の数 | パネルの`New meshes (id -1): 0 of 8 rows`は、「CSVに`id`が-1の行が8行あり、そのMeshがLibraryにあって置けるのは0個」の意味です。足りないときは、赤字で`Import New Meshes`を案内します。Previewの結果行も`new meshes 0 of 8 rows with id -1`と出ます（0.8.1）。 |
 | Libraryに無い名前 | 近い名前（`Similar Library names: ...`）、同名だがMeshでないObject（`it is a EMPTY, not a mesh`）、新しいMesh（`id = -1`の行は、似た名前があっても必ず`It is a new mesh (id -1): run Import New Meshes first.`と出ます）、既存Objectを残したこと、のどれかを添えます。 |
 | 不明な`id`／重複した`id` | 警告。どの行の`id`で、どの行と重なるかを出します。 |
-| `colname`の問題 | 空の区切りを含む（警告）、名前が衝突する（警告）。 |
+| `colname`の問題 | 空の区切りを含む（警告）、名前が衝突する（警告）。名前が衝突して`.001`が付いたCollectionは、頼んだ名前（`UNI`）を覚えており、次のPreviewでも`UNI`として見つけます（0.9.1）。手で名前を変えると、新しい名前で扱います。 |
 | Libraryで名前が重複 | 正規化した名前が複数のObjectに一致し、最初を使ったこと（警告。名前ごとに1件で、該当するObjectをすべて並べます）。 |
 | `use`の値 | `0`と`1`以外（エラー`bad_use`。行は使いません）／同じ`id`に`use = 0`と`use = 1`の行がある（警告`use_conflict`。Objectは残します）。0.9.0で、CSVに行が無いだけでは退避しなくなったため、旧`many_retired`警告はなくなりました。 |
 

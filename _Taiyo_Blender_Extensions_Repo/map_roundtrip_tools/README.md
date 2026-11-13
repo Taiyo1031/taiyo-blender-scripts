@@ -1,6 +1,6 @@
 # Map Roundtrip Tools
 
-**対象version: 0.9.0 / Blender 4.5.0以上**
+**対象version: 0.9.1 / Blender 4.5.0以上**
 
 ゾーン管理・配置CSV・HoudiniとのFBX往復・リンク複製での配置復元を担当するExtensionです。Unreal Bridge Toolsなしで利用できます。
 
@@ -18,6 +18,8 @@
 `Zone Empties`（折りたたみ）にはEmptyの一覧・検索・`Select Zone Empties`があります。
 
 CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持します。Mesh CandidatesでMap配下／現在Sceneを選べます。旧UBTの登録ゾーン・EmptyのAdd/Subtract・登録解除状態も読み取れます。
+
+0.9.0からの変更（0.9.1、不具合の修正）: ①Replace Zoneを同じCSVで繰り返すと、`id`が-1の行のObjectが毎回増えていました。前回のReplaceで作ったObjectを`id`が-1の行へ対応づけて更新します。②名前が衝突して`.001`が付いたCollectionが、毎回「移動」と判定され、新しいCollectionも作られていました。頼んだ名前を覚えて、同じCollectionとして扱います。③回転が変わっていないObjectが「移動」と数えられることがありました（同じ回転でも、四元数の符号が逆だと差が360度と出ていました）。実シーンのコピーでは、Replace後のPreviewが`moved 139`、`added 8`から、どちらも0になりました。
 
 0.8.1からの変更（0.9.0、**動作の変更**）: 戻りCSVに`use`列（`1`＝使う、`0`＝元のマップから消す）を足せるようになりました。消す（`_Replaced_<ゾーン名>`へ退避する）のは、`use`が`0`の行の`id`のObjectだけです。**戻りCSVに行が無い`id`のObjectは、動かさず、そのまま残します**（これまでは退避していました）。`use`が`0`の行は何も置かず、警告も出しません。`use`列が無いCSVは、すべて使う行として読みます。Previewには`Retire N (use 0: M rows)`と`Not in CSV, left as they are: N`が出ます。大量退避の警告`many_retired`はなくなりました。
 
