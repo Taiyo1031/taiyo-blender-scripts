@@ -191,3 +191,7 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - 修正後は、取り込み時にObjectの変換をMeshデータへ焼き込みます。`Gasyou_522_F_560`の寸法は、Library側の同種Meshと同じ向き・m単位（0.16×4.7×2.24）になり、置いたObjectの中心はCSVの位置（-21.56, -10.46, 8.89）と一致しました。`Comb`系もほかの部材と同じ範囲（約 -20.5, -9.2, 6〜7）に入りました（Blender 4.5.9）。
 - 回帰: `tools/test_map_roundtrip_mesh_import_paths.py`（回転・スケール付きのObjectを模擬して、頂点の世界座標が保たれ、Objectの変換が単位になる）。
 - 未確認: スケールが負（ミラー）のObject、同じMeshデータを違う変換で共有するFBX、Unrealなど他ツールのFBX。
+- **実画面の確認**（Blender 4.5.9のGUI、実シーンのコピー、`--enable-event-simulate`）: Import New Meshes（8個）→ Preview（`added 8`、エラー0）→ Replace Zone中に物理ESC（8個を巻き戻し、ゾーンのObject 3,258個が開始時と完全に一致）→ Replace Zone → Restore Original Map（開始時と完全に一致）→ Re-apply Imported Map（新しい8個が戻る）→ Ctrl+Z（Replace前と完全に一致、アーカイブも消える）→ Ctrl+Shift+Z（Replace後に戻る）。いずれも成功しました。
+- 実画面の確認で見つけた不具合: Ctrl+Zの後、退避したObject 3,155個の`ub_zone`などが戻りませんでした。Objectのカスタムプロパティだけの変更はUndoに記録されないためです。書き込みのたびに`update_tag()`を呼び、Replace・Restore・Importが1回ずつUndoできるようにしました。6万件の実測では、Replace 約13.8秒（0.7.0は約11.2秒）、Restore 約3.9秒（約3.4秒）で、最長の分割できない1ステップは約2.9秒でした。`update_tag`の分は少し遅くなっています。
+- 実画面の確認で見つけたUIの問題: Restore Original Mapが、長い警告リストの下にあり、スクロールしないと見えませんでした。ボタンを警告リストの上へ移しました。
+- 実GUIで、取り込みは約3〜22秒（FBX読み込み中の最長1ステップ 2.4〜17.9秒）でした。FBXの読み込み自体は分割できません。

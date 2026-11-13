@@ -79,6 +79,7 @@ def choose_colname(colnames):
 class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
     bl_description = '指定したMesh FBXをLibraryへ取り込みます。配置を置換する操作ではありません'
     bl_idname = 'mrt.import_meshes'
+    undo_push = True
     bl_label = 'Import New Meshes'
 
     def work(self, context):

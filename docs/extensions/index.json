@@ -557,9 +557,9 @@
         "Object"
       ],
       "archive_url": "./map_roundtrip_tools-0.7.2.zip",
-      "archive_size": 168824,
-      "archive_hash": "sha256:9079c7ada96bfc7dcfc9dbc2c78f2d4a56dbdb32aa8a5ac8450eaa2a7f795cb9",
-      "taiyo_updated_at": 1794532479
+      "archive_size": 169924,
+      "archive_hash": "sha256:f7c6c9870e9307039bbd360683ff44d28d7518410f5178ee27d699cbbc6360a3",
+      "taiyo_updated_at": 1794534076
     }
   ]
 }

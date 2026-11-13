@@ -19,6 +19,10 @@
 
 CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持します。Mesh CandidatesでMap配下／現在Sceneを選べます。旧UBTの登録ゾーン・EmptyのAdd/Subtract・登録解除状態も読み取れます。
 
+0.7.1からの変更（追加の修正）:
+- **Ctrl+Z（Undo）**で、Replace Zone・Restore・Import New Meshesを1回分ずつ取り消せます。以前は、退避したObjectの`ub_zone`などのカスタムプロパティが戻らず、中途半端な状態になりました。
+- **ボタンの位置**: Import パネルの`Replace Zone`欄で、`Import New Meshes`・`Replace Zone`・**`Restore Original Map`**（Replaceを1回行うと出ます）を、警告リストより上へ移しました。サイドバーをスクロールしなくても押せます。
+
 0.7.1からの変更（不具合の修正）: Houdini（Y-up・cm）のFBXから取り込んだ新しいMeshが、CSVの位置に置かれず、向きが違い、100倍の大きさになる問題を直しました。FBXのObjectは「X回転90度・スケール0.01」を持ち、Meshデータは元の座標のままです。配置はMeshデータだけを使うため、取り込み時にこの変換をMeshデータへ焼き込み、Libraryと同じ（Z-up・m・変換なし）にしました。
 
 0.7.0からの変更（不具合の修正）: `New Meshes To`を`Library`の外のCollection（例 `NewOBJs`）にしたとき、取り込んだMeshがPreview/Replaceで「Libraryに無い」と判定され、`added 0`になる問題を直しました。`New Meshes To`もLibraryと同じ検索対象です（Mapの中は対象外）。HelperもそのCollectionを含めて調べ、大規模シーンでの照合も高速にしました。

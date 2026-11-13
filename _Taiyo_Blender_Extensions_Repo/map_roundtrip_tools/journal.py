@@ -143,6 +143,7 @@ def read_run(ob):
 def write_run(journal, ob, spec):
     journal.prop(ob, RUN_KEY)
     ob[RUN_KEY] = json.dumps(spec)
+    ob.update_tag()  # a custom property alone is not tracked by Undo: without the tag Ctrl+Z leaves it as it was
 
 
 def set_tags(journal, ob, tags):
@@ -153,6 +154,7 @@ def set_tags(journal, ob, tags):
                 del ob[key]
         else:
             ob[key] = value
+    ob.update_tag()  # see write_run
 
 
 def apply_present(journal, ob, state, scene, fallback, owners):

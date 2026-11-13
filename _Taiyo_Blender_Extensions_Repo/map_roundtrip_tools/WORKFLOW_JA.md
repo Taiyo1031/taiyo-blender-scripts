@@ -154,7 +154,7 @@ Unreal用の個別SMなら、配置Objectではなく原点に置いたLibrary�
 4. `Dry Run`ONのまま**Preview Placement**を押し、計画とエラー・警告を確認します（後述）。
 5. 新しいMeshがある場合だけ、`Mesh FBX`を指定して**Import New Meshes**を実行します。
 6. もう一度Previewで確認し、`Dry Run`をOFFにして**Replace Zone**を実行します。
-7. 結果が違ったら、**Restore Original Map**で最初のマップへ戻せます。
+7. 結果が違ったら、**Restore Original Map**で最初のマップへ戻せます。ボタンは、`N`キーのサイドバー > `Map Roundtrip` > **Import** > `Replace Zone`欄の、`Replace Zone`ボタンのすぐ下にあります。**Replace Zoneを1回実行すると表示されます**（Dry Runのままでは出ません）。Ctrl+Zでも、Replace Zone 1回分を取り消せます。
 
 CSV名を`ZONE_A_return.csv`に変えて返す場合も、`Zone`はZONE_Aのままにしてください。`id`で対応づけるObjectは、その`Zone`の`ub_zone`を持つものです。
 
