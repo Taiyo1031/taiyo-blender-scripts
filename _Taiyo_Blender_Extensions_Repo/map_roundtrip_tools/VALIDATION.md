@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.7.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.7.1**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -178,3 +178,9 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - **最後の同期（約2秒）は分割できず**、UIの応答目標（0.5秒）は、この1回分だけ超えます。
 - 開発中に、動かしたObjectの選択・非表示を戻すループが68秒（2万件）かかる問題を見つけました。Collectionへの`link`を`unlink`より先に行うと、Base（選択・非表示の状態）が失われないため、そのループを無くしました（`test_selection_and_hide_flags_survive`で確認）。
 - 未測定: 数千個のCollectionを持つシーン、Helperの走査時間、Blender 5.x、Linux。
+
+## 0.7.1の追加（New Meshes ToがLibraryの外のとき）
+
+- 実シーン（約6.6万Object、ゾーン`ZONE_1A`の旧3,258個、戻りCSV 647行）のコピーで再現しました。`New Meshes To`が`Library`の外（`NewOBJs`）だと、Import New Meshesは8個を取り込めるのに、Previewは`added 0, skipped 8 (not in Library)`でした。修正後は`added 8`、エラー0件、Replace Zoneは約1.7秒でした（Blender 4.5.9, M1 Pro）。
+- 回帰: `tools/test_map_roundtrip_mesh_import_paths.py`（外にある取り込み先が探され、Mapの中の取り込み先は無視される）。
+- Helperの照合は、Mapの各Objectごとに全Library Objectを調べていたため、`Library Mesh数 × Map Object数`の時間がかかっていました。Meshデータの集合で調べるよう直しました。実シーンでのHelper走査時間は未測定です。

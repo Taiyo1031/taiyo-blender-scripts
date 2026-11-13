@@ -75,7 +75,7 @@ class MRT_PT_Import(bpy.types.Panel):
         box.label(text='Collections')
         for name in ('library_coll', 'map_coll', 'new_mesh_coll'):
             box.prop(p, name)
-        box.label(text='New meshes go under Library, at the origin.')
+        box.label(text='New meshes go to New Meshes To (default: below Library).')
         box = layout.box()
         box.label(text='Return Files')
         box.label(text='Return Folder is a reference, not an automatic import.')

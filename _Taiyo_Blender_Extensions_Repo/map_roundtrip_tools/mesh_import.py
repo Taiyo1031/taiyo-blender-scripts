@@ -5,7 +5,7 @@ import re
 import bpy
 from .chunked import ChunkedOperator
 from .mirror import mirror_path
-from .placement import colname_parts, normalize, walk_collections
+from .placement import colname_parts, normalize, walk_library
 
 LAST_IMPORTER = ''
 DEFAULT_NEW_MESHES = 'FromHoudini'
@@ -84,7 +84,7 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
         if not p.mesh_fbx or not os.path.isfile(path):
             raise ValueError('Mesh FBX does not exist.')
         exact, norm = {}, {}
-        for c in walk_collections(p.library_coll):
+        for c in walk_library(p):
             for ob in c.objects:
                 if ob.type == 'MESH':
                     exact.setdefault(ob.name, ob)

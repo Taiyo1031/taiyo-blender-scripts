@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 import bpy
 from .chunked import ChunkedOperator
-from .placement import walk_collections
+from .placement import walk_collections, walk_library
 
 USAGE = None  # the last scan (Usage); operators read helper.USAGE each time
 
@@ -20,9 +20,11 @@ def scan_usage(p, chunk=4096):
 
     # Library mesh objects
     library_objects = []
-    for coll in walk_collections(p.library_coll):
+    seen_objects = set()
+    for coll in walk_library(p):  # Library plus the New Meshes To collection
         for ob in coll.objects:
-            if ob.type == 'MESH':
+            if ob.type == 'MESH' and ob not in seen_objects:
+                seen_objects.add(ob)
                 library_objects.append(ob)
     library_objects.sort(key=lambda o: o.name)
 
@@ -35,13 +37,14 @@ def scan_usage(p, chunk=4096):
             if ob.type == 'MESH':
                 total_count += 1
 
+    library_data = {ob.data for ob in library_objects}
     done_count = 0
     for coll in walk_collections(p.map_coll):
         for ob in coll.objects:
             if ob.type == 'MESH':
                 data = ob.data
                 # LibraryのMeshデータかどうかを確認
-                is_library_mesh = any(ob2.data == data for ob2 in library_objects)
+                is_library_mesh = data in library_data
                 if is_library_mesh:
                     if data in instances:
                         instances[data].append((ob, coll))

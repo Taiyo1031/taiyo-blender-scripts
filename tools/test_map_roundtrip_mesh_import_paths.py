@@ -12,7 +12,7 @@ import bpy
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / '_Taiyo_Blender_Extensions_Repo'))
 mrt = importlib.import_module('map_roundtrip_tools')
-from map_roundtrip_tools import mesh_import
+from map_roundtrip_tools import mesh_import, placement
 from map_roundtrip_tools.chunked import Cancelled
 mrt.register()
 p = bpy.context.scene.mrt_props
@@ -146,6 +146,23 @@ def test_existing_structure_is_reused_and_conflicts_warn(fbx):
     print('PASS the most common colname wins, several colnames warn, mirrors are reused')
 
 
+def test_destination_outside_library_is_searched(fbx):
+    lib, mapc = fixture(fbx)
+    outside = bpy.data.collections.new('NewOBJs')  # next to Library, not below it
+    bpy.context.scene.collection.children.link(outside)
+    p.new_mesh_coll = outside
+    write_csv([('NewA', ''), ('NewB', ''), ('Rock', '')])
+    run()
+    plan = drain(placement.build_plan(p))
+    assert not plan.missing_rows and len(plan.adds) == 3, (plan.missing_rows, plan.adds, [i.message for i in plan.issues])
+    # The same collection inside Map must never count as Library
+    inside = bpy.data.collections.new('InMap')
+    mapc.children.link(inside)
+    p.new_mesh_coll = inside
+    assert 'InMap' not in [c.name for c in placement.walk_library(p)]
+    print('PASS meshes imported outside Library are found by the plan; a destination inside Map is ignored')
+
+
 def test_cancel_removes_new_collections(fbx):
     lib, mapc = fixture(fbx)
     write_csv([('NewA', 'Area2/NewRocks'), ('NewB', 'Area9/Deep/Er')])
@@ -166,7 +183,8 @@ def test_cancel_removes_new_collections(fbx):
 
 fbx = build_fbx()
 for test in (test_default_destination_and_no_csv, test_user_chosen_destination, test_structure_follows_colname,
-             test_existing_structure_is_reused_and_conflicts_warn, test_cancel_removes_new_collections):
+             test_existing_structure_is_reused_and_conflicts_warn, test_destination_outside_library_is_searched,
+             test_cancel_removes_new_collections):
     test(fbx)
 mrt.unregister()
 print('MRT_MESH_IMPORT_PATHS_PASSED')
