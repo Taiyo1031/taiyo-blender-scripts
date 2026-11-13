@@ -61,6 +61,7 @@ class MRT_Props(bpy.types.PropertyGroup):
     plan_names: StringProperty(options={'SKIP_SAVE'})
     plan_new_meshes_imported: IntProperty(default=0, options={'SKIP_SAVE'})
     plan_added: IntProperty(default=0, options={'SKIP_SAVE'})
+    plan_new_rows: IntProperty(default=0, options={'SKIP_SAVE'})
     plan_unknown_id: IntProperty(default=0, options={'SKIP_SAVE'})
     plan_id_check: BoolProperty(default=False, options={'SKIP_SAVE'})
     last_export: StringProperty(default='none', options={'SKIP_SAVE'})

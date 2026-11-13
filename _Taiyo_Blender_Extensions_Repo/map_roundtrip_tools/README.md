@@ -1,6 +1,6 @@
 # Map Roundtrip Tools
 
-**対象version: 0.8.0 / Blender 4.5.0以上**
+**対象version: 0.8.1 / Blender 4.5.0以上**
 
 ゾーン管理・配置CSV・HoudiniとのFBX往復・リンク複製での配置復元を担当するExtensionです。Unreal Bridge Toolsなしで利用できます。
 
@@ -18,6 +18,8 @@
 `Zone Empties`（折りたたみ）にはEmptyの一覧・検索・`Select Zone Empties`があります。
 
 CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持します。Mesh CandidatesでMap配下／現在Sceneを選べます。旧UBTの登録ゾーン・EmptyのAdd/Subtract・登録解除状態も読み取れます。
+
+0.8.0からの変更（0.8.1、表示の修正）: Previewの`New meshes (id -1)`が、Libraryにまだ無い新しいMeshの行を数えず、`id`が-1の行が数個あっても`0`と出ていました。`0 of 8 rows`のように、`id`が-1の行の数と、Libraryにあって置けるMeshの数を並べて出し、足りないときは「Import New Meshesを実行してください」と赤字で案内します。
 
 0.7.2からの変更（0.8.0）:
 - **Convert Houdini FBX to Blender size**（チェックボックス、**既定OFF**）: HoudiniのFBXが持つ回転・スケールをMeshデータへ焼き込み、Blenderのサイズ・向きにそろえます。HoudiniのFBXを取り込むときは、チェックを入れてください（0.7.2は常にONでした）。

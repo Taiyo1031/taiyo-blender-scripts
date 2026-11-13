@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.8.0 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.8.1 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -233,6 +233,7 @@ Preview Placementは、CSVの**行・列・値・理由**を出します。パ�
 | `id`が整数でない | `Line 5: column id = 'x' is not an integer.` |
 | 列が足りない | `Line 6: the row has 4 columns, but the header has 12; at least 12 are needed.` |
 | `objname`が空 | `Line 9: objname is empty.` |
+| `id = -1`の行の数 | パネルの`New meshes (id -1): 0 of 8 rows`は、「CSVに`id`が-1の行が8行あり、そのMeshがLibraryにあって置けるのは0個」の意味です。足りないときは、赤字で`Import New Meshes`を案内します。Previewの結果行も`new meshes 0 of 8 rows with id -1`と出ます（0.8.1）。 |
 | Libraryに無い名前 | 近い名前（`Similar Library names: ...`）、同名だがMeshでないObject（`it is a EMPTY, not a mesh`）、新しいMesh（`id = -1`の行は、似た名前があっても必ず`It is a new mesh (id -1): run Import New Meshes first.`と出ます）、既存Objectを残したこと、のどれかを添えます。 |
 | 不明な`id`／重複した`id` | 警告。どの行の`id`で、どの行と重なるかを出します。 |
 | `colname`の問題 | 空の区切りを含む（警告）、名前が衝突する（警告）。 |

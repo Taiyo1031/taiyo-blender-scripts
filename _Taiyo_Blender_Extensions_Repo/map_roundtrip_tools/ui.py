@@ -104,7 +104,11 @@ class MRT_PT_Import(bpy.types.Panel):
             plan.label(text=f'Unchanged {p.plan_unchanged}; Moved {p.plan_moved}')
             plan.label(text=f'Retire {p.plan_archive} to _Replaced_{p.plan_zone}; Add {p.plan_create}')
             plan.label(text=f'Invalid rows {p.plan_invalid}; new collections {p.plan_collections}')
-            plan.label(text=f'New meshes (id -1): {p.plan_added}')
+            plan.label(text=f'New meshes (id -1): {p.plan_added} of {p.plan_new_rows} rows')
+            if p.plan_new_rows > p.plan_added:
+                row = plan.row()
+                row.alert = True
+                row.label(text=f'{p.plan_new_rows - p.plan_added} new mesh rows are not in Library yet: run Import New Meshes')
             if p.plan_unknown_id:
                 row = plan.row()
                 row.alert = True

@@ -77,6 +77,17 @@ def test_new_mesh_hint_survives_similar_names():
     print('PASS an id -1 row always says it is a new mesh, even when similar names are listed')
 
 
+def test_new_mesh_rows_are_counted_even_when_the_mesh_is_not_in_the_library():
+    fixture()
+    # three id -1 rows: one mesh is in the Library, two are not (not imported yet)
+    plan = plan_for([(-1, 'Rock_Def_1'), (-1, 'NotYet_A'), (-1, 'NotYet_B'), (0, 'Rock_Def_1')])
+    assert plan.new_rows == 3 and plan.added == 1, (plan.new_rows, plan.added)
+    placement.publish_plan(p, plan)
+    assert p.plan_new_rows == 3 and p.plan_added == 1
+    assert 'new meshes 1 of 3 rows with id -1' in placement.plan_summary(plan), placement.plan_summary(plan)
+    print('PASS rows with id -1 are counted even when their mesh is not in the Library yet')
+
+
 def test_new_mesh_hint_without_similar_names():
     fixture()
     plan = plan_for([(-1, 'Zzzzqqqq_Totally_Different')])
@@ -114,7 +125,8 @@ def test_large_retire_warning():
     print('PASS retiring most of a zone (at least 10 objects, half or more) is warned about')
 
 
-for test in (test_new_mesh_hint_survives_similar_names, test_new_mesh_hint_without_similar_names,
+for test in (test_new_mesh_hint_survives_similar_names, test_new_mesh_rows_are_counted_even_when_the_mesh_is_not_in_the_library,
+             test_new_mesh_hint_without_similar_names,
              test_duplicate_library_names_are_one_warning_per_name, test_large_retire_warning):
     test()
 mrt.unregister()
