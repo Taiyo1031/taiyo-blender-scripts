@@ -237,12 +237,22 @@ def build_plan(p, progress=lambda *args: None):
     zone = effective_zone(p)
     if not zone:
         raise ValueError('Zone name is empty.')
+    if p.archive_coll is not None:
+        scene = bpy.context.scene
+        if p.archive_coll != scene.collection and p.archive_coll not in scene.collection.children_recursive:
+            raise ValueError(f'Archive To ({p.archive_coll.name}) is not in this scene.')
+        if p.archive_coll in set(walk_collections(p.map_coll)) | set(walk_library(p)):
+            raise ValueError(f'Archive To ({p.archive_coll.name}) must be outside the Map and the Library, '
+                             f'or retired objects would count as placed or as Library meshes.')
+        if not p.archive_coll.is_editable:
+            raise ValueError(f'Archive To ({p.archive_coll.name}) is not editable.')
     if map_state(zone) == STATE_BEFORE:
         raise ValueError(f'{zone} is showing the original map. Re-apply the imported map before importing again.')
     plan = Plan(zone, map_name=p.map_coll.name)
     issues = plan.issues
     exact, norm, seen, non_mesh = {}, {}, set(), {}
     first_of = {}
+    dup_names = {}  # normalized name -> list of object names with that normalization
     for c in walk_library(p):
         for i, ob in enumerate(c.objects):
             if ob in seen:
@@ -255,14 +265,18 @@ def build_plan(p, progress=lambda *args: None):
                 name = normalize(ob.name, p.name_mode)
                 if name in norm:
                     plan.duplicates += 1
-                    issues.append(Issue('duplicate_library_name', f'Library has several objects named {name!r} after name normalization '
-                                        f'({first_of[name]}, {ob.name}); the first one ({first_of[name]}) is used.', severity='warning'))
+                    # Store the object names for later warning creation.
+                    dup_names.setdefault(name, []).append(ob.name)
                 else:
                     norm[name] = ob.data
                     first_of[name] = ob.name
             if i % 512 == 0:
                 yield
         yield
+    # Now create warnings for duplicates (one per name).
+    for name, obj_names in dup_names.items():
+        issues.append(Issue('duplicate_library_name', f'Library has several objects named {name!r} after name normalization: '
+                            f'{", ".join([first_of[name], *obj_names])}; the first one ({first_of[name]}) is used.', severity='warning'))
     for c in walk_collections(p.map_coll):
         plan.collections.setdefault(c.name, c)
         yield
@@ -332,10 +346,12 @@ def build_plan(p, progress=lambda *args: None):
                             extra = f' A Library object with this name exists, but it is a {non_mesh[name]}, not a mesh.'
                         elif hints[name]:
                             extra = ' Similar Library names: ' + ', '.join(hints[name]) + '.'
-                        elif csv_id == NEW_MESH_ID:
-                            extra = ' It is a new mesh (id -1): run Import New Meshes first.'
-                        else:
+                        elif csv_id != NEW_MESH_ID:
                             extra = ' No similar name in Library.'
+                        else:
+                            extra = ''
+                        if csv_id == NEW_MESH_ID and name not in non_mesh:  # also when similar names are listed
+                            extra += ' It is a new mesh (id -1): run Import New Meshes first.'
                         if matched is not None:
                             plan.kept_unresolved.add(matched)
                             extra += f' The existing object {matched.name} was left unchanged.'
@@ -386,6 +402,13 @@ def build_plan(p, progress=lambda *args: None):
 
     claimed_obs = {ob for ob in plan.row_ob if ob is not None} | plan.kept_unresolved
     plan.retired = [ob for ob in plan.old if ob not in claimed_obs]
+    # Add the many_retired warning after calculating retired.
+    if len(plan.retired) >= 10 and len(plan.retired) * 2 >= len(plan.old) and plan.old:
+        percent = round(100 * len(plan.retired) / len(plan.old))
+        issues.append(Issue('many_retired', f'{len(plan.retired)} of {len(plan.old)} zone objects ({percent}%) have no row in the CSV '
+                            f'and will be moved to _Replaced_{plan.zone}. Is the returned CSV complete? Restore Original Map undoes this.',
+                            severity='warning'))
+
     for i, ob in enumerate(plan.row_ob):
         if ob is None:
             plan.adds.append(i)
@@ -536,7 +559,7 @@ class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
                 self.progress('Moving changed objects', n + 1, len(plan.moved))
                 yield
             if plan.retired or moved_obs or plan.adds:
-                archive = ensure_archive(scene, view_layer, zone, journal)
+                archive = ensure_archive(scene, view_layer, zone, journal, p.archive_coll)
             for n, ob in enumerate(plan.retired):
                 old_spec = read_run(ob)
                 before = old_spec['before'] if old_spec and old_spec.get('zone') == zone and 'before' in old_spec else capture(ob, owners.get(ob, []), scene.collection)

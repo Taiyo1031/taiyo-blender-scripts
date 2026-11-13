@@ -107,11 +107,11 @@ class MRT_OT_ZoneEmptyAction(bpy.types.Operator):
     bl_label = 'Zone Empty'
     bl_options = {'REGISTER', 'UNDO'}
     object_name: StringProperty(options={'HIDDEN'})
-    action: EnumProperty(items=[('SELECT','Select','一覧のEmptyを選択して移動・拡大を編集します'), ('UNREGISTER','Unregister','登録を解除します。Empty本体は削除しません')])
+    action: EnumProperty(items=[('SELECT','Select','一覧のEmptyを選択して移動・拡大を編集します'), ('UNREGISTER','Unregister','登録を解除し、Empty本体も削除します')])
 
     @classmethod
     def description(cls, context, properties):
-        return 'このEmptyのゾーン登録を解除します。Objectは削除しません' if properties.action == 'UNREGISTER' else 'このEmptyを選択・アクティブにして、ビューポートで編集します'
+        return 'このEmptyをゾーンから外し、Empty本体も削除します(Ctrl+Zで戻せます)' if properties.action == 'UNREGISTER' else 'このEmptyを選択・アクティブにして、ビューポートで編集します'
 
     @classmethod
     def poll(cls, context):
@@ -126,9 +126,7 @@ class MRT_OT_ZoneEmptyAction(bpy.types.Operator):
             if not e.is_editable:
                 return {'CANCELLED'}
             choice = context.scene.mrt_props.zone_choice
-            e.mrt_zone_enabled = False
-            if ZONE_NAME_KEY in e:
-                del e[ZONE_NAME_KEY]
+            bpy.data.objects.remove(e, do_unlink=True)  # the empty is the zone's range: unregistering it deletes it
             props = context.scene.mrt_props
             available = {item[0] for item in zone_items(props, context)}
             props.zone_choice = choice if choice in available else 'ALL'

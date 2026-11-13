@@ -1,5 +1,5 @@
 bl_info = {
-    'name': 'Map Roundtrip Tools', 'author': 'Taiyo', 'version': (0, 7, 2),
+    'name': 'Map Roundtrip Tools', 'author': 'Taiyo', 'version': (0, 8, 0),
     'blender': (4, 5, 0), 'location': 'View3D > Sidebar > Map Roundtrip',
     'description': 'Roundtrip linked map placements and library FBX meshes through Houdini',
     'category': 'Import-Export',
@@ -10,6 +10,7 @@ from .zones import (MRT_LegacyZoneEntry, MRT_LegacyUBTProps, migrate_legacy_zone
                     MRT_OT_SelectZoneEmpties, register_zone_properties, unregister_zone_properties)
 from .zone_csv import MRT_OT_ExportZoneCSV
 from .zone_add_objects import MRT_OT_AddObjectsToZone
+from .zone_rename import MRT_OT_RenameZone
 from .props import MRT_Props
 from .presets import MRT_OT_SavePreset, MRT_OT_DeletePreset
 from .placement import MRT_OT_ReplaceZone
@@ -22,7 +23,7 @@ from .ui_zones import (MRT_PT_Zones, MRT_PT_ZoneRange, MRT_PT_ZoneEmpties, MRT_P
                        MRT_PT_ZoneCSV, MRT_PT_ZoneAdvanced)
 
 # Panels are listed in registration order: Zones (with its sub-panels) must come first.
-classes = (MRT_LegacyZoneEntry, MRT_LegacyUBTProps, MRT_ZoneEntry, MRT_Props, MRT_OT_NewZone, MRT_OT_RegisterZoneEmpties,
+classes = (MRT_LegacyZoneEntry, MRT_LegacyUBTProps, MRT_ZoneEntry, MRT_Props, MRT_OT_NewZone, MRT_OT_RenameZone, MRT_OT_RegisterZoneEmpties,
            MRT_OT_ZoneEmptyAction, MRT_OT_AddZoneEmpty, MRT_OT_SelectInZone, MRT_OT_SelectZoneEmpties,
            MRT_OT_ExportZoneCSV, MRT_OT_AddObjectsToZone, MRT_OT_SavePreset, MRT_OT_DeletePreset, MRT_OT_ReplaceZone,
            MRT_OT_SwitchMapState, MRT_OT_ImportMeshes, MRT_OT_ExportFBX, MRT_OT_ExportFBXNative,

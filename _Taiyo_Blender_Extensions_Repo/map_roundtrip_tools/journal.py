@@ -98,17 +98,17 @@ class Journal:
             bpy.data.batch_remove(ids=self.created_collections)
 
 
-def ensure_archive(scene, view_layer, zone, journal):
+def ensure_archive(scene, view_layer, zone, journal, parent=None):
     """The excluded `_Replaced_<zone>` collection that holds objects absent from the shown state."""
     name = archive_name(zone)
     archive = bpy.data.collections.get(name)
     if archive is None:
         archive = bpy.data.collections.new(name)
         archive[STATE_KEY] = STATE_AFTER
-        scene.collection.children.link(archive)
+        (parent or scene.collection).children.link(archive)
         journal.created_collection(archive)
-    elif archive not in scene.collection.children[:]:
-        journal.attach(scene.collection, archive)
+    elif archive not in scene.collection.children_recursive:  # an archive made earlier may sit anywhere in the scene
+        journal.attach(parent or scene.collection, archive)
     layer = find_layer(view_layer.layer_collection, archive)
     if layer is not None and not layer.exclude:
         journal.exclude(layer)

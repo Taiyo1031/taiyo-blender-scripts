@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.7.2**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.8.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -195,3 +195,12 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - 実画面の確認で見つけた不具合: Ctrl+Zの後、退避したObject 3,155個の`ub_zone`などが戻りませんでした。Objectのカスタムプロパティだけの変更はUndoに記録されないためです。書き込みのたびに`update_tag()`を呼び、Replace・Restore・Importが1回ずつUndoできるようにしました。6万件の実測では、Replace 約13.8秒（0.7.0は約11.2秒）、Restore 約3.9秒（約3.4秒）で、最長の分割できない1ステップは約2.9秒でした。`update_tag`の分は少し遅くなっています。
 - 実画面の確認で見つけたUIの問題: Restore Original Mapが、長い警告リストの下にあり、スクロールしないと見えませんでした。ボタンを警告リストの上へ移しました。
 - 実GUIで、取り込みは約3〜22秒（FBX読み込み中の最長1ステップ 2.4〜17.9秒）でした。FBXの読み込み自体は分割できません。
+
+## 0.8.0の追加（FBX変換のチェックボックス・Archive To・Rename Zone・Empty削除・Previewの案内）
+
+- **実画面の確認**（Blender 4.5.9のGUI、実シーンのコピー、`--enable-event-simulate`）: `Convert Houdini FBX to Blender size`は既定OFF（OFFならObjectの回転90度・スケール0.01のまま取り込み、ONなら8個すべてに焼き込み）。`Archive To`に指定したCollectionの中に`_Replaced_ZONE_1A`が作られ、View Layerから除外されたまま。Replace → Ctrl+Z（開始時と完全に一致）→ Ctrl+Shift+Z → Rename Zone（`ZONE_1A`→`ZONE_1B`: ゾーンのObject 647個、退避したObject 2,595個、Empty、登録簿、`_Replaced_ZONE_1B`）→ Ctrl+Z（名前・`ub_zone`・`ub_archived_from`がすべて元どおり）。いずれも成功。
+- Rename Zoneは、6万6千Objectのシーンで、確認0.04秒＋付け替え0.08秒でした。
+- パネルにも、✎（Rename Zone）、`Archive To`、チェックボックス、集約された警告（以前は13件、今回は8件）が表示されることを画面で確認しました。
+- 回帰: `tools/test_map_roundtrip_zone_rename.py` `_archive_dest.py` `_preview_hints.py` `_mesh_import_paths.py`（OFF/ON）`_zone_registry.py`（Empty削除）。
+- LM Studioの使用: Previewの案内3点（`placement.py`）は1回目で合格しました（ただし重複名の警告に最初のObject名が抜けていたのと、新しいMeshの案内が二重に出る場合があったため、手で直しました）。Rename Zone（`zone_rename.py`）は5回の試行で合格せず、Objectの数え方と余分な未使用変数・空行を手で直しました。
+- 未確認: 他の`.blend`で`Archive To`に既存の`_Replaced_*`がある場合の移動、複数シーンにまたがるゾーン名の変更、Blender 5.x、Linux、Houdini/Unrealでの実行。

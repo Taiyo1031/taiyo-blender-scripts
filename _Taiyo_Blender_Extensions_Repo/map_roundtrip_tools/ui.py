@@ -73,13 +73,14 @@ class MRT_PT_Import(bpy.types.Panel):
         layout.enabled = not p.running
         box = layout.box()
         box.label(text='Collections')
-        for name in ('library_coll', 'map_coll', 'new_mesh_coll'):
+        for name in ('library_coll', 'map_coll', 'new_mesh_coll', 'archive_coll'):
             box.prop(p, name)
         box.label(text='New meshes go to New Meshes To (default: below Library).')
+        box.label(text='Retired objects go to _Replaced_<Zone> in Archive To (default: scene root).')
         box = layout.box()
         box.label(text='Return Files')
         box.label(text='Return Folder is a reference, not an automatic import.')
-        for name in ('return_dir', 'placement_csv', 'mesh_fbx', 'name_mode', 'if_exists'):
+        for name in ('return_dir', 'placement_csv', 'mesh_fbx', 'convert_houdini_fbx', 'name_mode', 'if_exists'):
             box.prop(p, name)
         box = layout.box()
         box.label(text='Replace Zone')

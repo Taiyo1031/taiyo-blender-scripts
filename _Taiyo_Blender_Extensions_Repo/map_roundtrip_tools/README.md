@@ -1,6 +1,6 @@
 # Map Roundtrip Tools
 
-**対象version: 0.7.2 / Blender 4.5.0以上**
+**対象version: 0.8.0 / Blender 4.5.0以上**
 
 ゾーン管理・配置CSV・HoudiniとのFBX往復・リンク複製での配置復元を担当するExtensionです。Unreal Bridge Toolsなしで利用できます。
 
@@ -18,6 +18,13 @@
 `Zone Empties`（折りたたみ）にはEmptyの一覧・検索・`Select Zone Empties`があります。
 
 CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持します。Mesh CandidatesでMap配下／現在Sceneを選べます。旧UBTの登録ゾーン・EmptyのAdd/Subtract・登録解除状態も読み取れます。
+
+0.7.2からの変更（0.8.0）:
+- **Convert Houdini FBX to Blender size**（チェックボックス、**既定OFF**）: HoudiniのFBXが持つ回転・スケールをMeshデータへ焼き込み、Blenderのサイズ・向きにそろえます。HoudiniのFBXを取り込むときは、チェックを入れてください（0.7.2は常にONでした）。
+- **Archive To**: 退避用の`_Replaced_<ゾーン名>` Collectionを作る場所を指定できます（空欄はシーンの最上位）。
+- **Rename Zone**: `Zone`欄の横の✎で、ゾーン名を変更できます。Empty・Object・退避用Collectionも一緒に更新します。
+- **Emptyの登録解除でEmptyも削除**します（一覧のゴミ箱アイコン。Ctrl+Zで戻せます）。
+- **Previewの案内**: `id = -1`の行は必ず「新しいMeshです」と案内、Libraryの重複名は名前ごとに1件、ゾーンの大半が退避されるときは警告。
 
 0.7.1からの変更（追加の修正）:
 - **Ctrl+Z（Undo）**で、Replace Zone・Restore・Import New Meshesを1回分ずつ取り消せます。以前は、退避したObjectの`ub_zone`などのカスタムプロパティが戻らず、中途半端な状態になりました。
