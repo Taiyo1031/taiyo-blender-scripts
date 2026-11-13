@@ -49,7 +49,8 @@ header, body = rows[0], rows[1:]
 edited, kept, moved, removed = [], 0, 0, 0
 for i, r in enumerate(body):
     if i % 6 == 0:
-        removed += 1  # deleted in Houdini
+        removed += 1  # deleted in Houdini: the row stays, with use = 0
+        edited.append([*r[:12], '0'])
         continue
     if i % 3 == 1:
         r[1] = str(float(r[1]) + 0.5)  # moved in Houdini
@@ -61,10 +62,10 @@ for i, r in enumerate(body):
     edited.append(r)
 added = 10000
 for i in range(added):
-    edited.append(['-1', str(i * 0.1), '500', '0', '0', '0', '0', '1', '1', '1', 'Obj', ''])
+    edited.append(['-1', str(i * 0.1), '500', '0', '0', '0', '0', '1', '1', '1', 'Obj', '', '1'])
 with open(out / 'return.csv', 'w', newline='') as stream:
     w = csv.writer(stream)
-    w.writerow(header)
+    w.writerow([*header[:12], 'use'])
     w.writerows(edited)
 p.placement_csv = str(out / 'return.csv')
 p.zone_override = 'ZONE_BIG'

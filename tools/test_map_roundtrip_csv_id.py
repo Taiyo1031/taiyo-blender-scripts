@@ -49,7 +49,7 @@ def row(i, name, x=0.0, col=''):
 def write_csv(path, rows):
     with open(path, 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
-        w.writerow(placement.CSV_COLUMNS)
+        w.writerow([*placement.CSV_COLUMNS, 'use'])
         w.writerows(rows)
 
 
@@ -98,13 +98,13 @@ def test_constants():
 
 def test_known_unknown_and_new_ids():
     fixture([1, 2, 3])
-    plan = plan_for([row(1, 'Rock'), row(3, 'Rock', 3), row(99, 'Rock', 9), row(-1, 'NewRock', 5), row(-1, 'Rock', 6)])
-    assert len(plan.rows) == 4, len(plan.rows)
+    plan = plan_for([row(1, 'Rock'), row(2, 'Rock') + [0], row(3, 'Rock', 3), row(99, 'Rock', 9), row(-1, 'NewRock', 5), row(-1, 'Rock', 6)])
+    assert len(plan.rows) == 4, len(plan.rows)  # the use = 0 row places nothing
     assert plan.unknown_id_rows == 1 and plan.added == 2
     assert plan.id_check is True
     assert plan.unmatched == set() and plan.missing_rows == 0
     placement.publish_plan(p, plan)
-    # ids 1 and 3 update existing objects (1 unchanged, 3 moved), id 2 has no row (retired), the two -1 rows are new
+    # ids 1 and 3 update existing objects (1 unchanged, 3 moved), id 2 has use = 0 (retired), the two -1 rows are new
     assert (p.plan_unchanged, p.plan_moved, p.plan_archive, p.plan_create) == (1, 1, 1, 2), (p.plan_unchanged, p.plan_moved, p.plan_archive, p.plan_create)
     assert p.plan_added == 2 and p.plan_unknown_id == 1 and p.plan_id_check
     print('PASS known / unknown / -1 ids')
@@ -155,7 +155,7 @@ def test_other_zone_ids_do_not_count():
 
 def test_replace_uses_only_valid_rows():
     fixture([1, 2])
-    write_csv(p.placement_csv, [row(1, 'Rock', 1), row(42, 'Rock', 2), row(-1, 'NewRock', 3)])
+    write_csv(p.placement_csv, [row(1, 'Rock', 1), row(42, 'Rock', 2), row(2, 'Rock', 9) + [0], row(-1, 'NewRock', 3)])
     p.dry_run = False
     assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
     created = [o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_A']

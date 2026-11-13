@@ -42,8 +42,10 @@ def fixture():
     path = TEMP / 'ZONE_A.csv'
     with open(path, 'w', newline='') as f:
         w = csv.writer(f)
-        w.writerow(placement.CSV_COLUMNS)
-        w.writerow([1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', ''])  # ids 2 and 3 have no row: they are retired
+        w.writerow([*placement.CSV_COLUMNS, 'use'])
+        w.writerow([1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', '', 1])
+        w.writerow([2, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', '', 0])  # ids 2 and 3 have use = 0: they are retired
+        w.writerow([3, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', '', 0])
     p.library_coll, p.map_coll, p.new_mesh_coll, p.archive_coll = lib, mapc, None, None
     p.placement_csv = str(path)
     p.zone_override = ''

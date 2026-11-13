@@ -70,7 +70,7 @@ def new_mesh():
 def write_csv(path, rows):
     with open(path, 'w', newline='', encoding='utf-8') as f:
         w = csv.writer(f)
-        w.writerow(placement.CSV_COLUMNS)
+        w.writerow([*placement.CSV_COLUMNS, 'use'])
         w.writerows(rows)
 
 
@@ -227,7 +227,7 @@ def test_export_then_restore_hierarchy():
 
 
 def test_houdini_edits_moved_removed_and_added():
-    """What comes back from Houdini: moved row = moved in place, missing row = retired, id -1 = added mesh."""
+    """What comes back from Houdini: moved row = moved in place, use = 0 = retired, id -1 = added mesh."""
     mapc, area, rocks, legacy, outside = import_fixture()
     from_houdini = make('FromHoudini', bpy.data.collections['Library'])
     new_rock_mesh = new_mesh()
@@ -241,8 +241,8 @@ def test_houdini_edits_moved_removed_and_added():
         o['keep_me'] = 'custom property'
         area.objects.link(o)
         olds.append(o)
-    # Houdini: id 1 moved to x=100, id 2 deleted (no row), a new mesh added (-1) under a new path, id 99 is unknown.
-    write_csv(p.placement_csv, [row(1, 100, 'Area1'), row(-1, 200, 'Area2/NewRocks', 'NewRock'), row(99, 300, 'Area1')])
+    # Houdini: id 1 moved to x=100, id 2 deleted (use = 0), a new mesh added (-1) under a new path, id 99 is unknown.
+    write_csv(p.placement_csv, [row(1, 100, 'Area1'), [2, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Area1', 0], row(-1, 200, 'Area2/NewRocks', 'NewRock'), row(99, 300, 'Area1')])
     p.dry_run = False
     assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
     assert tuple(olds[0].location) == (100, 0, 0) and olds[0]['keep_me'] == 'custom property'  # moved in place, properties kept

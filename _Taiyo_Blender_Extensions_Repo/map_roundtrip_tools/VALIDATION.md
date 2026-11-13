@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.8.1**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.9.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -212,3 +212,12 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - **見つけたが、直していない動き**（実シーンのコピー、Blender 4.5.9）:
   - Replace Zoneの後で、もう一度Previewすると`unchanged 500, moved 139, retired 8, added 8`になります。`retired 8`は、前のReplaceで追加した新しい8個です。`id`が-1の行は毎回新しいObjectを作るため、Replaceを繰り返すと、前に追加したObjectが退避され、同じ数が作り直されます。
   - `moved 139`は、`UNI`のように、他で既に使われている名前のCollectionが`UNI.001`として作られたため、`colname`の階層と名前が合わず、毎回「移動した」と判定されたものと考えられます（原因の特定は未確認）。
+
+## 0.9.0の追加（`use`列、CSVに行が無い`id`は残す）
+
+- 仕様: 戻りCSVの`use`列が`0`の行の`id`のObjectだけを`_Replaced_<Zone>`へ退避します。行が無い`id`のObjectは動かしません。`use`が`1`・空欄・列なしは使う行です。`use`が`0`の行は何も置かず、警告もありません。
+- 回帰（Blender 4.5.9、すべて合格）: `tools/test_map_roundtrip_*.py` 17本と`test_mrt_zone_from_objects.py`、`test_unreal_bridge_tools.py`。既存テストのうち、行を消して退避を確認していた6本（`_restore` `_tools` `_csv_id` `_colname_path` `_archive_dest` `_preview_hints`）は、`use = 0`の行で退避する形に直しました。`test_map_roundtrip_preview_hints.py`に`use`の新しい検証を5件足しました（0だけ退避・行なしは残す／0の行は警告なし／`bad_use`と空欄／同じ`id`で0と1の競合／`use`列なしで退避なし）。
+- 実UI（`tools/ui_test_map_roundtrip_tools.py`、`use = 0`の行で1/4を退避）は合格しました。
+- 6万件（`tools/benchmark_map_roundtrip_diff.py`、M1 Pro）: Preview 0.63秒、Replace 11.9秒（最大の無中断ステップ2.4秒）、Restore 3.8秒、Re-apply 3.5秒。0.8.1（Replace 約13.8秒）と同等です。
+- **新しく分かった注意**: 行が無い`id`を退避しなくなったため、Replace Zoneを同じCSVで繰り返すと、`id`が-1の行から作られたObjectが前の分と別に増えます（以前は前の分が退避されて同数に保たれていました）。やり直すときは、Restore Original Mapで戻してからにしてください。
+- 未確認: 実シーン（Houdiniから戻した`use`列つきCSV）、Blender 5.x、Linux、Houdini/Unrealでの実行。

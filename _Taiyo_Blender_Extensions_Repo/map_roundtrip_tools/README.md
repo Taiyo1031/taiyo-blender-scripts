@@ -1,6 +1,6 @@
 # Map Roundtrip Tools
 
-**対象version: 0.8.1 / Blender 4.5.0以上**
+**対象version: 0.9.0 / Blender 4.5.0以上**
 
 ゾーン管理・配置CSV・HoudiniとのFBX往復・リンク複製での配置復元を担当するExtensionです。Unreal Bridge Toolsなしで利用できます。
 
@@ -18,6 +18,8 @@
 `Zone Empties`（折りたたみ）にはEmptyの一覧・検索・`Select Zone Empties`があります。
 
 CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持します。Mesh CandidatesでMap配下／現在Sceneを選べます。旧UBTの登録ゾーン・EmptyのAdd/Subtract・登録解除状態も読み取れます。
+
+0.8.1からの変更（0.9.0、**動作の変更**）: 戻りCSVに`use`列（`1`＝使う、`0`＝元のマップから消す）を足せるようになりました。消す（`_Replaced_<ゾーン名>`へ退避する）のは、`use`が`0`の行の`id`のObjectだけです。**戻りCSVに行が無い`id`のObjectは、動かさず、そのまま残します**（これまでは退避していました）。`use`が`0`の行は何も置かず、警告も出しません。`use`列が無いCSVは、すべて使う行として読みます。Previewには`Retire N (use 0: M rows)`と`Not in CSV, left as they are: N`が出ます。大量退避の警告`many_retired`はなくなりました。
 
 0.8.0からの変更（0.8.1、表示の修正）: Previewの`New meshes (id -1)`が、Libraryにまだ無い新しいMeshの行を数えず、`id`が-1の行が数個あっても`0`と出ていました。`0 of 8 rows`のように、`id`が-1の行の数と、Libraryにあって置けるMeshの数を並べて出し、足りないときは「Import New Meshesを実行してください」と赤字で案内します。
 
