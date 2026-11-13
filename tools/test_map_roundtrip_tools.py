@@ -67,12 +67,12 @@ def fixture():
     old.rotation_euler = (.1,.2,.3)
     old.scale = (1,2,3)
     old['ub_zone'] = 'ZONE_A'
+    old['ub_csv_id'] = 1
     old['ub_archived_from'] = 'earlier'
     p = bpy.context.scene.mrt_props
     p.library_coll, p.map_coll = lib, mapc
     p.placement_csv = str(TEMP / 'ZONE_A.csv')
     p.zone_override = ''
-    p.old_mode = 'ARCHIVE'
     p.dry_run = True
     p.if_exists = 'SKIP'
     p.name_mode = 'numeric_suffix'
@@ -99,28 +99,37 @@ def expect_error(call, text):
 
 def test_placement():
     p, lib, mapc, source, old = fixture()
+    write_csv(p.placement_csv, [[1, 3, 4, 5, math.degrees(.1), math.degrees(.2), math.degrees(.3), 1, 2, 3, 'Rock', '']])
     before = set(bpy.data.objects), set(bpy.data.collections)
+    # Unchanged CSV: the object keeps everything and nothing is created.
     assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
-    assert p.plan_archive == p.plan_create == 1
+    assert (p.plan_unchanged, p.plan_moved, p.plan_archive, p.plan_create) == (1, 0, 0, 0)
     assert before == (set(bpy.data.objects), set(bpy.data.collections))
     p.dry_run = False
     assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
-    new = [o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_A']
-    assert len(new) == 1 and new[0].data == source.data
-    assert new[0].parent is None and new[0].rotation_mode == 'XYZ'
-    assert (new[0].location - old.location).length < 1e-5
-    assert (new[0].rotation_euler.to_matrix() - old.rotation_euler.to_matrix()).to_quaternion().angle < 1e-4
-    assert tuple(new[0].scale) == tuple(old.scale)
+    assert before == (set(bpy.data.objects), set(bpy.data.collections)) and old['ub_zone'] == 'ZONE_A'
+    # Houdini moved the object and added a new one.
+    write_csv(p.placement_csv, [[1, 10, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks'], [-1, 20, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks']])
+    p.dry_run = True
+    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
+    assert (p.plan_unchanged, p.plan_moved, p.plan_archive, p.plan_create) == (0, 1, 0, 1)
+    assert before == (set(bpy.data.objects), set(bpy.data.collections)) and tuple(old.location) == (3, 4, 5)
+    p.dry_run = False
+    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
+    rocks = bpy.data.collections['Rocks']
+    new = [o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_A' and o != old]
+    assert len(new) == 1 and new[0].data == source.data and new[0].parent is None and new[0].rotation_mode == 'XYZ'
+    assert tuple(old.location) == (10, 0, 0) and old.users_collection == (rocks,) and new[0].users_collection == (rocks,)
+    assert tuple(new[0].location) == (20, 0, 0) and tuple(old.scale) == (1, 1, 1)
+    # Houdini removed the object: it is retired into the excluded archive, hierarchy kept.
+    write_csv(p.placement_csv, [[-1, 20, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks']])
+    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
     archive = bpy.context.scene.collection.children['_Replaced_ZONE_A']
-    assert old.name in archive.objects and 'ub_zone' not in old and old['ub_archived_from'] == 'ZONE_A'
+    mirror = archive.children['Rocks [ZONE_A]']
+    assert old.users_collection == (mirror,) and 'ub_zone' not in old and old['ub_archived_from'] == 'ZONE_A'
     assert placement.find_layer(bpy.context.view_layer.layer_collection, archive).exclude
-    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
-    assert sum(o.get('ub_zone') == 'ZONE_A' for o in bpy.data.objects) == 1
-    assert len(archive.objects) == 2
-    p.old_mode = 'DELETE'
-    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
-    assert sum(o.get('ub_zone') == 'ZONE_A' for o in bpy.data.objects) == 1
-    print('PASS placement preview/archive/repeat/delete/shared mesh/transforms')
+    assert archive['ub_state'] == 'after'
+    print('PASS placement: unchanged / moved in place / added / retired with hierarchy')
 
 
 def test_plan_errors():
@@ -129,13 +138,13 @@ def test_plan_errors():
     write_csv(p.placement_csv, rows)
     plan = drain(placement.build_plan(p))
     assert plan.invalid == 2 and plan.missing_rows == 1 and plan.unmatched == {'Missing'}
-    write_csv(p.placement_csv, [[i,0,0,0,0,0,0,1,1,1,f'Missing{i}',''] for i in range(7)])
+    write_csv(p.placement_csv, [[-1,0,0,0,0,0,0,1,1,1,f'Missing{i}',''] for i in range(7)])  # id -1: new meshes
     many = drain(placement.build_plan(p))
     placement.publish_plan(p, many)
     assert p.plan_missing == 7 and 'Missing4' in p.plan_names and 'Missing5' not in p.plan_names and 'and 2 more' in p.plan_names
     duplicate_mesh = bpy.data.meshes.new('ExactDuplicateMesh')
     duplicate = obj('Rock.999', p.library_coll, duplicate_mesh)
-    write_csv(p.placement_csv, [[1,0,0,0,0,0,0,1,1,1,'Rock.999',''],[2,0,0,0,0,0,0,1,1,1,'Rock.123','']])
+    write_csv(p.placement_csv, [[-1,0,0,0,0,0,0,1,1,1,'Rock.999',''],[-1,0,0,0,0,0,0,1,1,1,'Rock.123','']])
     named = drain(placement.build_plan(p))
     assert named.rows[0][0] == duplicate_mesh and named.rows[1][0] != duplicate_mesh and named.duplicates == 1
     write_csv(p.placement_csv, [], ['id'])
@@ -144,18 +153,25 @@ def test_plan_errors():
 
 
 def test_rollback():
-    for phase in ('Creating linked instances', 'Archiving', 'tags'):
+    for phase in ('Creating linked instances', 'Moving changed objects', 'Retiring unused objects'):
         p, lib, mapc, source, old = fixture()
+        old2 = obj('Rock.002', mapc, source.data)
+        old2.location = (9, 9, 9)
+        old2['ub_zone'] = 'ZONE_A'
+        old2['ub_csv_id'] = 2
+        bpy.context.view_layer.update()
+        write_csv(p.placement_csv, [[1, 10, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks'], [-1, 20, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks']])
         p.dry_run = False
         old.select_set(True)
         old.hide_set(True)
-        original_state = old.hide_get(), old.select_get()
+        old2.select_set(True)
+        original_state = old.hide_get(), old.select_get(), old2.hide_get(), old2.select_get()
         before = set(bpy.data.objects), set(bpy.data.collections)
         h = Harness()
         g = placement.MRT_OT_ReplaceZone.work(h, bpy.context)
         while True:
             next(g)
-            if (phase == 'tags' and 'ub_zone' not in old) or (phase != 'tags' and getattr(h, 'phase', '') == phase):
+            if getattr(h, 'phase', '') == phase:
                 break
         try:
             g.throw(Cancelled('Injected ESC'))
@@ -163,13 +179,15 @@ def test_rollback():
         except Cancelled:
             pass
         assert before == (set(bpy.data.objects), set(bpy.data.collections)), phase
-        assert old.name in mapc.objects and old['ub_zone'] == 'ZONE_A'
-        assert old['ub_archived_from'] == 'earlier'
-        assert (old.hide_get(), old.select_get()) == original_state, phase
+        assert tuple(old.location) == (3, 4, 5) and old.users_collection == (mapc,), phase
+        assert tuple(old2.location) == (9, 9, 9) and old2.users_collection == (mapc,), phase
+        assert old['ub_zone'] == old2['ub_zone'] == 'ZONE_A' and old['ub_archived_from'] == 'earlier', phase
+        assert 'ub_run' not in old and 'ub_run' not in old2, phase
+        assert (old.hide_get(), old.select_get(), old2.hide_get(), old2.select_get()) == original_state, phase
         # Re-run with an ordinary exception, not only ESC.
         h = Harness()
         g = placement.MRT_OT_ReplaceZone.work(h, bpy.context)
-        while getattr(h, 'phase', '') != 'Creating linked instances':
+        while getattr(h, 'phase', '') != phase:
             next(g)
         try:
             g.throw(RuntimeError('Injected failure'))
@@ -177,7 +195,8 @@ def test_rollback():
         except RuntimeError:
             pass
         assert before == (set(bpy.data.objects), set(bpy.data.collections))
-    print('PASS rollback during creation/archive/tag changes and exception')
+        assert tuple(old.location) == (3, 4, 5) and 'ub_run' not in old
+    print('PASS rollback during creation / move / retire and exception')
 
 
 def test_zone_csv():

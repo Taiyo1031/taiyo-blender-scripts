@@ -79,7 +79,6 @@ def fixture(old_ids):
     p.library_coll, p.map_coll = lib, mapc
     p.placement_csv = str(TEMP / 'ZONE_A.csv')
     p.zone_override = ''
-    p.old_mode = 'ARCHIVE'
     p.dry_run = True
     p.name_mode = 'numeric_suffix'
     bpy.context.view_layer.update()
@@ -105,7 +104,9 @@ def test_known_unknown_and_new_ids():
     assert plan.id_check is True
     assert plan.unmatched == set() and plan.missing_rows == 0
     placement.publish_plan(p, plan)
-    assert p.plan_create == 4 and p.plan_added == 2 and p.plan_unknown_id == 1 and p.plan_id_check
+    # ids 1 and 3 update existing objects (1 unchanged, 3 moved), id 2 has no row (retired), the two -1 rows are new
+    assert (p.plan_unchanged, p.plan_moved, p.plan_archive, p.plan_create) == (1, 1, 1, 2), (p.plan_unchanged, p.plan_moved, p.plan_archive, p.plan_create)
+    assert p.plan_added == 2 and p.plan_unknown_id == 1 and p.plan_id_check
     print('PASS known / unknown / -1 ids')
 
 
@@ -117,14 +118,20 @@ def test_unknown_id_is_not_reported_as_missing_mesh():
     print('PASS unknown id skipped before mesh lookup; -1 without a Library mesh stays unmatched')
 
 
-def test_legacy_zone_has_no_id_check():
+def test_zone_without_ub_csv_id_asks_for_a_new_export():
     fixture([None, None])
-    plan = plan_for([row(1, 'Rock'), row(99, 'Rock', 1), row(-1, 'NewRock', 2)])
-    assert plan.id_check is False and plan.unknown_id_rows == 0
-    assert len(plan.rows) == 3 and plan.added == 1
-    placement.publish_plan(p, plan)
-    assert p.plan_id_check is False
-    print('PASS zone without ub_csv_id keeps the old behaviour')
+    write_csv(p.placement_csv, [row(1, 'Rock')])
+    try:
+        drain(placement.build_plan(p))
+    except ValueError as exc:
+        assert 'ub_csv_id' in str(exc) and 'Export Zone CSV' in str(exc), str(exc)
+    else:
+        raise AssertionError('a zone whose objects have no ub_csv_id must ask for a new export')
+    # A zone without any object has nothing to match: every row is new.
+    bpy.data.batch_remove(ids=[o for o in bpy.data.objects if o.get('ub_zone')])
+    plan = plan_for([row(5, 'Rock'), row(-1, 'NewRock', 2)])
+    assert plan.id_check is False and len(plan.rows) == 2 and plan.added == 1 and len(plan.adds) == 2
+    print('PASS a zone without ub_csv_id needs a new export; an empty zone takes every row as new')
 
 
 def test_invalid_ids():
@@ -244,7 +251,7 @@ def test_export_then_import_roundtrip():
 
 
 TESTS = (test_constants, test_known_unknown_and_new_ids, test_unknown_id_is_not_reported_as_missing_mesh,
-         test_legacy_zone_has_no_id_check, test_invalid_ids, test_other_zone_ids_do_not_count,
+         test_zone_without_ub_csv_id_asks_for_a_new_export, test_invalid_ids, test_other_zone_ids_do_not_count,
          test_replace_uses_only_valid_rows, test_export_writes_ub_csv_id,
          test_export_cancel_restores_ub_csv_id, test_export_then_import_roundtrip)
 EXPORT = {'test_export_writes_ub_csv_id', 'test_export_cancel_restores_ub_csv_id'}

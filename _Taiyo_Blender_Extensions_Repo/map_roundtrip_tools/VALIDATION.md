@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.6.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.7.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -150,3 +150,31 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - 回帰：`tools/test_map_roundtrip_empty_collection.py`（各Collection・ネスト・ルート／多数決と報告／同数／複数所属・シーン外Collection／ESCでの取り消し）に加え、既存の10本が合格しました。実UI（`tools/ui_test_map_roundtrip_add_objects.py`：ESC取り消し・完了・Undo・Redo・描画）も合格しました。
 - 6万Object（すべてシーンのルート）の測定：Add Selected Objects 4.75〜4.84秒、最長tick 0.326〜0.329秒（0.3.0の実測は4.95秒、0.335秒）。ゾーンの中身は選択と完全一致です。Collectionが多数あるシーンでの時間は測っていません。
 - 読み取り専用（リンクされた）Collectionの実機での挙動は、未確認です。編集できないときの退避先をシーンの最上位にしてあります。
+
+## 0.7.0の追加（差分更新・復元・エラー詳細・追加Meshの置き場・Helper）
+
+検証日: 2026-11-13（日本時間）。macOS arm64（Apple M1 Pro）、Blender **4.5.9 LTS**のみ。Houdini・Unrealは未検証です。
+
+- **差分更新**: Replace Zoneは`ub_csv_id`で元のObjectと対応づけ、変わっていないObjectには触りません。動いたObjectはその場で更新、削除されたObjectは`_Replaced_ZONE_A`へ元の階層（ミラーCollection）のまま退避、新しいObjectだけを作ります。`Delete`は廃止しました。
+- **復元**: Restore Original Map / Re-apply Imported Mapで、最初のReplace Zoneの前と取り込み後を切り替えます。取り込み後のObjectの手動編集は保たれます。
+- **追加Mesh**: `New Meshes To`で取り込み先を選び、`Placement CSV`の`colname`の階層をミラーCollectionとして再現します。`colname`が複数ある場合は警告します。
+- **エラー詳細**: CSVの行・列・値・理由を出します。パネルに最初の5件、全件はTextエディターの`MRT Placement Report`に書きます。
+- **Helper**: Library/FromHoudiniのObjectがMapでどう使われているか（使用数・Collection・ゾーン）を調べ、選択できます。
+- 回帰（すべて合格）: `tools/test_map_roundtrip_restore.py`（差分・復元・再適用・2回目のReplace・ESC・選択/非表示の保持・Importパネル・CSVの問題・ファイル全体の問題）、`test_map_roundtrip_mesh_import_paths.py`、`test_map_roundtrip_helper.py`、`test_map_roundtrip_tools.py`（Replace・ロールバック）、`_csv_id.py`、`_colname_path.py`、`_zones.py` `_zone_csv.py` `_add_objects.py` `_empty_collection.py` `_ui_layout.py` `_zone_registry.py` `_zone_migration.py` `_addon_lifecycle.py`。実UI（`tools/ui_test_map_roundtrip_tools.py`）では、物理ESCによる作成中・更新中の取り消し、Replace、Restore、Re-applyが合格しました。
+
+### 6万Objectの実測（`tools/benchmark_map_roundtrip_diff.py`）
+
+60,025個のMesh（Add Selected Objectsでゾーン化→Export Zone CSV）を、Houdiniから次のように返した想定です。変更なし30,012個、動いた20,008個（うち半数は別Collectionへ）、削除10,005個、新規10,000個。
+
+| 操作 | 全体（秒） | 最長の分割できない1ステップ（秒） |
+|---|---:|---:|
+| Preview Placement | 0.55 | 0.05 |
+| Replace Zone | 11.2〜11.3 | 2.2〜2.3（最後の依存グラフ同期） |
+| Restore Original Map | 3.3〜3.6 | 2.0〜2.2（同上） |
+| Re-apply Imported Map | 3.3〜3.4 | 2.0（同上） |
+
+- Replace Zoneの内訳: 新しいObjectの作成7.7秒、CSVの計画0.56秒、移動0.4秒、退避0.2秒、最後の同期2.3秒。
+- 0.6.0までの全作り直しは、6万件で約282.5秒でした（0.1.0の実測）。同じ6万件でも、変更の少ない戻りなら大幅に短くなります。変更が6万件すべてなら、作成の非線形性は残ります。
+- **最後の同期（約2秒）は分割できず**、UIの応答目標（0.5秒）は、この1回分だけ超えます。
+- 開発中に、動かしたObjectの選択・非表示を戻すループが68秒（2万件）かかる問題を見つけました。Collectionへの`link`を`unlink`より先に行うと、Base（選択・非表示の状態）が失われないため、そのループを無くしました（`test_selection_and_hide_flags_survive`で確認）。
+- 未測定: 数千個のCollectionを持つシーン、Helperの走査時間、Blender 5.x、Linux。

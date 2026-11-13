@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.6.0 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.7.0 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -146,30 +146,55 @@ Unreal用の個別SMなら、配置Objectではなく原点に置いたLibrary�
 
 ## 8. Houdiniから戻す
 
-1. Import > Collectionsで **Library** と **Map** を指定します。例ForExport_Dirty_1／Laid_MAP_1。名前は自由です。
-2. 新しいMeshがある場合だけMesh FBXを指定し、Import New Meshesを実行します。既定の入れ先はLibrary/FromHoudiniです。
-3. 戻りのPlacement CSVを指定します。
-4. Replace ZoneのZoneを元のタグ（例ZONE_A）に合わせます。CSV出力成功時にはこの欄にもZone名が設定されます。空欄なら戻りCSV名を使用します。
-5. Dry Run ONでPreview Placementを確認し、OFFにしてReplace Zoneを実行します。
+`N > Map Roundtrip > Import` パネルで行います。作業前に`.blend`を保存してください。
 
-Archiveは旧配置を保持して退避します。Deleteは明示選択時だけ削除します。旧対象はMap配下だけでなく、全データの同じub_zoneを持つObjectです。CSV名をZONE_A_return.csvに変えて返す場合も、置換タグはZONE_Aを維持してください。
+1. **Collections**で`Library`（元のMeshの置き場。子Collectionも探します）と`Map`（配置先）を指定します。例ForExport_Dirty_1／Laid_MAP_1。名前は自由です。
+2. **戻りのCSVを先に指定します**（`Placement CSV`）。追加Meshの置き場所を、このCSVの`colname`から決めるためです。
+3. **Replace Zone**の`Zone`を元のタグ（例ZONE_A）に合わせます。CSV出力成功時にはこの欄にもZone名が設定されます。空欄なら戻りCSV名を使います。
+4. `Dry Run`ONのまま**Preview Placement**を押し、計画とエラー・警告を確認します（後述）。
+5. 新しいMeshがある場合だけ、`Mesh FBX`を指定して**Import New Meshes**を実行します。
+6. もう一度Previewで確認し、`Dry Run`をOFFにして**Replace Zone**を実行します。
+7. 結果が違ったら、**Restore Original Map**で最初のマップへ戻せます。
 
-### Houdiniで変えた内容の扱い
+CSV名を`ZONE_A_return.csv`に変えて返す場合も、`Zone`はZONE_Aのままにしてください。`id`で対応づけるObjectは、その`Zone`の`ub_zone`を持つものです。
 
-Replace Zoneは、既存のObjectをその場で更新しません。戻りCSVの各行から**新しいObjectを作り直し**、旧Objectを`Old Objects`の設定（Archive／Delete）で扱います。
+### Replace Zoneの動き（差分更新）
 
-| Houdiniでの操作 | 結果 |
+Replace Zoneは、戻りCSVの各行を、書き出し時に保存した`ub_csv_id`で元のObjectと対応づけて、**変わったものだけ**を更新します。
+
+| 状態 | Replace Zoneの結果 |
 |---|---|
-| 位置・回転・拡大を変えた | CSVの行に新しい値が入るので、新しい値で新Objectが作られます。旧Objectは退避（または削除）されます。 |
-| Objectを削除した | その`id`の行がCSVにありません。新しい配置に含まれず、旧Objectだけが退避（または削除）されます。 |
-| 別のMeshに差し替えた（`objname`が変わった） | 新しい`objname`に合うLibraryのMeshで作ります。Libraryに無い名前は作られず、`names not found in Library`と報告されます。 |
-| 新しいMeshを追加した（`id`が-1） | Libraryに同名のMeshがあれば配置します。先にMesh FBXで`Import New Meshes`を実行しておきます。 |
-| 書き出し後にBlenderで手で動かした | 戻りCSVの値が優先されます。手で動かした位置は、退避した旧Objectにだけ残ります。 |
+| 変わっていない（位置・回転・拡大・Mesh・Collectionが同じ） | 何もしません。モディファイア・Custom Properties・親子関係はそのまま残ります。 |
+| Houdiniで**動かした**（位置・回転・拡大）／Meshを差し替えた／別のCollectionへ移した | **同じObjectをその場で更新します**（Custom Propertiesなどは残ります）。更新前の状態は保存されます。 |
+| Houdiniで**削除した**（その`id`の行がCSVにない） | 退避用のCollection`_Replaced_ZONE_A`へ、**元と同じ階層のまま**移します。 |
+| 新しく追加した（`id`が-1）／`id`が重複した行（Houdiniで複製した） | 新しいObjectを作ります。 |
+| `id`が書き出し時に無かった行 | 使いません（件数を警告します）。 |
+| `objname`がLibraryに無い行で、既存のObjectを指す | そのObjectは**変えずに残し**、エラーとして報告します（削除扱いにはしません）。 |
 
-- **追加Meshの置き先**: 追加Meshの行にも、通常の行と同じ`colname`の階層パスが使えます。たとえば`Area2/NewRocks`なら、`Map`の下に`Area2`と`NewRocks`を入れ子で作り、そこへ配置します。
-- **追加Meshの取り込み先**: `Import New Meshes`で取り込んだMeshは、Libraryの下の`FromHoudini`（`New Meshes To`で変更可）に並びます。FBXの階層は作られません。
-- **引き継がれないもの**: 新しいObjectに入るのは、位置・回転・拡大、`ub_zone`タグ、配置先のCollectionだけです。旧Objectに付けたモディファイア、Custom Properties、親子関係、Materialの上書きは引き継がれません。必要なものは、退避した旧Objectから取り出してください。
-- **名前**: `objname`から付けます。旧Objectと重なるときは、`.001`などの接尾辞が付きます。
+- **削除はしません**。`Delete`の選択肢はなくなり、使わなくなったObjectはいつも退避されます。
+- **ub_csv_idが必要です**。ゾーンのObjectに`ub_csv_id`が1つも無いときは、`Run Export Zone CSV with this version first.`というエラーになります。先に**Export Zone CSV**をやり直してください。ゾーンに1つもObjectが無いときは、すべての行を新しいObjectとして作ります。
+- **退避用のCollection**: `_Replaced_ZONE_A`は`Scene Collection`の直下に作られ、View Layerから除外されます。中は、元のCollectionと同じ階層を`名前 [ZONE_A]`というCollectionで再現します（Blenderは同じ名前のCollectionを持てないためです）。`ub_zone`タグは外れ、`ub_archived_from=ZONE_A`が付きます。
+- **進捗とキャンセル**: 進捗と残り時間が出ます。ESCで中断すると、すべて元に戻ります。
+
+### 最初のマップへ戻す・もう一度適用する
+
+Blenderの中には、Houdiniに出す前の**元のマップ**と、Replace Zone後の**取り込み後のマップ**の2つの状態が残ります。`Replace Zone`を実行すると、Importパネルに次が出ます。
+
+- **Restore Original Map**: 最初のReplace Zoneの前の状態へ戻します。動かしたObjectは元の位置・Mesh・Collectionへ、退避したObjectは元のCollectionへ戻り、新しく作ったObjectは`_Replaced_ZONE_A`へ移ります。
+- **Re-apply Imported Map**: 取り込み後のマップへ戻します。何度でも切り替えられます。
+
+- 元のマップを表示している間は、Replace Zoneはできません（先にRe-applyしてください）。
+- 取り込み後のObjectを手で動かしたり編集してから切り替えても、その状態は取り込み後のマップに保たれます。
+- 2回目以降のReplace Zoneでも、戻る先は**最初のReplace Zoneの前**です。
+- 範囲外などでCollectionが無くなっているときは、`Map`に入れて件数を報告します。
+- 切り替えもESCで取り消せます。
+
+### 追加Meshの取り込み（Import New Meshes）
+
+- **取り込み先**: `New Meshes To`で、取り込み先のCollectionを選べます。空欄なら`Library`の下の`FromHoudini`（無ければ作成）です。
+- **構造**: `Placement CSV`が指定してあれば、追加Meshを使う行の`colname`の階層を、取り込み先の中に再現します（例 `Area2/NewRocks` → 取り込み先の中の`Area2 [FromHoudini]` > `NewRocks [FromHoudini]`）。無い階層は作り、ある階層は再利用します。`colname`が空欄、またはCSVが無いMeshは、取り込み先の直下に並びます。
+- **`colname`が複数ある**: 同じ追加Meshを、`colname`が違う複数の行が使っているときは**警告**を出し、最も多い`colname`を使います（同数ならCSVで先に出る行）。
+- ESCや失敗では、作ったCollectionも含めて取り込み前に戻ります。
 
 ### Collectionの階層
 
@@ -180,24 +205,37 @@ Replace Zoneは、既存のObjectをその場で更新しません。戻りCSV�
 3. 空欄は`Map`直下へ配置します。`Map/Area1`のように、先頭が`Map`の名前のパスは、その`Map`を除いて読みます。
 4. `//`のように空の区切りを含む`colname`は、パスではなく1つの名前として扱います。
 
-Previewの`new collections N`は、新しく作るCollectionの数です（途中の階層も数えます）。
+新しいCollectionを作るのは、新しいObjectを置くときと、Objectを別のCollectionへ移すときだけです。位置が変わっていないObjectを、Collectionの解決のためだけに移すことはありません（Mapの外のCollectionにいるObjectも動きません）。Previewの`new collections N`は、新しく作るCollectionの数です。
 
-- **名前の衝突**: Blenderでは、Collection名は1つのファイル内で重複できません。新しく作る名前が、`Map`の外などで既に使われているときは、Blenderが`.001`などの接尾辞を付けます。Previewと実行時に警告を出します。たとえばMapの外の`Other/Deep`は、`Map`の下に`Other.001/Deep.001`として作られます。
-- **元の場所には戻りません**: Mapの外にあったCollectionは、`Map`の下に作られます。
-- **中断・失敗**: ESCや失敗では、新しく作った入れ子のCollectionもObjectと一緒に全部取り消します。
+- **名前の衝突**: Blenderでは、Collection名は1つのファイル内で重複できません。新しく作る名前が既に使われているときは、Blenderが`.001`などの接尾辞を付けます。Previewと実行時に警告を出します。
+- **元の場所には戻りません**: Mapの外にあったCollectionへ新しいObjectを置くときは、`Map`の下に作られます。
 
 ### idの扱い
 
-戻りのPlacement CSVでは、`id`列を次のように判定します。判定はPreview Placementにも反映されます。
-
-- `id`が**-1**の行は、Houdiniで新しく追加したMeshです。置換ではなく追加として配置します。`objname`がLibraryのMeshと一致する場合だけ配置し、一致しなければ従来どおり「Libraryに無い名前」として報告します。
-- `id`が、書き出し時のどのObjectの`ub_csv_id`にも一致しない行（-1以外）は**使用しません**。Previewとステータスに`unknown id N`として件数が出ます。
-- Houdiniで削除したObjectは、その`id`の行がCSVに無いだけです。従来どおり旧Objectとして扱われ、Archive（既定）なら`_Replaced_ZONE_A`へ退避します。
+- `id`が**-1**の行は、Houdiniで新しく追加したMeshです。`objname`がLibraryのMeshと一致する場合だけ配置し、一致しなければ「Libraryに無い名前」として報告します（先にImport New Meshesを実行します）。
+- `id`が、書き出し時のどのObjectの`ub_csv_id`にも一致しない行（-1以外）は**使用しません**。`unknown id N`として件数が出ます。
+- 同じ`id`の行が2つ以上あるときは、最初の行を元のObjectに対応づけ、残りは新しいObjectとして作り、警告します。
 - `id`が整数でない行（空欄・文字・1.5など）は`invalid rows`に数えて使いません。`1.0`や`-1.0`は整数として読みます。
 - `id`の照合は、そのゾーンの`ub_zone`を持つObjectの`ub_csv_id`だけで行います。他のゾーンのidは数えません。
-- 対象ゾーンのどのObjectにも`ub_csv_id`が無い場合（`ub_csv_id`を保存する前の版で書き出したゾーン）は、idの判定をせず従来どおり配置します（-1は追加として数えます）。Previewに「ID check off」と表示されます。
-- Previewには`New meshes (id -1): N`が出ます。不明idがあれば`Skipped N rows with an unknown id`も出ます。結果ステータスの末尾には`new meshes N, unknown id N`が付きます。
 - Replace Zoneで作った新しいObjectには`ub_csv_id`は付きません。同じゾーンをもう一度Houdiniへ送るときは、先にExport Zone CSVをやり直してください。
+
+### Previewのエラー・警告の見方
+
+Preview Placementは、CSVの**行・列・値・理由**を出します。パネルに最初の5件（エラーを先に）が出て、全件はTextエディターの`MRT Placement Report`に書かれます。**エラー**はその行を使わなかったもの、**警告**は使ったか、見落としやすいことの知らせです。
+
+| 内容 | 例 |
+|---|---|
+| 数値が読めない | `Line 3: column tx = 'abc' is not a number.` |
+| 有限でない値 | `Line 4: column sz = 'nan' is not a finite number.` |
+| `id`が整数でない | `Line 5: column id = 'x' is not an integer.` |
+| 列が足りない | `Line 6: the row has 4 columns, but the header has 12; at least 12 are needed.` |
+| `objname`が空 | `Line 9: objname is empty.` |
+| Libraryに無い名前 | 近い名前（`Similar Library names: ...`）、同名だがMeshでないObject（`it is a EMPTY, not a mesh`）、新しいMesh（`run Import New Meshes first`）、既存Objectを残したこと、のどれかを添えます。 |
+| 不明な`id`／重複した`id` | 警告。どの行の`id`で、どの行と重なるかを出します。 |
+| `colname`の問題 | 空の区切りを含む（警告）、名前が衝突する（警告）。 |
+| Libraryで名前が重複 | 正規化した名前が複数のObjectに一致し、最初を使ったこと（警告）。 |
+
+ファイル全体の問題は、エラーで止まります: CSVが空／列が足りない（見つかった列も表示）／ファイルが無い（パスも表示）／`Library`・`Map`が未設定／編集できないObjectやCollection／`ub_csv_id`が無い／元のマップを表示中。
 
 ## 9. ヒント・注意
 
@@ -205,8 +243,24 @@ Previewの`new collections N`は、新しく作るCollectionの数です（途�
 
 性能測定は[検証報告](VALIDATION.md)を参照してください。0.1.0の6万件Replaceは約282.5秒で、生成の非線形性と分割不能な同期が残っています。担当アドオンを移しても、この配置生成の制約が解消したわけではありません。
 
+## 10. ヘルパー（使われ方の確認）
+
+`N > Map Roundtrip` の一番下の**Helper**パネル（初期は閉じています）で、Library（FromHoudiniを含む）のObjectが、Mapの中でどう使われているかを調べます。使われているかどうかは、**Meshデータの共有**で判定します。
+
+1. **Scan Usage**: LibraryとMapを一度走査します。大量のObjectでも進捗が出て、ESCで中断できます。シーンを変えたら、もう一度実行してください。
+2. 結果の1行（`Scanned: N library objects, M map instances, K unused`）が出ます。
+3. Libraryのうち、選択中のObject（なければアクティブ。最大5つ）の使用数と、使われているCollection（多い順に最大3つ）が出ます。Map内のObjectを選ぶと、元のLibrary Objectが出ます。
+4. ボタン:
+   - **Select Usage in Map**: 選択中のLibrary Objectを使っているMap内のObjectを選択します。
+   - **Select Library Object**: 選択中のMap内のObjectの、元のLibrary Objectを選択します。
+   - **Select Unused Library Objects**: Mapで1つも使われていないLibrary Objectを選択します。
+   - **Write Usage Report**: Textエディターの`MRT Usage Report`に、Library Objectごとの使用数・Collection・ゾーンを書きます。
+
+Scan Usageを実行する前の選択操作は、`Run Scan Usage first.`と表示されます。
+
 ## 過去バージョン
 
-CSV出力が「選択Mesh」から「ゾーン範囲内のMesh」へ変わった0.3.0より前の版です。必要なときだけ使用してください。
+古い動作が必要なときだけ使用してください。0.6.0は、Replace Zoneが全作り直しで`Delete`を選べた最後の版です。0.2.0は、CSV出力が「選択したMesh」だった版です。
 
+- [Map Roundtrip Tools 0.6.0（ZIP）](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/map_roundtrip_tools-0.6.0.zip)
 - [Map Roundtrip Tools 0.2.0（ZIP）](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/map_roundtrip_tools-0.2.0.zip)
