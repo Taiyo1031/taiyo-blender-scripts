@@ -80,7 +80,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 | `laid_collection_instance_linker` | CW_Laid Collection Instance Linker | Laid_MAPを分割済みCollection Instanceで再構築 |
 | `zone_groups` | Taiyo Object Groups | 手動・空間グループ、複数所属、色分け、表示制御 |
 | `hierarchy_restriction_manager` | Hierarchy Restriction Manager | 階層の表示・選択・レンダー制限、Solo、復元 |
-| `map_roundtrip_tools` | Map Roundtrip Tools 0.9.1 | Houdiniとの配置CSV・FBX往復（Blender 4.5+） |
+| `map_roundtrip_tools` | Map Roundtrip Tools 0.9.2 | Houdiniとの配置CSV・FBX往復（Blender 4.5+） |
 | `map_link_tools` | Map Link Tools | リンク配置・共有Mesh・名前整理 |
 | `mesh_attribute_batch_remover` | Mesh Attribute Batch Remover | 指定したMesh Attributeを多数のObjectから一括削除 |
 | `modular_asset_renamer` | Modular Asset Renamer | モジュール式の命名ルールで一括リネーム |

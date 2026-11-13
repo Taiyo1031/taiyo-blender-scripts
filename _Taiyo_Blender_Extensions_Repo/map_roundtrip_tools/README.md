@@ -1,6 +1,6 @@
 # Map Roundtrip Tools
 
-**対象version: 0.9.1 / Blender 4.5.0以上**
+**対象version: 0.9.2 / Blender 4.5.0以上**
 
 ゾーン管理・配置CSV・HoudiniとのFBX往復・リンク複製での配置復元を担当するExtensionです。Unreal Bridge Toolsなしで利用できます。
 
@@ -18,6 +18,8 @@
 `Zone Empties`（折りたたみ）にはEmptyの一覧・検索・`Select Zone Empties`があります。
 
 CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持します。Mesh CandidatesでMap配下／現在Sceneを選べます。旧UBTの登録ゾーン・EmptyのAdd/Subtract・登録解除状態も読み取れます。
+
+0.9.1からの変更（0.9.2、不具合の修正）: ①前のReplace Zoneで`use`が0として退避したObjectを、新しいCSVの`use`が1の行で**戻せる**ようになりました。以前は、退避済みのObjectは`unknown id`として使われず、新しいCSVを適用する手段がありませんでした（Restore Original Mapの後はReplaceも止まります）。退避済みのObjectは、`_Replaced_<ゾーン名>`からMapへ戻り、行の位置・Mesh・Collectionで更新されます。②Restore Original Map / Re-apply Imported Mapを一度でも行うと、前のReplaceで作ったObjectを`id`が-1の行へ対応づけられず、Replaceのたびに重複して作っていました。実シーンのコピーでは、退避済みの屋根瓦428個が戻り、Replaceは約2.7秒でした。
 
 0.9.0からの変更（0.9.1、不具合の修正）: ①Replace Zoneを同じCSVで繰り返すと、`id`が-1の行のObjectが毎回増えていました。前回のReplaceで作ったObjectを`id`が-1の行へ対応づけて更新します。②名前が衝突して`.001`が付いたCollectionが、毎回「移動」と判定され、新しいCollectionも作られていました。頼んだ名前を覚えて、同じCollectionとして扱います。③回転が変わっていないObjectが「移動」と数えられることがありました（同じ回転でも、四元数の符号が逆だと差が360度と出ていました）。実シーンのコピーでは、Replace後のPreviewが`moved 139`、`added 8`から、どちらも0になりました。
 

@@ -65,6 +65,7 @@ class MRT_Props(bpy.types.PropertyGroup):
     plan_unknown_id: IntProperty(default=0, options={'SKIP_SAVE'})
     plan_not_in_csv: IntProperty(default=0, options={'SKIP_SAVE'})
     plan_unused_rows: IntProperty(default=0, options={'SKIP_SAVE'})
+    plan_resurrected: IntProperty(default=0, options={'SKIP_SAVE'})
     plan_id_check: BoolProperty(default=False, options={'SKIP_SAVE'})
     last_export: StringProperty(default='none', options={'SKIP_SAVE'})
     running: BoolProperty(default=False, options={'SKIP_SAVE'})

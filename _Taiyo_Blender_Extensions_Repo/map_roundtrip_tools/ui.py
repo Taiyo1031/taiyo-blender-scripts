@@ -101,7 +101,7 @@ class MRT_PT_Import(bpy.types.Panel):
             op.zone = zone
         plan = box.box()
         if p.plan_ready:
-            plan.label(text=f'Unchanged {p.plan_unchanged}; Moved {p.plan_moved}')
+            plan.label(text=f'Unchanged {p.plan_unchanged}; Moved {p.plan_moved}' + (f' (incl. {p.plan_resurrected} brought back from the archive)' if p.plan_resurrected else ''))
             plan.label(text=f'Retire {p.plan_archive} (use 0: {p.plan_unused_rows} rows) to _Replaced_{p.plan_zone}; Add {p.plan_create}')
             plan.label(text=f'Not in CSV, left as they are: {p.plan_not_in_csv}')
             plan.label(text=f'Invalid rows {p.plan_invalid}; new collections {p.plan_collections}')

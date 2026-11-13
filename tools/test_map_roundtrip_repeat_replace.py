@@ -154,7 +154,64 @@ def test_same_rotation_with_opposite_quaternion_is_not_a_move():
     print('PASS a rotation written back from the CSV is never reported as moved (q and -q are the same rotation)')
 
 
+def test_new_objects_are_found_again_after_restore_and_reapply():
+    """Restore / Re-apply store an 'after' state in ub_run; the objects made by Replace must still be matched to id -1 rows."""
+    mapc, olds = fixture()
+    write_csv([row(1, 0, 'Rock'), row(2, 0, 'Rock'), row(-1, 10), row(-1, 20)])
+    run(False)
+    assert bpy.ops.mrt.switch_map_state(target='BEFORE', zone='Z') == {'FINISHED'}, p.status
+    assert bpy.ops.mrt.switch_map_state(target='AFTER', zone='Z') == {'FINISHED'}, p.status
+    run(True)
+    assert (p.plan_create, p.plan_moved, p.plan_unchanged) == (0, 0, 4), (p.plan_create, p.plan_moved, p.plan_unchanged)
+    run(False)
+    assert xs(zone_objects()) == [0, 0, 10, 20], xs(zone_objects())
+    print('PASS objects made by Replace are found again after Restore Original Map and Re-apply (no duplicates)')
+
+
+def test_retired_object_comes_back_when_the_csv_uses_it_again():
+    """An earlier Replace retired id 2 (use 0). A newer CSV says use 1: the object returns to the Map and takes the row."""
+    mapc, olds = fixture()
+    write_csv([row(1, 0, 'Rock'), row(2, 0, 'Rock', use=0)])
+    run(False)
+    assert olds[2].get('ub_zone') is None and olds[2].get('ub_archived_from') == 'Z' and olds[2] not in mapc.objects[:]
+    run(True)  # the same CSV: nothing to do, the retired object is not "unknown"
+    assert (p.plan_moved, p.plan_archive, p.plan_unknown_id, p.plan_resurrected) == (0, 0, 0, 0), \
+        (p.plan_moved, p.plan_archive, p.plan_unknown_id, p.plan_resurrected)
+    write_csv([row(1, 0, 'Rock'), row(2, 7, 'Rock')])
+    run(True)
+    assert (p.plan_moved, p.plan_resurrected, p.plan_unknown_id, p.plan_archive) == (1, 1, 0, 0), \
+        (p.plan_moved, p.plan_resurrected, p.plan_unknown_id, p.plan_archive)
+    run(False)
+    ob = olds[2]
+    assert ob.get('ub_zone') == 'Z' and 'ub_archived_from' not in ob, dict(ob.items())
+    assert ob.users_collection == (mapc,) and round(ob.location.x) == 7, (ob.users_collection, ob.location.x)
+    assert 'after' not in placement.read_run(ob) and placement.read_run(ob)['before']['colls'] == [mapc.name], placement.read_run(ob)
+    run(True)  # a second Preview with the same CSV: everything is in place
+    assert (p.plan_moved, p.plan_create, p.plan_resurrected, p.plan_unchanged) == (0, 0, 0, 2), \
+        (p.plan_moved, p.plan_create, p.plan_resurrected, p.plan_unchanged)
+    # the original map still comes back, and the imported map again
+    assert bpy.ops.mrt.switch_map_state(target='BEFORE', zone='Z') == {'FINISHED'}, p.status
+    assert xs(zone_objects()) == [0, 0] and olds[2].users_collection == (mapc,), xs(zone_objects())
+    assert bpy.ops.mrt.switch_map_state(target='AFTER', zone='Z') == {'FINISHED'}, p.status
+    assert xs(zone_objects()) == [0, 7] and olds[2].get('ub_zone') == 'Z', xs(zone_objects())
+    print('PASS a retired object comes back when a newer CSV has a use = 1 row for it; Restore/Re-apply keep working')
+
+
+def test_retired_object_stays_retired_without_a_library_mesh():
+    mapc, olds = fixture()
+    write_csv([row(1, 0, 'Rock'), row(2, 0, 'Rock', use=0)])
+    run(False)
+    write_csv([row(1, 0, 'Rock'), row(2, 7, 'NoSuchMesh')])
+    run(True)
+    assert (p.plan_moved, p.plan_resurrected) == (0, 0), (p.plan_moved, p.plan_resurrected)
+    run(False)
+    assert olds[2].get('ub_zone') is None and olds[2].get('ub_archived_from') == 'Z'
+    print('PASS a retired object whose row has no Library mesh stays retired')
+
+
 for test in (test_same_rotation_with_opposite_quaternion_is_not_a_move, test_repeat_replace_does_not_duplicate_new_objects, test_repeat_replace_then_restore_and_reapply,
+             test_new_objects_are_found_again_after_restore_and_reapply, test_retired_object_comes_back_when_the_csv_uses_it_again,
+             test_retired_object_stays_retired_without_a_library_mesh,
              test_suffixed_collection_matches_its_colname, test_renamed_suffixed_collection_uses_its_real_name):
     test()
 mrt.unregister()

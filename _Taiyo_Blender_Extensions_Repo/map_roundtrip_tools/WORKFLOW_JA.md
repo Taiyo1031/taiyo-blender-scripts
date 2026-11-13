@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.9.1 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.9.2 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -172,9 +172,11 @@ Replace Zoneは、戻りCSVの各行を、書き出し時に保存した`ub_csv_
 | 戻りCSVに**行が無い**`id`（`use`列が無いCSVも同じ） | **何もしません**。元の位置にそのまま残り、動いていないものとして数えます（0.9.0）。 |
 | 新しく追加した（`id`が-1）／`id`が重複した行（Houdiniで複製した） | 新しいObjectを作ります。 |
 | `id`が-1の行で、**前のReplace Zoneで作ったObjectがある**（同じMeshで、まだ書き出し直していない） | 新しくは作らず、そのObjectを更新します（0.9.1）。位置が同じなら何もしません。Mesh・位置が同じものを優先して対応づけ、足りなければ名前順です。対応する行が無くなった前回のObjectは、そのまま残し、警告`unmatched_added`を出します。 |
+| 前のReplace Zoneで**退避したObject**（`_Replaced_ZONE_A`にある）の`id`に、`use`が1の行がある（0.9.2） | **Mapへ戻します**。行の位置・回転・拡大・Mesh・Collectionで更新します。Previewの`Moved`に含まれ、`brought back from the archive N`と出ます。退避したObjectに`use`が0の行があるだけなら、何もしません。行の`objname`がLibraryに無いときは、退避したままです。 |
 | `id`が書き出し時に無かった行 | 使いません（件数を警告します）。 |
 | `objname`がLibraryに無い行で、既存のObjectを指す | そのObjectは**変えずに残し**、エラーとして報告します（削除扱いにはしません）。 |
 
+- **新しいCSVで退避を取り消せます**（0.9.2）: Houdiniでやり直して、前に`use`が0だった行を`1`にしたCSVでも、もう一度Replace Zoneできます。Restore Original Mapは不要です。
 - **削除はしません**。`Delete`の選択肢はなくなり、`use`が`0`のObjectは退避されます。
 - **`use`列（0.9.0）**: 戻りCSVに`use`という列を足すと、行ごとに使うか消すかを決められます。`1`（または空欄）は使う、`0`は、その`id`のObjectを元のマップから消す（退避する）という意味です。`use`が`0`の行は何も置かず、`objname`がLibraryに無くても、`id`が-1や不明でも、警告は出しません（Previewの`use 0 rows`に数えます）。`use`が`0`と`1`以外の値（`x`・`2`など）の行は、使わない行として`bad_use`のエラーで報告します。同じ`id`に`0`の行と`1`の行があるときは、`1`を優先してObjectを残し、警告します（`use_conflict`）。`use`列が無い古いCSVでも使えますが、その場合はObjectを退避しません。
 - **ub_csv_idが必要です**。ゾーンのObjectに`ub_csv_id`が1つも無いときは、`Run Export Zone CSV with this version first.`というエラーになります。先に**Export Zone CSV**をやり直してください。ゾーンに1つもObjectが無いときは、すべての行を新しいObjectとして作ります。

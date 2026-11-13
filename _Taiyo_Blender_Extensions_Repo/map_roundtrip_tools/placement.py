@@ -9,10 +9,10 @@ from dataclasses import dataclass, field
 import bpy
 from mathutils import Euler
 from . import placement_report
-from .constants import ZONE_KEY, COLNAME_SEPARATOR, CSV_COLUMNS, CSV_ID_KEY, NEW_MESH_ID, RUN_KEY
+from .constants import ARCHIVED_KEY, ZONE_KEY, COLNAME_SEPARATOR, CSV_COLUMNS, CSV_ID_KEY, NEW_MESH_ID, RUN_KEY
 from .chunked import ChunkedOperator
 from .journal import (Journal, STATE_AFTER, STATE_BEFORE, STATE_KEY, apply_absent, capture,
-                      ensure_archive, find_layer, map_state, read_run, write_run)  # noqa: F401 (find_layer is re-exported)
+                      ensure_archive, find_layer, map_state, read_run, set_tags, write_run)  # noqa: F401 (find_layer is re-exported)
 from .placement_report import Issue
 
 INTENDED_NAME_KEY = 'mrt_intended_name'  # the name the CSV asked for, when Blender added a suffix (UNI -> UNI.001)
@@ -185,6 +185,7 @@ class Plan:
     remove_marks: dict = field(default_factory=dict)  # zone object -> first CSV line with use = 0
     not_in_csv: list = field(default_factory=list)  # zone objects without any row: left exactly as they are
     unused_rows: int = 0      # rows with use = 0 (they place nothing)
+    resurrected: set = field(default_factory=set)   # objects an earlier Replace retired, whose id now has a use = 1 row: they come back
     adds: list = field(default_factory=list)        # row indices that create a new object
     kept_unresolved: set = field(default_factory=set)   # zone objects whose row names a mesh that is not in Library
     owners: dict = field(default_factory=dict)      # zone object -> its collections, in export order
@@ -315,10 +316,18 @@ def build_plan(p, progress=lambda *args: None):
         plan.collections.setdefault(c.name, c)
         yield
     plan.path_index = map_collection_paths(p.map_coll)
+    retired_by_id = {}  # csv id -> object that an earlier Replace retired (use 0); a use = 1 row for it brings it back
     for i, ob in enumerate(bpy.data.objects):
         plan.object_names.add(ob.name)
         if ob.get(ZONE_KEY) == zone:
             plan.old.append(ob)
+        elif ob.get(ARCHIVED_KEY) == zone:
+            value = ob.get(CSV_ID_KEY)
+            spec = read_run(ob)
+            # only an object that Replace retired: it has the state it had in the original map and is absent after the import
+            if (spec and spec.get('zone') == zone and isinstance(spec.get('before'), dict) and 'after' in spec and spec['after'] is None
+                    and isinstance(value, (int, float)) and not isinstance(value, bool) and float(value).is_integer()):
+                retired_by_id.setdefault(int(value), ob)
         if i % 1024 == 0:
             yield
     known = {}
@@ -328,12 +337,13 @@ def build_plan(p, progress=lambda *args: None):
             known.setdefault(int(value), ob)
     if plan.old and not known:
         raise ValueError(f'{zone} has {len(plan.old)} objects but none has ub_csv_id. Run Export Zone CSV with this version first.')
-    plan.id_check = bool(known)
+    plan.id_check = bool(known or retired_by_id)
     fresh = {}  # mesh -> objects that an earlier Replace made from id -1 rows (no exported id yet), in name order
     for ob in plan.old:
         if ob.get(CSV_ID_KEY) is None:
             spec = read_run(ob)
-            if spec and spec.get('zone') == zone and 'before' in spec and spec['before'] is None and 'after' not in spec:
+            # 'after' may exist: Restore Original Map / Re-apply Imported Map store it for the objects they switch
+            if spec and spec.get('zone') == zone and 'before' in spec and spec['before'] is None:
                 fresh.setdefault(ob.data, []).append(ob)
     for objects in fresh.values():
         objects.sort(key=lambda o: o.name)
@@ -358,7 +368,7 @@ def build_plan(p, progress=lambda *args: None):
                 values, csv_id, name, colname, use = parsed
                 if not use:
                     plan.unused_rows += 1
-                    matched = known.get(csv_id) if plan.id_check and csv_id != NEW_MESH_ID else None
+                    matched = known.get(csv_id) if plan.id_check and csv_id != NEW_MESH_ID else None  # a retired object has nothing left to remove
                     if matched is not None:
                         plan.remove_marks.setdefault(matched, line)
                     if number % 256 == 0:
@@ -371,6 +381,9 @@ def build_plan(p, progress=lambda *args: None):
                 skip = False
                 if plan.id_check and csv_id != NEW_MESH_ID:
                     matched = known.get(csv_id)
+                    if matched is None and csv_id in retired_by_id:
+                        matched = retired_by_id[csv_id]
+                        plan.resurrected.add(matched)
                     if matched is None:
                         plan.unknown_id_rows += 1
                         skip = True
@@ -437,10 +450,11 @@ def build_plan(p, progress=lambda *args: None):
     # Collections of the zone's objects, in the order the exporter looks at them (all collections, then scene roots).
     if not p.map_coll.is_editable:
         raise ValueError('Map collection is not editable.')
-    for ob in plan.old:
+    plan.resurrected &= {ob for ob in plan.row_ob if ob is not None}  # a row without a Library mesh leaves its object retired
+    for ob in (*plan.old, *plan.resurrected):
         if not ob.is_editable:
             raise ValueError(f'Old object is not editable: {ob.name}')
-    old_set = set(plan.old)
+    old_set = set(plan.old) | plan.resurrected
     roots = {scene.collection for scene in bpy.data.scenes}
     for c in (*bpy.data.collections, *roots):
         for i, ob in enumerate(c.objects):
@@ -478,10 +492,10 @@ def build_plan(p, progress=lambda *args: None):
         mesh, name, loc, rot, scale, colname = plan.rows[i]
         owners = plan.owners.get(ob, [])
         current = collection_colname(owners[0], p.map_coll, parents, root_set) if owners else None
-        collection_changed = current is None or parts_of(current) != parts_of(colname)
+        collection_changed = current is None or parts_of(current) != parts_of(colname) or ob in plan.resurrected
         if collection_changed and colname:
             resolve_colname(plan, p.map_coll, colname)
-        if ob.data != mesh or _transform_differs(ob, loc, rot, scale) or collection_changed:
+        if ob.data != mesh or _transform_differs(ob, loc, rot, scale) or collection_changed or ob in plan.resurrected:
             plan.moved.append(i)
             if collection_changed:
                 plan.collection_moves.add(i)
@@ -503,6 +517,7 @@ def publish_plan(p, plan):
     p.plan_moved = len(plan.moved)
     p.plan_archive = len(plan.retired)
     p.plan_not_in_csv = len(plan.not_in_csv)
+    p.plan_resurrected = len(plan.resurrected)
     p.plan_unused_rows = plan.unused_rows
     p.plan_create = len(plan.adds)
     p.plan_invalid = plan.invalid
@@ -522,7 +537,7 @@ def publish_plan(p, plan):
 
 
 def plan_summary(plan):
-    return (f'{plan.zone}: unchanged {len(plan.unchanged)} (not in CSV {len(plan.not_in_csv)}), moved {len(plan.moved)}, retired {len(plan.retired)} (use 0 rows {plan.unused_rows}), '
+    return (f'{plan.zone}: unchanged {len(plan.unchanged)} (not in CSV {len(plan.not_in_csv)}), moved {len(plan.moved)} (brought back from the archive {len(plan.resurrected)}), retired {len(plan.retired)} (use 0 rows {plan.unused_rows}), '
             f'added {len(plan.adds)}, skipped {plan.missing_rows} (not in Library), invalid rows {plan.invalid}, '
             f'new meshes {plan.added} of {plan.new_rows} rows with id -1, unknown id {plan.unknown_id_rows}')
 
@@ -624,7 +639,9 @@ class MRT_OT_ReplaceZone(ChunkedOperator, bpy.types.Operator):
                     for c in list(owners.get(ob, [])):
                         if c != target:
                             journal.unlink(c, ob)
-                write_run(journal, ob, {'zone': zone, 'before': before})
+                write_run(journal, ob, {'zone': zone, 'before': before})  # no 'after': the object is present in the imported map
+                if ob in plan.resurrected:  # it was retired by an earlier Replace: it is part of the zone again
+                    set_tags(journal, ob, {ZONE_KEY: zone, ARCHIVED_KEY: None})
                 self.progress('Moving changed objects', n + 1, len(plan.moved))
                 yield
             if plan.retired or moved_obs or plan.adds:

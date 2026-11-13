@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.9.1**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.9.2**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -229,3 +229,11 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - 回帰: `tools/test_map_roundtrip_repeat_replace.py`（回転の符号・繰り返しReplace・Restore/Re-apply・`UNI.001`・手で名前を変えた場合）。既存の17本、`test_mrt_zone_from_objects.py`、`test_unreal_bridge_tools.py`、実UIは合格しました。
 - 前回のReplaceで作ったObjectは、`ub_run`の`before`が`null`で`ub_csv_id`が無いものとして見分けます。書き出し直して`ub_csv_id`が付いたObjectは、通常の`id`の対応です。
 - 未確認: Houdiniから実際に戻した`use`列つきCSV、Blender 5.x、Linux、Unreal。
+
+## 0.9.2の追加（退避したObjectを新しいCSVで戻す）
+
+- 実シーンのコピー（`BO_StPrlg_BaseMap_V16`のZONE_1、Blender 5.2.2。保存先は元のファイルとは別のコピー）: 前のReplaceで1026個を退避した状態で、`use`が1に変わった戻りCSV（4910行）をPreviewすると、修正前は`unknown id 428`（すべて屋根瓦）で`moved 0`、修正後は`moved 428 (brought back from the archive 428)`・`unknown id 0`でした。Replaceは約2.7秒、続けてPreviewすると`moved 0`です。Restore Original Mapで3258個、Re-apply Imported Mapで2672個になり、もう一度Previewしても`moved 0`・`create 0`でした。
+- 修正前は、Restore Original Mapの後は、Replace Zone・Previewとも`showing the original map`で止まり、新しいCSVを適用する手段がありませんでした。
+- 重複の原因: Restore / Re-applyは、切り替えたObjectの`ub_run`へ`after`を書きます。前回のReplaceで作ったObjectを見分ける判定が`after`の無いものだけを対象にしていたため、切り替えの後は`id`が-1の行を毎回新しく作っていました。`before`がnullであれば、`after`があっても前回作ったObjectとして扱います。
+- 回帰: `tools/test_map_roundtrip_repeat_replace.py`（退避したObjectの復活・同じCSVの`use`が0だけなら何もしない・Libraryに無いMeshの行は退避のまま・切り替え後の重複なし）。既存の`restore`・`csv_id`・`colname_path`・`archive_dest`・`preview_hints`・`mesh_import_paths`・`ui_layout`・`tools`・`zone_csv`・`zone_rename`は合格しました（Blender 4.5.9）。
+- 未確認: Blender 5.1.2（5.2.2と4.5.9で確認）、実UIのESC、Houdiniの再実行。
