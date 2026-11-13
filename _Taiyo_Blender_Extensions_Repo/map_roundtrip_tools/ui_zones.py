@@ -19,6 +19,7 @@ class MRT_PT_Zones(bpy.types.Panel):
 
         row = layout.row()
         row.prop(p, 'zone_choice', text='')
+        row.operator('mrt.rename_zone', text='', icon='GREASEPENCIL')
         row.operator('mrt.new_zone', text='', icon='ADD')
 
         layout.prop(p, 'zone_scope', expand=True)
@@ -109,7 +110,7 @@ class MRT_PT_ZoneEmpties(bpy.types.Panel):
                 op = row.operator('mrt.zone_empty_action', text=e.name, icon='EMPTY_AXIS')
                 op.object_name, op.action = e.name, 'SELECT'
                 row.prop(e, 'mrt_zone_operation', text='')
-                op = row.operator('mrt.zone_empty_action', text='', icon='X')
+                op = row.operator('mrt.zone_empty_action', text='', icon='TRASH')
                 op.object_name, op.action = e.name, 'UNREGISTER'
 
                 count += 1

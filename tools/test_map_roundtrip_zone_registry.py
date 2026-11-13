@@ -26,9 +26,10 @@ assert set(zone_empties(s,'ZONE_'))=={a,b}
 assert bpy.ops.mrt.zone_empty_action(object_name=b.name,action='SELECT')=={'FINISHED'}
 assert set(bpy.context.selected_objects)=={b}
 assert bpy.ops.mrt.zone_empty_action(object_name=a.name,action='UNREGISTER')=={'FINISHED'}
-assert a.name in s.objects and a not in set(zone_empties(s,'ZONE_'))
+assert bpy.data.objects.get('ZONE_A') is None and set(zone_empties(s,'ZONE_'))=={b}  # unregistering deletes the empty itself
 assert p.zone_choice=='ZONE_Z'
-# UI registration can re-enable the same object without renaming it.
+# A new empty can be registered after that.
+a=bpy.data.objects.new('ZONE_A2',None);a.empty_display_type='CUBE';s.collection.objects.link(a)
 bpy.ops.object.select_all(action='DESELECT');a.select_set(True)
 assert bpy.ops.mrt.register_zone_empties()=={'FINISHED'}
 assert a in set(zone_empties(s,'ZONE_'))

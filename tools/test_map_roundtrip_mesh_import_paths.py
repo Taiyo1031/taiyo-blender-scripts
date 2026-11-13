@@ -180,6 +180,7 @@ def test_fbx_object_transform_is_baked_into_the_mesh(fbx):
         return {'FINISHED'}
 
     mesh_import.fbx_import = fake_import
+    p.convert_houdini_fbx = True
     try:
         h = run()
     finally:
@@ -191,8 +192,34 @@ def test_fbx_object_transform_is_baked_into_the_mesh(fbx):
     assert (a.data.vertices[2].co - Vector((0, -3, 0))).length < 1e-4, a.data.vertices[2].co
     assert (b.data.vertices[0].co - Vector((5, 0, 0))).length < 1e-4, b.data.vertices[0].co
     assert 'baked into 2 meshes' in h.result, h.result
-    # An identity FBX object is left alone
-    print('PASS the FBX object transform (rotation, scale) is baked into the imported mesh data')
+    print('PASS with the checkbox on, the FBX object transform (rotation, scale) is baked into the imported mesh data')
+
+
+def test_fbx_conversion_is_off_by_default(fbx):
+    assert p.bl_rna.properties['convert_houdini_fbx'].default is False
+    lib, mapc = fixture(fbx)
+    p.convert_houdini_fbx = False
+    original = mesh_import.fbx_import
+
+    def fake_import(path):
+        m = bpy.data.meshes.new('HouC')
+        m.from_pydata([(0, 0, 0), (100, 0, 0), (0, 0, 300)], [], [(0, 1, 2)])
+        ob = bpy.data.objects.new('HouC', m)
+        ob.rotation_euler = Euler((1.5707963, 0, 0))
+        ob.scale = (0.01, 0.01, 0.01)
+        bpy.context.scene.collection.objects.link(ob)
+        return {'FINISHED'}
+
+    mesh_import.fbx_import = fake_import
+    try:
+        h = run()
+    finally:
+        mesh_import.fbx_import = original
+    c = bpy.data.objects['HouC']
+    assert all(abs(v - 0.01) < 1e-6 for v in c.scale) and abs(c.rotation_euler.x - 1.5707963) < 1e-6, (c.rotation_euler, c.scale)
+    assert (c.data.vertices[2].co - Vector((0, 0, 300))).length < 1e-4, c.data.vertices[2].co  # the mesh data is not touched
+    assert 'baked' not in h.result, h.result
+    print('PASS with the checkbox off (default) the FBX is imported as it is')
 
 
 def test_cancel_removes_new_collections(fbx):
@@ -216,6 +243,7 @@ def test_cancel_removes_new_collections(fbx):
 fbx = build_fbx()
 for test in (test_default_destination_and_no_csv, test_user_chosen_destination, test_structure_follows_colname,
              test_existing_structure_is_reused_and_conflicts_warn, test_destination_outside_library_is_searched, test_fbx_object_transform_is_baked_into_the_mesh,
+             test_fbx_conversion_is_off_by_default,
              test_cancel_removes_new_collections):
     test(fbx)
 mrt.unregister()

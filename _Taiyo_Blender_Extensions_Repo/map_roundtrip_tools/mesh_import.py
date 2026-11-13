@@ -190,11 +190,13 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
                     world = ob.matrix_world.copy()
                     ob.parent = None
                     ob.matrix_world = world
-                # A Y-up / centimetre FBX (Houdini) arrives as an object with rotation 90 deg and scale 0.01 over raw
-                # mesh data. Placement only uses the mesh, so that transform is baked into it: the mesh then matches
-                # the Library (Z-up, metres, identity object) and a CSV row's transform puts it in the right place.
+                # Only with 'Convert Houdini FBX to Blender size'. A Y-up / centimetre FBX (Houdini) arrives as an object
+                # with rotation 90 deg and scale 0.01 over raw mesh data. Placement only uses the mesh, so that transform
+                # is baked into it: the mesh then matches the Library (Z-up, metres, identity object).
                 world = ob.matrix_basis.copy()  # the parent is gone; matrix_world can be stale right after an import
-                if ob.data not in baked and not _is_identity(world):
+                if not p.convert_houdini_fbx:
+                    pass
+                elif ob.data not in baked and not _is_identity(world):
                     ob.data.transform(world)
                     if world.determinant() < 0:
                         ob.data.flip_normals()
@@ -240,7 +242,7 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
             p.plan_new_meshes_imported += imported
             if off_origin:
                 self.report({'WARNING'}, f'{off_origin} imported meshes are not at the origin; transforms preserved.')
-            self.result = f'Imported {imported} meshes (skipped {skipped}, updated {updated}); importer {LAST_IMPORTER}; collection paths from CSV {from_csv}; FBX transform baked into {transformed} meshes'
+            self.result = f'Imported {imported} meshes (skipped {skipped}, updated {updated}); importer {LAST_IMPORTER}; collection paths from CSV {from_csv}' + (f'; FBX transform baked into {transformed} meshes' if p.convert_houdini_fbx else '')
         except BaseException as exc:
             if not committed:
                 for old_mesh, new_mesh in reversed(remapped):
