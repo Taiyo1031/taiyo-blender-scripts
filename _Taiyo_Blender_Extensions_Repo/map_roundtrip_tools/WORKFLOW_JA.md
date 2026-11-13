@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.7.1 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.7.2 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -192,6 +192,7 @@ Blenderの中には、Houdiniに出す前の**元のマップ**と、Replace Zon
 ### 追加Meshの取り込み（Import New Meshes）
 
 - **取り込み先**: `New Meshes To`で、取り込み先のCollectionを選べます。空欄なら`Library`の下の`FromHoudini`（無ければ作成）です。`Library`の外のCollection（例 `NewOBJs`）でも構いません。Preview/Replace/Helperは`Library`と`New Meshes To`の両方からMeshを探します（0.7.1。0.7.0では外にあると`added 0`になりました）。Mapの中のCollectionは探しません。
+- **FBXの変換**: HoudiniのFBX（Y-up・cm）は、取り込むと「X回転90度・スケール0.01」を持つObjectになります。配置にはMeshデータだけを使うため、この変換をMeshデータへ焼き込み、Libraryと同じ（Z-up・m・Objectの変換なし）にします（0.7.2。0.7.1までは新しいMeshの向き・大きさ・位置がずれました）。結果欄に`FBX transform baked into N meshes`と出ます。
 - **構造**: `Placement CSV`が指定してあれば、追加Meshを使う行の`colname`の階層を、取り込み先の中に再現します（例 `Area2/NewRocks` → 取り込み先の中の`Area2 [FromHoudini]` > `NewRocks [FromHoudini]`）。無い階層は作り、ある階層は再利用します。`colname`が空欄、またはCSVが無いMeshは、取り込み先の直下に並びます。
 - **`colname`が複数ある**: 同じ追加Meshを、`colname`が違う複数の行が使っているときは**警告**を出し、最も多い`colname`を使います（同数ならCSVで先に出る行）。
 - ESCや失敗では、作ったCollectionも含めて取り込み前に戻ります。

@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.7.1**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.7.2**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -184,3 +184,10 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - 実シーン（約6.6万Object、ゾーン`ZONE_1A`の旧3,258個、戻りCSV 647行）のコピーで再現しました。`New Meshes To`が`Library`の外（`NewOBJs`）だと、Import New Meshesは8個を取り込めるのに、Previewは`added 0, skipped 8 (not in Library)`でした。修正後は`added 8`、エラー0件、Replace Zoneは約1.7秒でした（Blender 4.5.9, M1 Pro）。
 - 回帰: `tools/test_map_roundtrip_mesh_import_paths.py`（外にある取り込み先が探され、Mapの中の取り込み先は無視される）。
 - Helperの照合は、Mapの各Objectごとに全Library Objectを調べていたため、`Library Mesh数 × Map Object数`の時間がかかっていました。Meshデータの集合で調べるよう直しました。実シーンでのHelper走査時間は未測定です。
+
+## 0.7.2の追加（Houdini FBXの変換を焼き込む）
+
+- 実シーンのコピーで再現しました。0.7.1では、新しいMesh 8個（`UNI`系6個と`Comb`系2個）が、CSVの位置に置かれませんでした。FBXのObjectは回転X 90度・スケール0.01で、Meshデータは元の座標（cm・Y-up）のままだったためです。置いたObjectはスケール1・回転0なので、向きが違い、100倍の大きさになり、`Comb`系は約2,000離れた場所に出ました。
+- 修正後は、取り込み時にObjectの変換をMeshデータへ焼き込みます。`Gasyou_522_F_560`の寸法は、Library側の同種Meshと同じ向き・m単位（0.16×4.7×2.24）になり、置いたObjectの中心はCSVの位置（-21.56, -10.46, 8.89）と一致しました。`Comb`系もほかの部材と同じ範囲（約 -20.5, -9.2, 6〜7）に入りました（Blender 4.5.9）。
+- 回帰: `tools/test_map_roundtrip_mesh_import_paths.py`（回転・スケール付きのObjectを模擬して、頂点の世界座標が保たれ、Objectの変換が単位になる）。
+- 未確認: スケールが負（ミラー）のObject、同じMeshデータを違う変換で共有するFBX、Unrealなど他ツールのFBX。
