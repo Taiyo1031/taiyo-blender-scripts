@@ -1,6 +1,7 @@
 import bpy
 from bpy.props import BoolProperty, CollectionProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty, StringProperty
 from .zones import MRT_ZoneEntry, zone_items
+from .ui_common import invalidate_choice
 from .constants import BUILTIN_PRESET
 from .presets import preset_items, apply_selected
 
@@ -12,7 +13,7 @@ def enum(items):
 class MRT_Props(bpy.types.PropertyGroup):
     zones: CollectionProperty(type=MRT_ZoneEntry)
     zone_prefix: StringProperty(name='Zone Prefix', default='ZONE_', description='従来Cube Emptyの自動検出用接頭辞。UI登録したEmptyは接頭辞に依存しません')
-    zone_choice: EnumProperty(name='Zone', items=zone_items, description='操作するゾーン。All Zonesなら全ゾーンをまとめて選択します')
+    zone_choice: EnumProperty(name='Zone', items=zone_items, update=invalidate_choice, description='操作するゾーン。All Zonesなら全ゾーンをまとめて選択します')
     zone_result: StringProperty(options={'SKIP_SAVE'})
     zone_scope: EnumProperty(name='Mesh Candidates', items=[('MAP','Map Collection','Mapと子CollectionのMesh'),('SCENE','All Scene Meshes','現在のSceneのMesh')], default='MAP')
     zone_csv_dir: StringProperty(name='CSV Output Folder', subtype='DIR_PATH', default='//houdini_io/out', description='選択Meshをゾーン名.csvへ書き出します。ub_zoneも現在のZone名になります')
@@ -44,12 +45,12 @@ class MRT_Props(bpy.types.PropertyGroup):
     convert_houdini_fbx: BoolProperty(description='ONにすると、取り込むFBXのObjectが持つ回転・スケール(HoudiniのY-up・cmのFBXは「X回転90度・スケール0.01」)をMeshデータへ焼き込み、Blenderのサイズ・向き(Z-up・m)にそろえます。既に変換済みのFBXでは何も変わりません。既定OFF: FBXの内容をそのまま取り込みます', name='Convert Houdini FBX to Blender size', default=False)
     name_mode: EnumProperty(description='Library Mesh名の照合方式。CSV書き出しとLibrary照合に使用します。読込は完全一致を優先し、次に正規化した名前で検索します', name='Name Normalize', items=[('keep_raw', 'Keep Raw', ''), ('numeric_suffix', 'Remove Numeric Suffix (.001+)', ''), ('trim_after_dot', 'Trim After Dot', '')], default='numeric_suffix')
     if_exists: EnumProperty(description='Skipは既存同名Meshを保持。UpdateはそのMeshを共有する全Objectを新Meshへ差し替えます', name='If Exists', items=enum(['SKIP', 'UPDATE']), default='SKIP')
-    zone_override: StringProperty(description='置換対象ub_zoneの名前。空欄ならPlacement CSV名。書き出し時のCSV名と一致させてください', name='Zone')
+    skip_bad_rows: BoolProperty(name='Skip rows that cannot be placed', default=False, description='OFFのとき、Libraryに無いMeshの行や読めない行が1つでもあるとImportを実行しません(そのObjectが消えてしまうため)。ONにすると、それらの行は置かずにImportします')
     dry_run: BoolProperty(description='ONはPreviewだけで配置を変えません。確認後にOFFにするとReplaceを実行します。作業前に.blendを保存してください', name='Dry Run', default=True)
     plan_ready: BoolProperty(default=False, options={'SKIP_SAVE'})
     plan_archive: IntProperty(default=0, options={'SKIP_SAVE'})
-    plan_unchanged: IntProperty(default=0, options={'SKIP_SAVE'})
-    plan_moved: IntProperty(default=0, options={'SKIP_SAVE'})
+    plan_delete: IntProperty(default=0, options={'SKIP_SAVE'})
+    plan_block: StringProperty(options={'SKIP_SAVE'})
     plan_errors: IntProperty(default=0, options={'SKIP_SAVE'})
     plan_warnings: IntProperty(default=0, options={'SKIP_SAVE'})
     plan_create: IntProperty(default=0, options={'SKIP_SAVE'})
@@ -60,13 +61,7 @@ class MRT_Props(bpy.types.PropertyGroup):
     plan_zone: StringProperty(options={'SKIP_SAVE'})
     plan_names: StringProperty(options={'SKIP_SAVE'})
     plan_new_meshes_imported: IntProperty(default=0, options={'SKIP_SAVE'})
-    plan_added: IntProperty(default=0, options={'SKIP_SAVE'})
-    plan_new_rows: IntProperty(default=0, options={'SKIP_SAVE'})
-    plan_unknown_id: IntProperty(default=0, options={'SKIP_SAVE'})
-    plan_not_in_csv: IntProperty(default=0, options={'SKIP_SAVE'})
     plan_unused_rows: IntProperty(default=0, options={'SKIP_SAVE'})
-    plan_resurrected: IntProperty(default=0, options={'SKIP_SAVE'})
-    plan_id_check: BoolProperty(default=False, options={'SKIP_SAVE'})
     last_export: StringProperty(default='none', options={'SKIP_SAVE'})
     running: BoolProperty(default=False, options={'SKIP_SAVE'})
     cancel_requested: BoolProperty(default=False, options={'SKIP_SAVE'})

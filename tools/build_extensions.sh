@@ -56,6 +56,7 @@ packages=(
 
 compatibility_archives=(
   "unreal_bridge_tools-2.3.2.zip"
+  "map_roundtrip_tools-0.9.2.zip"
   "map_roundtrip_tools-0.9.1.zip"
   "map_roundtrip_tools-0.9.0.zip"
   "map_roundtrip_tools-0.8.1.zip"

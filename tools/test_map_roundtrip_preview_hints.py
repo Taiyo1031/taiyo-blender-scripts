@@ -1,4 +1,4 @@
-"""Preview wording: new-mesh hint, one warning per duplicate Library name, large-retire warning.
+"""Preview wording: missing-mesh hint, one warning per duplicate Library name, use column, rows that block the import, fewer-rows warning.
 
 blender --background --factory-startup --python-exit-code 1 --python tools/test_map_roundtrip_preview_hints.py
 """
@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / '_Taiyo_Blender_Extensions_Repo'))
 mrt = importlib.import_module('map_roundtrip_tools')
 from map_roundtrip_tools import placement
+from map_roundtrip_tools.zones import ensure_zone
 mrt.register()
 scene = bpy.context.scene
 p = scene.mrt_props
@@ -44,7 +45,9 @@ def fixture(zone_objects=30):
         ob['ub_csv_id'] = i
         mapc.objects.link(ob)
     p.library_coll, p.map_coll, p.new_mesh_coll = lib, mapc, None
-    p.zone_override = 'Z'
+    ensure_zone(p, 'Z')
+    p.zone_choice = 'Z'
+    p.skip_bad_rows = False
     p.name_mode = 'numeric_suffix'
 
 
@@ -64,37 +67,60 @@ def kinds(plan, kind):
     return [i for i in plan.issues if i.kind == kind]
 
 
-def test_new_mesh_hint_survives_similar_names():
+def kinds(plan, kind):
+    return [i for i in plan.issues if i.kind == kind]
+
+
+def names(objects):
+    return sorted(ob.name for ob in objects)
+
+
+def other_issues(plan):
+    """Issues except the Library duplicate-name warnings that this fixture always has."""
+    return [i.message for i in plan.issues if i.kind != 'duplicate_library_name']
+
+
+def test_missing_mesh_hint_lists_similar_names_and_new_meshes():
     fixture()
-    # 'Rock_Def_2' is close to the Library name 'Rock_Def_1'; id -1 means a new mesh that is not in the Library yet.
+    # 'Rock_Def_2' is close to the Library name 'Rock_Def_1'; the id column plays no part
     plan = plan_for([(-1, 'Rock_Def_2'), (0, 'Rock_Def_2'), (1, 'Rock_Def_1')])
     issues = kinds(plan, 'missing_mesh')
-    assert len(issues) == 2, [i.message for i in issues]
-    new_row = next(i for i in issues if i.line == 2)
-    old_row = next(i for i in issues if i.line == 3)
-    assert 'Similar Library names' in new_row.message and 'new mesh (id -1)' in new_row.message and 'Import New Meshes' in new_row.message, new_row.message
-    assert 'new mesh' not in old_row.message and 'Similar Library names' in old_row.message, old_row.message
-    assert 'left unchanged' in old_row.message
-    print('PASS an id -1 row always says it is a new mesh, even when similar names are listed')
+    assert len(issues) == 2 and plan.missing_rows == 2 and len(plan.rows) == 1, ([i.message for i in issues], plan.missing_rows, len(plan.rows))
+    for issue in issues:
+        assert 'Similar Library names' in issue.message and 'Import New Meshes' in issue.message and 'cannot be placed' in issue.message, issue.message
+        assert 'left unchanged' not in issue.message, issue.message  # nothing is left unchanged any more: the object is archived
+    print('PASS a row without a Library mesh says so, lists similar names and points to Import New Meshes')
 
 
-def test_new_mesh_rows_are_counted_even_when_the_mesh_is_not_in_the_library():
-    fixture()
-    # three id -1 rows: one mesh is in the Library, two are not (not imported yet)
-    plan = plan_for([(-1, 'Rock_Def_1'), (-1, 'NotYet_A'), (-1, 'NotYet_B'), (0, 'Rock_Def_1')])
-    assert plan.new_rows == 3 and plan.added == 1, (plan.new_rows, plan.added)
-    placement.publish_plan(p, plan)
-    assert p.plan_new_rows == 3 and p.plan_added == 1
-    assert 'new meshes 1 of 3 rows with id -1' in placement.plan_summary(plan), placement.plan_summary(plan)
-    print('PASS rows with id -1 are counted even when their mesh is not in the Library yet')
-
-
-def test_new_mesh_hint_without_similar_names():
+def test_missing_mesh_hint_without_similar_names():
     fixture()
     plan = plan_for([(-1, 'Zzzzqqqq_Totally_Different')])
     message = kinds(plan, 'missing_mesh')[0].message
-    assert 'new mesh (id -1)' in message and 'Import New Meshes' in message, message
-    print('PASS an id -1 row without similar names still says it is a new mesh')
+    assert 'No similar name in Library' in message and 'Import New Meshes' in message, message
+    print('PASS a row without similar names still points to Import New Meshes')
+
+
+def test_rows_that_cannot_be_placed_block_the_import():
+    fixture(5)
+    plan = plan_for([(0, 'Rock_Def_1'), (1, 'NotYet_A'), (2, 'Rock_Def_1'), (3, 'Rock_Def_1', 'x')], use_column=True)
+    # the last row has a bad use value, the second has no Library mesh
+    assert (plan.missing_rows, plan.invalid, len(plan.rows)) == (1, 1, 2), (plan.missing_rows, plan.invalid, len(plan.rows))
+    problem = placement.blocking_problem(p, plan)
+    assert '1 rows have no Library mesh' in problem and '1 rows cannot be read' in problem and 'Skip rows' in problem, problem
+    placement.publish_plan(p, plan)
+    assert p.plan_block == problem and p.plan_missing_rows == 1 and p.plan_invalid == 1
+    p.skip_bad_rows = True
+    assert placement.blocking_problem(p, plan) == ''
+    p.skip_bad_rows = False
+    print('PASS rows that cannot be placed block the import unless they are skipped on purpose')
+
+
+def test_a_csv_that_places_nothing_blocks_the_import():
+    fixture(5)
+    plan = plan_for([(0, 'Rock_Def_1', 0), (1, 'Rock_Def_1', 0)])
+    assert plan.rows == [] and plan.unused_rows == 2
+    assert 'no row to place' in placement.blocking_problem(p, plan)
+    print('PASS a CSV with nothing to place is refused (it would only archive the zone)')
 
 
 def test_duplicate_library_names_are_one_warning_per_name():
@@ -110,38 +136,26 @@ def test_duplicate_library_names_are_one_warning_per_name():
     print('PASS a duplicated Library name gives one warning that lists every object')
 
 
-def names(objects):
-    return sorted(ob.name for ob in objects)
-
-
-def other_issues(plan):
-    """Issues except the Library duplicate-name warnings that this fixture always has."""
-    return [i.message for i in plan.issues if i.kind != 'duplicate_library_name']
-
-
-def test_use_zero_retires_only_marked_objects():
+def test_every_original_is_archived_and_every_row_is_placed():
     fixture(5)  # ids 0..4
-    plan = plan_for([(0, 'Rock_Def_1'), (1, 'Rock_Def_1', 0), (2, 'Rock_Def_1', 1), (3, 'Rock_Def_1', 0)])  # id 4 has no row
+    plan = plan_for([(0, 'Rock_Def_1'), (1, 'Rock_Def_1', 0), (2, 'Rock_Def_1', 1), (3, 'Rock_Def_1', 0)])
     assert len(plan.rows) == 2 and plan.unused_rows == 2, (len(plan.rows), plan.unused_rows)
-    assert names(plan.retired) == ['Rock_Def_1.001', 'Rock_Def_1.003'], names(plan.retired)
-    assert names(plan.not_in_csv) == ['Rock_Def_1.004'], names(plan.not_in_csv)
-    assert 'Rock_Def_1.004' in names(plan.unchanged), names(plan.unchanged)
-    assert not kinds(plan, 'many_retired') and not other_issues(plan), other_issues(plan)
+    assert len(plan.originals) == 5 and plan.previous == [], (len(plan.originals), len(plan.previous))  # the ids do not matter
+    assert not other_issues(plan) or {i.kind for i in plan.issues if i.kind != 'duplicate_library_name'} == {'fewer_rows'}, other_issues(plan)
     placement.publish_plan(p, plan)
-    assert (p.plan_archive, p.plan_not_in_csv, p.plan_unused_rows, p.plan_unchanged) == (2, 1, 2, 3), \
-        (p.plan_archive, p.plan_not_in_csv, p.plan_unused_rows, p.plan_unchanged)
+    assert (p.plan_archive, p.plan_delete, p.plan_create, p.plan_unused_rows, p.plan_block) == (5, 0, 2, 2, ''), \
+        (p.plan_archive, p.plan_delete, p.plan_create, p.plan_unused_rows, p.plan_block)
     summary = placement.plan_summary(plan)
-    assert 'retired 2 (use 0 rows 2)' in summary and 'not in CSV 1' in summary, summary
-    print('PASS use = 0 retires only the marked objects; objects without a row stay as they are')
+    assert 'archive 5 original objects' in summary and 'delete 0 from the earlier import' in summary and 'place 2 (use 0 rows 2)' in summary, summary
+    print('PASS the plan archives every original object and places every row with use = 1')
 
 
 def test_use_zero_rows_place_nothing_and_say_nothing():
     fixture(3)
     plan = plan_for([(99, 'NoSuchMesh', 0), (-1, 'NoSuchMesh', 0), (0, 'Rock_Def_1', 1)])
-    assert plan.unused_rows == 2 and len(plan.rows) == 1 and plan.new_rows == 0 and plan.unknown_id_rows == 0
-    assert plan.missing_rows == 0 and not other_issues(plan), other_issues(plan)
-    assert plan.retired == [] and len(plan.not_in_csv) == 2
-    print('PASS a use = 0 row with an unknown id or a missing mesh is ignored without a warning')
+    assert plan.unused_rows == 2 and len(plan.rows) == 1 and plan.missing_rows == 0
+    assert not [i for i in plan.issues if i.kind not in ('duplicate_library_name', 'fewer_rows')], other_issues(plan)
+    print('PASS a use = 0 row with a missing mesh is ignored without a warning')
 
 
 def test_bad_use_value_and_empty_use():
@@ -154,26 +168,53 @@ def test_bad_use_value_and_empty_use():
     print('PASS use accepts only 0 or 1 (empty = 1); other values are invalid rows')
 
 
-def test_use_zero_loses_to_a_use_one_row_of_the_same_id():
+def test_same_id_twice_is_two_rows_now():
     fixture(3)
-    plan = plan_for([(1, 'Rock_Def_1', 0), (1, 'Rock_Def_1', 1)])
-    assert plan.retired == [] and len(kinds(plan, 'use_conflict')) == 1, [i.message for i in plan.issues]
-    print('PASS the same id with use = 0 and use = 1: the object is kept and a warning says so')
+    plan = plan_for([(1, 'Rock_Def_1', 0), (1, 'Rock_Def_1', 1), (1, 'Rock_Def_1', 1)])
+    assert len(plan.rows) == 2 and plan.unused_rows == 1, (len(plan.rows), plan.unused_rows)
+    assert not [i for i in plan.issues if i.kind in ('use_conflict', 'duplicate_id', 'unknown_id')], [i.message for i in plan.issues]
+    print('PASS the id column is not checked: repeated ids are separate rows, no id warnings exist')
 
 
-def test_without_a_use_column_nothing_is_retired():
+def test_without_a_use_column_every_row_is_placed():
     fixture(30)
     plan = plan_for([(0, 'Rock_Def_1'), (1, 'Rock_Def_1')], use_column=False)
-    assert plan.retired == [] and len(plan.not_in_csv) == 28 and plan.unused_rows == 0
-    assert not kinds(plan, 'many_retired')
-    print('PASS a CSV without a use column keeps every object that has no row (no mass retire)')
+    assert len(plan.rows) == 2 and plan.unused_rows == 0 and len(plan.originals) == 30
+    print('PASS a CSV without a use column places every row')
 
 
-for test in (test_new_mesh_hint_survives_similar_names, test_new_mesh_rows_are_counted_even_when_the_mesh_is_not_in_the_library,
-             test_new_mesh_hint_without_similar_names,
-             test_duplicate_library_names_are_one_warning_per_name, test_use_zero_retires_only_marked_objects,
+def test_fewer_rows_warning():
+    fixture(30)
+    plan = plan_for([(i, 'Rock_Def_1') for i in range(10)])
+    warning = kinds(plan, 'fewer_rows')
+    assert len(warning) == 1 and warning[0].severity == 'warning' and 'whole zone' in warning[0].message, [i.message for i in plan.issues]
+    assert '10 objects, but Z has 30' in warning[0].message, warning[0].message
+    plan = plan_for([(i, 'Rock_Def_1') for i in range(15)])  # half of the zone is still fine
+    assert not kinds(plan, 'fewer_rows')
+    plan = plan_for([(i, 'Rock_Def_1') for i in range(30)])
+    assert not kinds(plan, 'fewer_rows')
+    print('PASS a CSV that places fewer than half of the zone\'s objects gets a warning')
+
+
+def test_no_zone_selected_is_refused():
+    fixture()
+    p.zone_choice = 'ALL'
+    try:
+        plan_for([(0, 'Rock_Def_1')])
+    except ValueError as exc:
+        assert 'Choose the zone' in str(exc), exc
+    else:
+        raise AssertionError('All Zones cannot be imported')
+    p.zone_choice = 'Z'
+    print('PASS All Zones cannot be imported')
+
+
+for test in (test_missing_mesh_hint_lists_similar_names_and_new_meshes, test_missing_mesh_hint_without_similar_names,
+             test_rows_that_cannot_be_placed_block_the_import, test_a_csv_that_places_nothing_blocks_the_import,
+             test_duplicate_library_names_are_one_warning_per_name, test_every_original_is_archived_and_every_row_is_placed,
              test_use_zero_rows_place_nothing_and_say_nothing, test_bad_use_value_and_empty_use,
-             test_use_zero_loses_to_a_use_one_row_of_the_same_id, test_without_a_use_column_nothing_is_retired):
+             test_same_id_twice_is_two_rows_now, test_without_a_use_column_every_row_is_placed,
+             test_fewer_rows_warning, test_no_zone_selected_is_refused):
     test()
 mrt.unregister()
 print('MRT_PREVIEW_HINTS_PASSED')

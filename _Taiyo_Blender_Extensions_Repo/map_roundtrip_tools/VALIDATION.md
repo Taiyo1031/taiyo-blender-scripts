@@ -1,6 +1,6 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.9.2**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.10.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
@@ -237,3 +237,13 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - 重複の原因: Restore / Re-applyは、切り替えたObjectの`ub_run`へ`after`を書きます。前回のReplaceで作ったObjectを見分ける判定が`after`の無いものだけを対象にしていたため、切り替えの後は`id`が-1の行を毎回新しく作っていました。`before`がnullであれば、`after`があっても前回作ったObjectとして扱います。
 - 回帰: `tools/test_map_roundtrip_repeat_replace.py`（退避したObjectの復活・同じCSVの`use`が0だけなら何もしない・Libraryに無いMeshの行は退避のまま・切り替え後の重複なし）。既存の`restore`・`csv_id`・`colname_path`・`archive_dest`・`preview_hints`・`mesh_import_paths`・`ui_layout`・`tools`・`zone_csv`・`zone_rename`は合格しました（Blender 4.5.9）。
 - 未確認: Blender 5.1.2（5.2.2と4.5.9で確認）、実UIのESC、Houdiniの再実行。
+
+## 0.10.0の追加（Importをゾーンの入れ替えに変更）
+
+- 実シーンのコピー（`BO_StPrlg_BaseMap_V16`のZONE_1、66,548個のObject、Blender 5.2.2。保存はしていません）: 旧版（0.6〜0.9）でReplace済みの状態から、`Out/CSV/StPr_map_Zone1.csv`（4910行、`use`が1の行は647）をImportしました。Previewは`archive 2232 original objects, delete 12 from the earlier import, place 647`、実行は約8〜13秒でした。同じCSVでもう一度Importすると、647個を削除して647個を置きなおし、約19〜24秒です（削除は1個あたり約10ミリ秒で、Blenderの`batch_remove`の速度です。一括でも分割でも総時間は同じため、小さく区切ってUIを止めません）。Restore Original Mapで3258個、Re-apply Imported Mapで647個になりました。
+- **注意（実データ）**: この戻りCSVには、ZONE_1のObjectのうち約2000個の行がありません。全置換では、それらも退避され、ZONE_1は647個だけになります。Houdiniから、ゾーンの全Objectの行を出してください。
+- 画面の止まる時間: 最大のtickは、配置と退避の後のView Layer更新で、4〜7秒でした（0.5秒の目標は未達で、従来から同じ種類の制約です）。削除は約0.25秒ごとに区切っています。
+- 回帰: `tools/test_map_roundtrip_full_import.py`（初回・2回目・Restore後・置けない行・空のCSV・All Zones・旧版のReplaceで作ったObject・失敗時の巻き戻し・別ゾーン・色アイコン）、重なるゾーンは`tools/test_map_roundtrip_zone_csv.py`。旧仕様だけを検証していた`tools/test_map_roundtrip_repeat_replace.py`は削除しました。
+- 未確認: Blender 5.1.2（5.2.2と4.5.9で確認）、実UIでの見た目（色アイコンの表示）、Houdiniの再実行。
+- **6万件のImportは未実測です**: 全置換では、6万個の削除だけで約11分（1個あたり約10ミリ秒）かかる計算で、`tools/benchmark_map_roundtrip_diff.py`（既定は6万件）は30分のCPU時間を使っても終わらず、中止しました。件数は引数で減らせます（`-- 45`で2,025個）。`tools/benchmark_map_roundtrip_tools.py`も、出力先に続けて件数をコンマ区切りで渡せます（既定は10000,30000,60000）。性能の目安は、上の実シーン（6.6万個のシーンで647個）の値を使ってください。
+- 全テスト（`tools/test_map_roundtrip_*.py`、`test_mrt_zone_from_objects.py`、`test_unreal_bridge_tools.py`）は、Blender 4.5.9で合格しました。`test_map_roundtrip_*.py`と`test_mrt_zone_from_objects.py`は、5.2.2でも合格しました。実UI（物理ESC）の`tools/ui_test_map_roundtrip_tools.py`は、4.5.9で15項目すべて合格しました。

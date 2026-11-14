@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / '_Taiyo_Blender_Extensions_Repo'))
 mrt = importlib.import_module('map_roundtrip_tools')
 from map_roundtrip_tools import placement
+from map_roundtrip_tools.zones import ensure_zone
 mrt.register()
 scene = bpy.context.scene
 p = scene.mrt_props
@@ -44,11 +45,12 @@ def fixture():
         w = csv.writer(f)
         w.writerow([*placement.CSV_COLUMNS, 'use'])
         w.writerow([1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', '', 1])
-        w.writerow([2, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', '', 0])  # ids 2 and 3 have use = 0: they are retired
+        w.writerow([2, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', '', 0])  # use = 0 rows place nothing; all three originals are archived anyway
         w.writerow([3, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', '', 0])
     p.library_coll, p.map_coll, p.new_mesh_coll, p.archive_coll = lib, mapc, None, None
     p.placement_csv = str(path)
-    p.zone_override = ''
+    ensure_zone(p, 'ZONE_A')
+    p.zone_choice = 'ZONE_A'
     p.dry_run = False
     p.name_mode = 'numeric_suffix'
     bpy.context.view_layer.update()

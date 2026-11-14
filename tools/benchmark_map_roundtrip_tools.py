@@ -1,4 +1,4 @@
-"""Background benchmarks. JSON output path can be passed after --."""
+"""Background benchmarks. After --: an optional JSON output path, then an optional comma list of object counts (default 10000,30000,60000)."""
 import importlib.util
 import json
 from pathlib import Path
@@ -40,12 +40,15 @@ def run(n):
     row = {'count':n}
     for o in objects:
         o.select_set(True)
+    p.library_coll, p.map_coll, p.zone_scope = lib, mapc, 'SCENE'
+    p.merge_distance = 5.0
     bpy.ops.mrt.new_zone(name=f'ZONE_{n}')
+    assert bpy.ops.mrt.add_objects_to_zone() == {'FINISHED'}, p.status  # the zone range decides what is exported (not the selection)
     p.zone_csv_dir = str(TEMP)
     u.collection = None
     u.filters.clear()
     u.name_mode = 'numeric_suffix'
-    u.export_path = str(TEMP / f'ZONE_{n}.csv')
+    u.export_path = str(TEMP / f'UBT_{n}.csv')  # the UBT collection CSV is only timed; the zone CSV of MRT is imported
     u.tag_zone = True
     t = time.perf_counter()
     bpy.ops.mrt.export_zone_csv()
@@ -55,17 +58,18 @@ def run(n):
     t = time.perf_counter()
     bpy.ops.ubt.export_csv()
     row['csv_collection_seconds'] = time.perf_counter()-t
-    p.placement_csv = u.export_path
-    p.zone_override = ''
+    p.placement_csv = str(TEMP / f'ZONE_{n}.csv')
+    p.zone_choice = f'ZONE_{n}'  # new_zone selected it already
     p.dry_run = True
     t = time.perf_counter()
     plan = drain(placement.build_plan(p))
     row['plan_seconds'] = time.perf_counter()-t
-    assert len(plan.rows) == len(plan.old) == n
+    assert len(plan.rows) == len(plan.originals) == n
     p.dry_run = False
     # Measure actual phases separately while using the production generator.
     class H:
         _error = ''
+        _past_cancel = placement.MRT_OT_ReplaceZone._past_cancel
         def report(self, *args): pass
         def progress(self, phase, done, total): self.phase = phase
     h = H()
@@ -94,7 +98,8 @@ def run(n):
 
 mrt.register()
 ubt.register()
-for n in (10000, 30000, 60000):
+counts = [int(x) for x in sys.argv[sys.argv.index('--')+2].split(',')] if '--' in sys.argv and len(sys.argv) > sys.argv.index('--')+2 else (10000, 30000, 60000)
+for n in counts:
     run(n)
 # Pure numpy membership for 100k origins and all boxes, separate extraction time.
 pts = np.ones((100000,4),dtype=np.float64)

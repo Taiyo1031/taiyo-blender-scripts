@@ -72,7 +72,7 @@ assert names == ['A1', 'A2', 'Both'], names  # numeric suffix normalized
 assert a1['ub_zone'] == 'ZONE_A' and a2['ub_zone'] == 'ZONE_A' and both['ub_zone'] == 'ZONE_A'
 assert 'ub_zone' not in out_of_zone and 'ub_zone' not in b1
 assert list(rows('ZONE_A')[0]) == list(mrt.constants.CSV_COLUMNS)
-assert p.zone_override == 'ZONE_A'
+assert 'left to' not in p.status  # no mesh of ZONE_A is owned by another zone
 
 # ALL: one file per zone; a mesh in both zones goes to the first zone only.
 for ob in (a1, a2, both):
@@ -83,6 +83,24 @@ assert sorted(r['objname'] for r in rows('ZONE_A')) == ['A1', 'A2', 'Both']
 assert sorted(r['objname'] for r in rows('ZONE_B')) == ['B1']
 assert b1['ub_zone'] == 'ZONE_B' and both['ub_zone'] == 'ZONE_A'
 assert 'ub_zone' not in out_of_zone
+
+# One zone: the same ownership as All Zones. `Both` is inside ZONE_A and ZONE_B; ZONE_A (first by name) owns it.
+for ob in (a1, a2, both, b1):
+    if 'ub_zone' in ob:
+        del ob['ub_zone']
+p.zone_choice = 'ZONE_B'
+assert bpy.ops.mrt.export_zone_csv() == {'FINISHED'}, p.status
+assert sorted(r['objname'] for r in rows('ZONE_B')) == ['B1'], [r['objname'] for r in rows('ZONE_B')]
+assert 'left to that zone' in p.status and '1 meshes' in p.status, p.status
+assert b1['ub_zone'] == 'ZONE_B' and 'ub_zone' not in both
+p.zone_choice = 'ZONE_A'
+assert bpy.ops.mrt.export_zone_csv() == {'FINISHED'}, p.status
+assert sorted(r['objname'] for r in rows('ZONE_A')) == ['A1', 'A2', 'Both']
+assert both['ub_zone'] == 'ZONE_A'
+# Exporting ZONE_B again never takes `Both` away from ZONE_A.
+p.zone_choice = 'ZONE_B'
+assert bpy.ops.mrt.export_zone_csv() == {'FINISHED'}, p.status
+assert both['ub_zone'] == 'ZONE_A' and sorted(r['objname'] for r in rows('ZONE_B')) == ['B1']
 
 # Failure keeps existing files and restores tags.
 sentinel = (out / 'ZONE_A.csv').read_text()

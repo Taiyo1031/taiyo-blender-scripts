@@ -81,8 +81,6 @@ def rename_zone(p, old, new):
             c[MIRROR_TAG_KEY] = new
             c.name = mirror_name(c[MIRROR_KEY], new)
             collections += 1
-    if p.zone_override.strip() == old:
-        p.zone_override = new
     p.zone_choice = new
     p.zone_result = ''
     return {'empties': empties, 'objects': objects, 'collections': collections}

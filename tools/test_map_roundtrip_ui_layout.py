@@ -82,12 +82,17 @@ log = draw(ui.MRT_PT_Zones)
 assert ('zone_choice' in [a[1] for n, a, kw in log if n == 'prop']), 'zone selector'
 assert 'mrt.new_zone' in ops(log)
 assert any(n == 'prop' and a[1] == 'map_coll' for n, a, kw in log), 'map collection shown for MAP scope'
-assert len(calls(log, 'label')) == 1 and not calls(log, 'progress')
+p.status = 'STATUS-X'
+log = draw(ui.MRT_PT_Zones)
+labels = [kw.get('text', '') for n, a, kw in log if n == 'label']
+assert labels[-1] == 'STATUS-X' and not calls(log, 'progress'), labels  # the status row stays the last one
+assert any(t.startswith('Map: ') for t in labels), labels  # the zone banner shows the state of the map
+assert any('ZONE_A' in t for t in labels), labels  # ... and what the panel does with the zone
 p.zone_scope = 'SCENE'
 assert not any(n == 'prop' and a[1] == 'map_coll' for n, a, kw in draw(ui.MRT_PT_Zones))
 p.running = True
 log = draw(ui.MRT_PT_Zones)
-assert calls(log, 'progress') and not calls(log, 'label')
+assert calls(log, 'progress') and 'STATUS-X' not in [kw.get('text', '') for n, a, kw in log if n == 'label']
 p.running = False
 
 # range panel: primary button first, then helpers
@@ -130,6 +135,28 @@ button = [kw for n, a, kw in draw(ui.MRT_PT_ZoneCSV) if n == 'operator'][0]
 assert button['text'] == 'Export CSV (every zone)'
 for key in ('zone_csv_dir', 'name_mode'):
     assert any(n == 'prop' and a[1] == key for n, a, kw in log), key
+
+# the zone banner is at the top of every panel; Import has its own Zone list and shows collection colors
+main = importlib.import_module('map_roundtrip_tools.ui')
+helper = importlib.import_module('map_roundtrip_tools.helper')
+p.zone_choice = 'ZONE_A'
+for panel in (main.MRT_PT_Export, main.MRT_PT_Import, helper.MRT_PT_Helper):
+    labels = [kw.get('text', '') for n, a, kw in draw(panel) if n == 'label']
+    assert 'Zone: ZONE_A' in labels and any(t.startswith('Map: ') for t in labels), (panel.bl_idname, labels)
+colored = bpy.data.collections.new('Colored')
+colored.color_tag = 'COLOR_02'
+p.library_coll = colored
+log = draw(main.MRT_PT_Import)
+assert any(n == 'prop' and a[1] == 'zone_choice' for n, a, kw in log), 'Import has a Zone list'
+icons = {a[1]: kw.get('icon') for n, a, kw in log if n == 'prop' and a[1] in ('library_coll', 'map_coll', 'new_mesh_coll', 'archive_coll')}
+assert set(icons) == {'library_coll', 'map_coll', 'new_mesh_coll', 'archive_coll'}, icons
+assert icons['library_coll'] == 'COLLECTION_COLOR_02' and icons['archive_coll'] == 'OUTLINER_COLLECTION', icons
+assert any(n == 'operator' and a[0] == 'mrt.replace_zone' and kw.get('text') == 'Preview Import' for n, a, kw in log)
+p.library_coll = None
+p.zone_choice = 'ALL'
+labels = [kw.get('text', '') for n, a, kw in draw(main.MRT_PT_Import) if n == 'label']
+assert 'Zone: All Zones' in labels and any('Choose one zone' in t for t in labels), labels
+p.zone_choice = 'ZONE_A'
 
 # advanced panel
 assert any(n == 'prop' and a[1] == 'zone_prefix' for n, a, kw in draw(ui.MRT_PT_ZoneAdvanced))

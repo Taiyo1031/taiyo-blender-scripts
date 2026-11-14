@@ -3,6 +3,7 @@ from . import placement_report
 from .placement import effective_zone
 from .constants import FBX_DEFAULTS
 from .journal import STATE_AFTER, STATE_BEFORE, map_state
+from .ui_common import collection_prop, draw_zone_banner, shown_zone
 
 MAX_ISSUE_ROWS = 5
 
@@ -18,6 +19,7 @@ class MRT_PT_Export(bpy.types.Panel):
         p = context.scene.mrt_props
         layout = self.layout
         layout.operator_context = 'INVOKE_DEFAULT'
+        draw_zone_banner(layout, context, 'Export panel: FBX of the selected meshes. The CSV of {zone} is in Zones.')
         col = layout.column()
         col.enabled = not p.running
         box = col.box()
@@ -71,53 +73,59 @@ class MRT_PT_Import(bpy.types.Panel):
         layout = self.layout
         layout.operator_context = 'INVOKE_DEFAULT'
         layout.enabled = not p.running
+        zone = draw_zone_banner(layout, context, 'Import: archive the original objects of {zone}, then place every CSV row into it.')
+        box = layout.box()
+        box.label(text='Zone to import into')
+        box.prop(p, 'zone_choice', text='Zone')  # the same Zone as in the Zones panel
+        if zone in ('', 'ALL'):
+            row = box.row()
+            row.alert = True
+            row.label(text='Choose one zone (All Zones cannot be imported).', icon='ERROR')
         box = layout.box()
         box.label(text='Collections')
         for name in ('library_coll', 'map_coll', 'new_mesh_coll', 'archive_coll'):
-            box.prop(p, name)
+            collection_prop(box, p, name)
         box.label(text='New meshes go to New Meshes To (default: below Library).')
-        box.label(text='Objects with use = 0 in the CSV go to _Replaced_<Zone> in Archive To (default: scene root).')
+        box.label(text='The original objects go to _Replaced_<Zone> in Archive To (default: scene root).')
         box = layout.box()
         box.label(text='Return Files')
         box.label(text='Return Folder is a reference, not an automatic import.')
         for name in ('return_dir', 'placement_csv', 'mesh_fbx', 'convert_houdini_fbx', 'name_mode', 'if_exists'):
             box.prop(p, name)
         box = layout.box()
-        box.label(text='Replace Zone')
-        box.prop(p, 'zone_override')
-        zone = effective_zone(p)
-        box.label(text=zone + (' from CSV name' if not p.zone_override else ''))
+        box.label(text=f'Import into {zone}' if zone not in ('', 'ALL') else 'Import')
         box.prop(p, 'dry_run')
+        box.prop(p, 'skip_bad_rows')
         box.operator('mrt.import_meshes')
-        state = map_state(zone)
+        state = map_state(zone) if zone not in ('', 'ALL') else ''
         row = box.row()
-        row.enabled = state != STATE_BEFORE
-        row.operator('mrt.replace_zone', text='Preview Placement' if p.dry_run else 'Replace Zone')
+        row.enabled = zone not in ('', 'ALL')
+        row.operator('mrt.replace_zone', text='Preview Import' if p.dry_run else 'Import Zone')
         if state:
             showing_imported = state == STATE_AFTER
-            box.label(text='Map shows: ' + ('the imported map' if showing_imported else 'the ORIGINAL map (Replace is off)'))
             op = box.operator('mrt.switch_map_state', text='Restore Original Map' if showing_imported else 'Re-apply Imported Map')
             op.target = 'BEFORE' if showing_imported else 'AFTER'
             op.zone = zone
         plan = box.box()
         if p.plan_ready:
-            plan.label(text=f'Unchanged {p.plan_unchanged}; Moved {p.plan_moved}' + (f' (incl. {p.plan_resurrected} brought back from the archive)' if p.plan_resurrected else ''))
-            plan.label(text=f'Retire {p.plan_archive} (use 0: {p.plan_unused_rows} rows) to _Replaced_{p.plan_zone}; Add {p.plan_create}')
-            plan.label(text=f'Not in CSV, left as they are: {p.plan_not_in_csv}')
-            plan.label(text=f'Invalid rows {p.plan_invalid}; new collections {p.plan_collections}')
-            plan.label(text=f'New meshes (id -1): {p.plan_added} of {p.plan_new_rows} rows')
-            if p.plan_new_rows > p.plan_added:
+            plan.label(text=f'Plan for {p.plan_zone}:')
+            plan.label(text=f'Archive {p.plan_archive} original objects to _Replaced_{p.plan_zone}')
+            plan.label(text=f'Delete {p.plan_delete} objects from the earlier import')
+            plan.label(text=f'Place {p.plan_create} CSV rows (use 0: {p.plan_unused_rows} rows); new collections {p.plan_collections}')
+            if p.plan_invalid or p.plan_missing:
                 row = plan.row()
                 row.alert = True
-                row.label(text=f'{p.plan_new_rows - p.plan_added} new mesh rows are not in Library yet: run Import New Meshes')
-            if p.plan_unknown_id:
-                row = plan.row()
-                row.alert = True
-                row.label(text=f'Skipped {p.plan_unknown_id} rows with an unknown id')
+                row.label(text=f'Cannot place: {p.plan_invalid} unreadable rows, {p.plan_missing_rows} rows without a Library mesh')
             if p.plan_missing:
                 row = plan.row()
                 row.alert = True
                 row.label(text=f'{p.plan_missing} names not found in Library: {p.plan_names}')
+            if p.plan_block:
+                row = plan.row()
+                row.alert = True
+                row.label(text='Import is blocked:', icon='ERROR')
+                for start in range(0, len(p.plan_block), 100):
+                    plan.label(text=p.plan_block[start:start + 100])
             if p.plan_errors or p.plan_warnings:
                 row = plan.row()
                 row.alert = bool(p.plan_errors)
@@ -126,5 +134,9 @@ class MRT_PT_Import(bpy.types.Panel):
                     plan.label(text=message if len(message) <= 110 else message[:107] + '...')
                 plan.label(text=f'Full list: Text "{placement_report.REPORT_TEXT}"')
         else:
-            plan.label(text='Run Preview Placement to see the plan.')
+            plan.label(text='Run Preview Import to see the plan.')
         plan.label(text=f'Imported {p.plan_new_meshes_imported} meshes this session' if p.plan_new_meshes_imported else 'No meshes imported yet')
+        if p.status:
+            layout.label(text=p.status)
+        if p.running:
+            layout.progress(factor=p.progress, type='BAR', text='Working | ESC cancels')

@@ -1,5 +1,6 @@
 import bpy
 from .zones import zone_empties, zone_name
+from .ui_common import collection_prop, draw_zone_banner
 
 MAX_EMPTY_ROWS = 50
 
@@ -21,10 +22,11 @@ class MRT_PT_Zones(bpy.types.Panel):
         row.prop(p, 'zone_choice', text='')
         row.operator('mrt.rename_zone', text='', icon='GREASEPENCIL')
         row.operator('mrt.new_zone', text='', icon='ADD')
+        draw_zone_banner(layout, context, 'Zones panel: define the range of {zone}, check it, export its CSV.', with_name=False)
 
         layout.prop(p, 'zone_scope', expand=True)
         if p.zone_scope == 'MAP':
-            layout.prop(p, 'map_coll')
+            collection_prop(layout, p, 'map_coll')
 
         if p.running:
             layout.progress(factor=p.progress, type='BAR', text='Working | ESC cancels')
