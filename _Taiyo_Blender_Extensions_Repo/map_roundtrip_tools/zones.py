@@ -344,19 +344,30 @@ def assign_batch(batch, zones):
 def zone_members(context, choice):
     """Generator: Mesh objects whose origin lies in each zone, independent of selection.
 
-    Returns ({zone name: [objects]}, overlap count) via `yield from`.
+    One object belongs to one zone: the first zone (by name) that contains its origin. The same rule applies to one zone
+    and to All Zones, so an object inside two zones is never exported twice.
+    Returns ({zone name: [objects]}, count) via `yield from`. The count is, for All Zones, the objects inside several zones
+    and, for one zone, the objects of that zone that an earlier zone owns (they are left out of its group).
     """
-    zones = resolve_zones(context, choice)
+    zones = resolve_zones(context, 'ALL')
+    if choice != 'ALL' and choice not in zones:
+        raise ValueError('Selected zone has no Cube empties. Use Add Empty or Register Selected Empties.')
     objects = yield from collect_candidate_meshes(context)
     groups = {name: [] for name in zones}
-    overlap = 0
+    names = list(zones)
+    overlap = left_out = 0
     for start in range(0, len(objects), 2048):
         batch = objects[start:start + 2048]
         owner, extra = assign_batch(batch, zones)
         overlap += extra
+        if choice != 'ALL':
+            mask = inside_mask(points_of(batch), zones[choice])
+            left_out += int(np.count_nonzero(mask & (owner != names.index(choice))))
         for k, name in enumerate(zones):
             groups[name].extend(batch[i] for i in np.flatnonzero(owner == k))
         yield
+    if choice != 'ALL':
+        return {choice: groups[choice]}, left_out
     return groups, overlap
 
 

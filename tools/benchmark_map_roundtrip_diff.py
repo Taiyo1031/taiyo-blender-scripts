@@ -1,6 +1,9 @@
-"""60k-object timing for the diff Replace Zone, Restore Original Map and Re-apply (Blender 4.5.9).
+"""60k-object timing for the whole-zone Import (archive all originals, place every row), importing again, Restore Original Map and Re-apply.
 
-blender --background --factory-startup --python-exit-code 1 --python tools/benchmark_map_roundtrip_diff.py
+blender --background --factory-startup --python-exit-code 1 --python tools/benchmark_map_roundtrip_diff.py [-- SIDE]
+
+SIDE is the side of the object grid (default 245: 60,025 objects; the whole-zone import needs tens of minutes for that, mostly
+to delete the 60k objects of the first import when importing again). Use e.g. `-- 45` (2,025 objects) for a quick check.
 """
 import csv
 import importlib
@@ -19,7 +22,7 @@ mrt.register()
 scene = bpy.context.scene
 bpy.data.batch_remove(ids=list(bpy.data.objects))
 p = scene.mrt_props
-COLUMNS = ROWS = 245
+COLUMNS = ROWS = int(sys.argv[sys.argv.index('--') + 1]) if '--' in sys.argv else 245
 mesh = bpy.data.meshes.new('M')
 lib = bpy.data.collections.new('Library')
 scene.collection.children.link(lib)
@@ -60,7 +63,7 @@ for i, r in enumerate(body):
     else:
         kept += 1
     edited.append(r)
-added = 10000
+added = 10000 if COLUMNS == 245 else COLUMNS * ROWS // 6
 for i in range(added):
     edited.append(['-1', str(i * 0.1), '500', '0', '0', '0', '0', '1', '1', '1', 'Obj', '', '1'])
 with open(out / 'return.csv', 'w', newline='') as stream:
@@ -68,12 +71,13 @@ with open(out / 'return.csv', 'w', newline='') as stream:
     w.writerow([*header[:12], 'use'])
     w.writerows(edited)
 p.placement_csv = str(out / 'return.csv')
-p.zone_override = 'ZONE_BIG'
-result = {'blender': bpy.app.version_string, 'objects': len(objects), 'expected': {'unchanged': kept, 'moved': moved, 'retired': removed, 'added': added}}
+assert p.zone_choice == 'ZONE_BIG', p.zone_choice  # new_zone selected it
+result = {'blender': bpy.app.version_string, 'objects': len(objects), 'expected': {'archive': len(objects), 'place': kept + moved + added, 'rows_with_use_0': removed}}
 
 
 class H:
     _error = ''
+    _past_cancel = placement.MRT_OT_ReplaceZone._past_cancel
 
     def __init__(self):
         self.phase = 'Plan'
@@ -108,7 +112,10 @@ def timed(label, work):
 p.dry_run = True
 timed('preview', lambda h: placement.MRT_OT_ReplaceZone.work(h, bpy.context))
 p.dry_run = False
-timed('replace', lambda h: placement.MRT_OT_ReplaceZone.work(h, bpy.context))
+timed('import', lambda h: placement.MRT_OT_ReplaceZone.work(h, bpy.context))
+assert result['expected']['place'] == sum(1 for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_BIG'), 'every row is placed'
+timed('import_again', lambda h: placement.MRT_OT_ReplaceZone.work(h, bpy.context))  # deletes the first import, places the rows again
+assert result['expected']['place'] == sum(1 for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_BIG')
 
 
 def with_target(h, target):

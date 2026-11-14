@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import bpy
 from .chunked import ChunkedOperator
 from .placement import walk_collections, walk_library
+from .ui_common import draw_zone_banner
 
 USAGE = None  # the last scan (Usage); operators read helper.USAGE each time
 
@@ -337,6 +338,7 @@ class MRT_PT_Helper(bpy.types.Panel):
         p = context.scene.mrt_props
         layout = self.layout
         layout.enabled = not p.running
+        draw_zone_banner(layout, context, 'Helper: how the Library meshes are used in the Map (all zones).')
 
         if not p.library_coll or not p.map_coll:
             layout.label(text='Set Library and Map in Import first.')

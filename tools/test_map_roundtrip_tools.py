@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / '_Taiyo_Blender_Extensions_Repo'))
 mrt = importlib.import_module('map_roundtrip_tools')
 from map_roundtrip_tools import placement, mesh_import, fbx_export, presets
 from map_roundtrip_tools.chunked import Cancelled
+from map_roundtrip_tools.zones import ensure_zone
 
 TEMP = Path(tempfile.mkdtemp(prefix='mrt-tests-'))
 
@@ -72,7 +73,9 @@ def fixture():
     p = bpy.context.scene.mrt_props
     p.library_coll, p.map_coll = lib, mapc
     p.placement_csv = str(TEMP / 'ZONE_A.csv')
-    p.zone_override = ''
+    ensure_zone(p, 'ZONE_A')
+    p.zone_choice = 'ZONE_A'
+    p.skip_bad_rows = False
     p.dry_run = True
     p.if_exists = 'SKIP'
     p.name_mode = 'numeric_suffix'
@@ -99,37 +102,38 @@ def expect_error(call, text):
 
 def test_placement():
     p, lib, mapc, source, old = fixture()
-    write_csv(p.placement_csv, [[1, 3, 4, 5, math.degrees(.1), math.degrees(.2), math.degrees(.3), 1, 2, 3, 'Rock', '']])
+    write_csv(p.placement_csv, [[1, 3, 4, 5, math.degrees(.1), math.degrees(.2), math.degrees(.3), 1, 2, 3, 'Rock', 'Rocks']])
     before = set(bpy.data.objects), set(bpy.data.collections)
-    # Unchanged CSV: the object keeps everything and nothing is created.
+    # Preview changes nothing and says what an import would do.
     assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
-    assert (p.plan_unchanged, p.plan_moved, p.plan_archive, p.plan_create) == (1, 0, 0, 0)
-    assert before == (set(bpy.data.objects), set(bpy.data.collections))
-    p.dry_run = False
-    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
+    assert (p.plan_archive, p.plan_delete, p.plan_create, p.plan_block) == (1, 0, 1, ''), (p.plan_archive, p.plan_delete, p.plan_create, p.plan_block)
     assert before == (set(bpy.data.objects), set(bpy.data.collections)) and old['ub_zone'] == 'ZONE_A'
-    # Houdini moved the object and added a new one.
-    write_csv(p.placement_csv, [[1, 10, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks'], [-1, 20, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks']])
-    p.dry_run = True
-    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
-    assert (p.plan_unchanged, p.plan_moved, p.plan_archive, p.plan_create) == (0, 1, 0, 1)
-    assert before == (set(bpy.data.objects), set(bpy.data.collections)) and tuple(old.location) == (3, 4, 5)
+    # Import: the original goes to the archive untouched, the CSV row becomes a new object.
     p.dry_run = False
     assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
     rocks = bpy.data.collections['Rocks']
-    new = [o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_A' and o != old]
-    assert len(new) == 1 and new[0].data == source.data and new[0].parent is None and new[0].rotation_mode == 'XYZ'
-    assert tuple(old.location) == (10, 0, 0) and old.users_collection == (rocks,) and new[0].users_collection == (rocks,)
-    assert tuple(new[0].location) == (20, 0, 0) and tuple(old.scale) == (1, 1, 1)
-    # Houdini removed the object (use = 0): it is retired into the excluded archive, hierarchy kept.
-    write_csv(p.placement_csv, [[1, 10, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks', 0], [-1, 20, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks']])
-    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
+    new = [o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_A']
+    assert len(new) == 1 and new[0] != old and new[0].data == source.data and new[0].parent is None and new[0].rotation_mode == 'XYZ'
+    assert tuple(new[0].location) == (3, 4, 5) and tuple(new[0].scale) == (1, 2, 3) and new[0].users_collection == (rocks,)
+    assert json.loads(new[0]['ub_run']) == {'zone': 'ZONE_A', 'before': None}
     archive = bpy.context.scene.collection.children['_Replaced_ZONE_A']
-    mirror = archive.children['Rocks [ZONE_A]']
-    assert old.users_collection == (mirror,) and 'ub_zone' not in old and old['ub_archived_from'] == 'ZONE_A'
+    assert old.users_collection == (archive,) and 'ub_zone' not in old and old['ub_archived_from'] == 'ZONE_A'
+    assert tuple(old.location) == (3, 4, 5) and tuple(old.scale) == (1, 2, 3) and old['ub_csv_id'] == 1
     assert placement.find_layer(bpy.context.view_layer.layer_collection, archive).exclude
     assert archive['ub_state'] == 'after'
-    print('PASS placement: unchanged / moved in place / added / retired with hierarchy')
+    # Houdini moved the object and added another one: the earlier import is deleted and everything is placed again.
+    write_csv(p.placement_csv, [[1, 10, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks'], [-1, 20, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks']])
+    objects_before = len(bpy.data.objects)
+    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
+    again = [o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_A']
+    assert sorted(o.location.x for o in again) == [10, 20] and len(bpy.data.objects) == objects_before + 1
+    assert all(o.users_collection == (rocks,) for o in again)
+    assert old.users_collection == (archive,), 'the archive keeps the original'
+    # A row with use = 0 places nothing.
+    write_csv(p.placement_csv, [[1, 10, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks', 0], [-1, 20, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Rocks']])
+    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
+    assert [o.location.x for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_A'] == [20] and p.plan_unused_rows == 1
+    print('PASS placement: preview changes nothing / original archived untouched / CSV rows placed / earlier import replaced / use 0')
 
 
 def test_plan_errors():
@@ -153,7 +157,7 @@ def test_plan_errors():
 
 
 def test_rollback():
-    for phase in ('Creating linked instances', 'Moving changed objects', 'Retiring unused objects'):
+    for phase in ('Placing CSV rows', 'Archiving original objects'):
         p, lib, mapc, source, old = fixture()
         old2 = obj('Rock.002', mapc, source.data)
         old2.location = (9, 9, 9)
@@ -197,7 +201,7 @@ def test_rollback():
             pass
         assert before == (set(bpy.data.objects), set(bpy.data.collections))
         assert tuple(old.location) == (3, 4, 5) and 'ub_run' not in old
-    print('PASS rollback during creation / move / retire and exception')
+    print('PASS rollback during placing / archiving and exception')
 
 
 def test_zone_csv():

@@ -46,7 +46,7 @@ bpy.ops.wm.save_as_mainfile(filepath=str(path));bpy.ops.wm.open_mainfile(filepat
 p=bpy.context.scene.mrt_props
 assert 'ZONE_EMPTY' in p.zones and 'ZONE_Z' in p.zones
 assert bpy.context.scene.objects['Artist Box']['zone']=='ZONE_Z'
-for attr in ('exchange_dir','zone_name','library_coll','map_coll','placement_csv','mesh_fbx','zone_override','dry_run'):
+for attr in ('exchange_dir','zone_name','library_coll','map_coll','placement_csv','mesh_fbx','skip_bad_rows','dry_run'):
  assert mrt.MRT_Props.bl_rna.properties[attr].description,attr
 assert '参考' in mrt.MRT_Props.bl_rna.properties['exchange_dir'].description
 assert '自動' in mrt.MRT_Props.bl_rna.properties['zone_prefix'].description

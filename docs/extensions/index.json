@@ -541,7 +541,7 @@
       "id": "map_roundtrip_tools",
       "name": "Map Roundtrip Tools",
       "tagline": "Roundtrip linked map placements and library FBX through Houdini",
-      "version": "0.9.1",
+      "version": "0.10.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
@@ -556,10 +556,10 @@
         "Import-Export",
         "Object"
       ],
-      "archive_url": "./map_roundtrip_tools-0.9.1.zip",
-      "archive_size": 178389,
-      "archive_hash": "sha256:5a81753405a8a0344c9ed0d544c6463ae1a69c39c3eb5f04208a297469358212",
-      "taiyo_updated_at": 1794575063
+      "archive_url": "./map_roundtrip_tools-0.10.0.zip",
+      "archive_size": 180753,
+      "archive_hash": "sha256:70393aff76a7acf7b8f472bdcceaff1f9bd0ddfd55f6396a3927b1183684e096",
+      "taiyo_updated_at": 1794618845
     }
   ]
 }

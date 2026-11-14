@@ -1,4 +1,4 @@
-"""CSV id handling: ub_csv_id on export, id -1 = new mesh, unknown ids are skipped on import.
+"""CSV id handling: the export writes ub_csv_id; the import does not use ids at all (the whole zone is replaced).
 
 blender --background --factory-startup --python-exit-code 1 --python tools/test_map_roundtrip_csv_id.py [-- import|export]  (import/export run only that side; no argument runs everything)
 """
@@ -15,6 +15,7 @@ mrt = importlib.import_module('map_roundtrip_tools')
 from map_roundtrip_tools import placement
 from map_roundtrip_tools.chunked import Cancelled
 from map_roundtrip_tools.zone_csv import MRT_OT_ExportZoneCSV
+from map_roundtrip_tools.zones import ensure_zone
 
 TEMP = Path(tempfile.mkdtemp(prefix='mrt-csv-id-'))
 mrt.register()
@@ -78,7 +79,9 @@ def fixture(old_ids):
         olds.append(o)
     p.library_coll, p.map_coll = lib, mapc
     p.placement_csv = str(TEMP / 'ZONE_A.csv')
-    p.zone_override = ''
+    ensure_zone(p, 'ZONE_A')
+    p.zone_choice = 'ZONE_A'
+    p.skip_bad_rows = False
     p.dry_run = True
     p.name_mode = 'numeric_suffix'
     bpy.context.view_layer.update()
@@ -96,73 +99,63 @@ def test_constants():
     print('PASS constants')
 
 
-def test_known_unknown_and_new_ids():
+def test_ids_play_no_part_in_the_plan():
     fixture([1, 2, 3])
     plan = plan_for([row(1, 'Rock'), row(2, 'Rock') + [0], row(3, 'Rock', 3), row(99, 'Rock', 9), row(-1, 'NewRock', 5), row(-1, 'Rock', 6)])
-    assert len(plan.rows) == 4, len(plan.rows)  # the use = 0 row places nothing
-    assert plan.unknown_id_rows == 1 and plan.added == 2
-    assert plan.id_check is True
-    assert plan.unmatched == set() and plan.missing_rows == 0
+    assert len(plan.rows) == 5 and plan.unused_rows == 1, (len(plan.rows), plan.unused_rows)  # the use = 0 row places nothing
+    assert plan.unmatched == set() and plan.missing_rows == 0 and plan.invalid == 0
+    assert len(plan.originals) == 3 and plan.previous == []
+    assert not [i for i in plan.issues if i.kind in ('unknown_id', 'duplicate_id', 'use_conflict', 'unmatched_added')], [i.message for i in plan.issues]
     placement.publish_plan(p, plan)
-    # ids 1 and 3 update existing objects (1 unchanged, 3 moved), id 2 has use = 0 (retired), the two -1 rows are new
-    assert (p.plan_unchanged, p.plan_moved, p.plan_archive, p.plan_create) == (1, 1, 1, 2), (p.plan_unchanged, p.plan_moved, p.plan_archive, p.plan_create)
-    assert p.plan_added == 2 and p.plan_unknown_id == 1 and p.plan_id_check
-    print('PASS known / unknown / -1 ids')
+    assert (p.plan_archive, p.plan_delete, p.plan_create) == (3, 0, 5), (p.plan_archive, p.plan_delete, p.plan_create)
+    print('PASS known / unknown / -1 / repeated ids are all just rows')
 
 
-def test_unknown_id_is_not_reported_as_missing_mesh():
+def test_a_missing_mesh_is_reported_whatever_the_id():
     fixture([1])
     plan = plan_for([row(7, 'NotInLibrary'), row(-1, 'NotInLibrary')])
-    assert plan.unknown_id_rows == 1 and plan.rows == []
-    assert plan.missing_rows == 1 and plan.unmatched == {'NotInLibrary'} and plan.added == 0
-    print('PASS unknown id skipped before mesh lookup; -1 without a Library mesh stays unmatched')
+    assert plan.rows == [] and plan.missing_rows == 2 and plan.unmatched == {'NotInLibrary'}
+    print('PASS a row without a Library mesh is reported whatever its id is')
 
 
-def test_zone_without_ub_csv_id_asks_for_a_new_export():
+def test_zone_without_ub_csv_id_needs_no_new_export():
     fixture([None, None])
-    write_csv(p.placement_csv, [row(1, 'Rock')])
-    try:
-        drain(placement.build_plan(p))
-    except ValueError as exc:
-        assert 'ub_csv_id' in str(exc) and 'Export Zone CSV' in str(exc), str(exc)
-    else:
-        raise AssertionError('a zone whose objects have no ub_csv_id must ask for a new export')
-    # A zone without any object has nothing to match: every row is new.
+    plan = plan_for([row(1, 'Rock')])
+    assert len(plan.originals) == 2 and len(plan.rows) == 1, (len(plan.originals), len(plan.rows))  # the export tag ub_zone is enough
     bpy.data.batch_remove(ids=[o for o in bpy.data.objects if o.get('ub_zone')])
     plan = plan_for([row(5, 'Rock'), row(-1, 'NewRock', 2)])
-    assert plan.id_check is False and len(plan.rows) == 2 and plan.added == 1 and len(plan.adds) == 2
-    print('PASS a zone without ub_csv_id needs a new export; an empty zone takes every row as new')
+    assert plan.originals == [] and len(plan.rows) == 2
+    print('PASS a zone whose objects have no ub_csv_id imports fine; an empty zone takes every row')
 
 
-def test_invalid_ids():
+def test_any_id_value_is_accepted():
     fixture([1])
     plan = plan_for([row('abc', 'Rock'), row('', 'Rock'), row('1.5', 'Rock'), row('1.0', 'Rock', 1), row('-1.0', 'NewRock', 2)])
-    assert plan.invalid == 3, plan.invalid
-    assert len(plan.rows) == 2 and plan.added == 1 and plan.unknown_id_rows == 0
-    print('PASS non-numeric / non-integer ids are invalid; 1.0 and -1.0 parse')
+    assert plan.invalid == 0 and len(plan.rows) == 5, (plan.invalid, len(plan.rows))
+    print('PASS the id column is not read: text, empty and fractional ids are not errors')
 
 
-def test_other_zone_ids_do_not_count():
+def test_only_the_selected_zones_objects_are_archived():
     olds = fixture([1])
     other = bpy.data.objects.new('Other', olds[0].data)
     other['ub_zone'] = 'ZONE_B'
     other['ub_csv_id'] = 50
     p.map_coll.objects.link(other)
     plan = plan_for([row(50, 'Rock'), row(1, 'Rock')])
-    assert plan.unknown_id_rows == 1 and len(plan.rows) == 1
-    print('PASS only ids of the target zone count')
+    assert plan.originals == [olds[0]] and len(plan.rows) == 2
+    print('PASS only the objects of the selected zone are archived')
 
 
-def test_replace_uses_only_valid_rows():
-    fixture([1, 2])
+def test_import_places_every_row_and_archives_the_originals():
+    olds = fixture([1, 2])
     write_csv(p.placement_csv, [row(1, 'Rock', 1), row(42, 'Rock', 2), row(2, 'Rock', 9) + [0], row(-1, 'NewRock', 3)])
     p.dry_run = False
     assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
     created = [o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_A']
-    assert len(created) == 2, len(created)
-    assert sorted(round(o.location.x) for o in created) == [1, 3]
-    assert 'unknown id 1' in p.status and 'new meshes 1' in p.status, p.status
-    print('PASS Replace Zone creates only valid rows;', p.status)
+    assert sorted(round(o.location.x) for o in created) == [1, 2, 3], [o.location.x for o in created]
+    assert all(o.get('ub_archived_from') == 'ZONE_A' and 'ub_zone' not in o and o['ub_csv_id'] in (1, 2) for o in olds)
+    assert 'archive 2' in p.status and 'place 3' in p.status and 'use 0 rows 1' in p.status, p.status
+    print('PASS Import Zone places every row with use = 1 and archives both originals;', p.status)
 
 
 def make_zone_with_objects(count):
@@ -232,7 +225,10 @@ def test_export_then_import_roundtrip():
     for c in (lib, mapc):
         bpy.context.scene.collection.children.link(c)
     lib.objects.link(bpy.data.objects.new('Rock', objects[0].data))
-    mapc.objects.link(bpy.data.objects.new('Placeholder', objects[0].data))
+    for o in objects:  # the exported objects now live in the Map
+        for c in list(o.users_collection):
+            c.objects.unlink(o)
+        mapc.objects.link(o)
     p.library_coll, p.map_coll = lib, mapc
     p.placement_csv = str(TEMP / 'ZONE_A.csv')
     with open(p.placement_csv) as f:
@@ -240,19 +236,23 @@ def test_export_then_import_roundtrip():
     header, body = rows[0], rows[1:]
     body.append(['-1', '10', '0', '0', '0', '0', '0', '1', '1', '1', 'Rock', ''])
     body.append(['999', '11', '0', '0', '0', '0', '0', '1', '1', '1', 'Rock', ''])
-    del body[1]  # Houdini deleted one object: its id simply has no row
+    del body[1]  # Houdini deleted one object: it simply has no row
     with open(p.placement_csv, 'w', newline='') as f:
         w = csv.writer(f)
         w.writerow(header)
         w.writerows(body)
     plan = drain(placement.build_plan(p))
-    assert plan.id_check and plan.added == 1 and plan.unknown_id_rows == 1 and len(plan.rows) == 3
-    print('PASS export -> Houdini edit -> import plan')
+    assert len(plan.originals) == 3 and len(plan.rows) == 4 and plan.missing_rows == 0, (len(plan.originals), len(plan.rows))
+    p.dry_run = False
+    assert bpy.ops.mrt.replace_zone() == {'FINISHED'}, p.status
+    new = [o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_A']
+    assert len(new) == 4 and not set(new) & set(objects), 'the deleted row is gone, the added rows exist, nothing of the export is left in the Map'
+    print('PASS export -> Houdini edit -> import: the Map holds exactly the CSV rows')
 
 
-TESTS = (test_constants, test_known_unknown_and_new_ids, test_unknown_id_is_not_reported_as_missing_mesh,
-         test_zone_without_ub_csv_id_asks_for_a_new_export, test_invalid_ids, test_other_zone_ids_do_not_count,
-         test_replace_uses_only_valid_rows, test_export_writes_ub_csv_id,
+TESTS = (test_constants, test_ids_play_no_part_in_the_plan, test_a_missing_mesh_is_reported_whatever_the_id,
+         test_zone_without_ub_csv_id_needs_no_new_export, test_any_id_value_is_accepted, test_only_the_selected_zones_objects_are_archived,
+         test_import_places_every_row_and_archives_the_originals, test_export_writes_ub_csv_id,
          test_export_cancel_restores_ub_csv_id, test_export_then_import_roundtrip)
 EXPORT = {'test_export_writes_ub_csv_id', 'test_export_cancel_restores_ub_csv_id'}
 BOTH = {'test_export_then_import_roundtrip'}  # needs the import and the export change: only in the default run

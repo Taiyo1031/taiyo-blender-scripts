@@ -1,4 +1,4 @@
-"""colname as a collection path: export writes it, Replace Zone restores the hierarchy.
+"""colname as a collection path: export writes it, Import Zone rebuilds the hierarchy.
 
 blender --background --factory-startup --python-exit-code 1 --python tools/test_map_roundtrip_colname_path.py
 """
@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / '_Taiyo_Blender_Extensions_Repo'))
 mrt = importlib.import_module('map_roundtrip_tools')
 from map_roundtrip_tools import placement
 from map_roundtrip_tools.chunked import Cancelled
+from map_roundtrip_tools.zones import ensure_zone
 
 TEMP = Path(tempfile.mkdtemp(prefix='mrt-colname-'))
 mrt.register()
@@ -129,7 +130,8 @@ def import_fixture():
     outside = make('Outside')
     p.library_coll, p.map_coll = lib, mapc
     p.placement_csv = str(TEMP / 'ZONE_A.csv')
-    p.zone_override = 'ZONE_X'
+    ensure_zone(p, 'ZONE_X')
+    p.zone_choice = 'ZONE_X'
     p.dry_run = True
     p.name_mode = 'numeric_suffix'
     bpy.context.view_layer.update()
@@ -150,7 +152,7 @@ def test_resolution():
     print('PASS resolution: existing path / new path with intermediates / legacy name / literal "//" name')
 
 
-def test_replace_builds_hierarchy():
+def test_import_builds_hierarchy():
     mapc, area, rocks, legacy, outside = import_fixture()
     cols = ['', 'Area1/Rocks', 'Area1/Trees', 'New1/New2', 'Legacy', 'Fresh']
     write_csv(p.placement_csv, [row(i, i, c) for i, c in enumerate(cols)])
@@ -162,7 +164,7 @@ def test_replace_builds_hierarchy():
     assert {c.name for c in set(bpy.data.collections) - before} == {'Trees', 'New1', 'New2', 'Fresh', '_Replaced_ZONE_X'}
     where = {round(o.location.x): o.users_collection[0] for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_X'}
     assert where == {0: mapc, 1: rocks, 2: trees, 3: new2, 4: legacy, 5: fresh}, where
-    print('PASS Replace Zone creates the nested collections and places each object in its collection')
+    print('PASS Import Zone creates the nested collections and places each object in its collection')
 
 
 def test_name_conflict_is_reported():
@@ -187,7 +189,7 @@ def test_rollback_removes_new_collections():
         before = set(bpy.data.objects), set(bpy.data.collections)
         h = Harness()
         g = placement.MRT_OT_ReplaceZone.work(h, bpy.context)
-        while getattr(h, 'phase', '') != 'Creating linked instances':
+        while getattr(h, 'phase', '') != 'Placing CSV rows':
             next(g)
         try:
             g.throw(exception)
@@ -199,35 +201,35 @@ def test_rollback_removes_new_collections():
     print('PASS ESC / exception remove the new nested collections and leave the old tree intact')
 
 
-def test_export_then_restore_hierarchy():
+def test_export_then_import_hierarchy():
     export_colnames(True)
     mapc = bpy.data.collections['Map']
     olds = [o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_A']
+    assert len(olds) == 6
     lib = make('Library')
     lib.objects.link(bpy.data.objects.new('Rock', olds[0].data))
     for name in ('Rocks', 'Area1'):
         bpy.data.collections.remove(bpy.data.collections[name])  # the nested tree is gone
     p.library_coll, p.map_coll = lib, mapc
     p.placement_csv = str(TEMP / 'ZONE_A.csv')
-    p.zone_override = ''
     p.dry_run = False
     assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
     new = [o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_A']
-    assert len(new) == 6
+    assert len(new) == 6 and not set(new) & set(olds), 'every row is placed as a new object'
+    assert all(o.get('ub_archived_from') == 'ZONE_A' and 'ub_zone' not in o for o in olds), 'the originals are archived'
     area = bpy.data.collections['Area1']
     rocks = bpy.data.collections['Rocks']
     assert area in mapc.children[:] and rocks in area.children[:]
-    where = {round(o.location.x): o.users_collection[0].name for o in new}
-    # The same objects were relinked (nothing was recreated); the ones outside Map did not move at all.
-    assert set(new) == set(olds)
-    assert where[3] == 'Area1' and where[6] == 'Rocks' and where[0] == 'Map' and where[15] == 'Odd/Name' and where[9] == 'Deep', where
-    assert where[12] == 'Scene Collection', where
-    assert 'Other.001' not in bpy.data.collections, [c.name for c in bpy.data.collections]
-    print('PASS export -> restore: the Map hierarchy comes back by relinking the same objects')
+    parents, roots = placement.build_parent_index(mapc)
+    where = {round(o.location.x): placement.collection_colname(o.users_collection[0], mapc, parents, roots) for o in new}
+    assert where == {0: '', 3: 'Area1', 6: 'Area1/Rocks', 9: 'Other/Deep', 12: '', 15: 'Odd/Name'}, where
+    # a name used elsewhere gets a suffix, but the CSV colname still finds it again
+    assert bpy.data.collections.get('Other.001') is not None and bpy.data.collections['Other.001'] in mapc.children[:]
+    print('PASS export -> import: the Map hierarchy is rebuilt for new objects; the originals are archived')
 
 
-def test_houdini_edits_moved_removed_and_added():
-    """What comes back from Houdini: moved row = moved in place, use = 0 = retired, id -1 = added mesh."""
+def test_houdini_edits_everything_is_replaced():
+    """What comes back from Houdini is the whole zone: every row is placed, use = 0 places nothing, the originals are archived."""
     mapc, area, rocks, legacy, outside = import_fixture()
     from_houdini = make('FromHoudini', bpy.data.collections['Library'])
     new_rock_mesh = new_mesh()
@@ -241,27 +243,27 @@ def test_houdini_edits_moved_removed_and_added():
         o['keep_me'] = 'custom property'
         area.objects.link(o)
         olds.append(o)
-    # Houdini: id 1 moved to x=100, id 2 deleted (use = 0), a new mesh added (-1) under a new path, id 99 is unknown.
+    # Houdini: id 1 moved to x=100, id 2 dropped (use = 0), a new mesh added (-1) under a new path, id 99 was never exported.
     write_csv(p.placement_csv, [row(1, 100, 'Area1'), [2, 0, 0, 0, 0, 0, 0, 1, 1, 1, 'Rock', 'Area1', 0], row(-1, 200, 'Area2/NewRocks', 'NewRock'), row(99, 300, 'Area1')])
     p.dry_run = False
     assert bpy.ops.mrt.replace_zone() == {'FINISHED'}
-    assert tuple(olds[0].location) == (100, 0, 0) and olds[0]['keep_me'] == 'custom property'  # moved in place, properties kept
-    assert olds[0].users_collection == (area,) and olds[0].get('ub_zone') == 'ZONE_X'
-    new = [o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_X' and o not in olds]
-    assert len(new) == 1 and round(new[0].location.x) == 200 and new[0].data == new_rock_mesh  # id 99 was not used
+    new = sorted((o for o in bpy.data.objects if o.get('ub_zone') == 'ZONE_X'), key=lambda o: o.location.x)
+    assert [round(o.location.x) for o in new] == [100, 200, 300], [o.location.x for o in new]  # the id column plays no part
+    assert not set(new) & set(olds) and new[1].data == new_rock_mesh
     area2, new_rocks = bpy.data.collections['Area2'], bpy.data.collections['NewRocks']
-    assert area2 in mapc.children[:] and new_rocks in area2.children[:] and new[0].users_collection == (new_rocks,)
+    assert area2 in mapc.children[:] and new_rocks in area2.children[:] and new[1].users_collection == (new_rocks,)
+    assert new[0].users_collection == (area,) and new[2].users_collection == (area,)
     archive = bpy.context.scene.collection.children['_Replaced_ZONE_X']
     retired = archive.children['Area1 [ZONE_X]']  # same hierarchy as the original, as a mirror
-    assert olds[1].users_collection == (retired,) and 'ub_zone' not in olds[1] and olds[1]['keep_me'] == 'custom property'
-    assert 'moved 1' in p.status and 'retired 1' in p.status and 'added 1' in p.status and 'unknown id 1' in p.status, p.status
-    print('PASS Houdini edits: moved in place, removed -> retired with hierarchy, id -1 + colname path -> nested collection')
+    assert all(o.users_collection == (retired,) and 'ub_zone' not in o and o['keep_me'] == 'custom property' for o in olds)
+    assert 'archive 2' in p.status and 'place 3' in p.status and 'use 0 rows 1' in p.status, p.status
+    print('PASS Houdini edits: all rows placed (id ignored), use 0 places nothing, originals archived with hierarchy, new path -> nested collection')
 
 
 for test in (test_export_path_relative_to_map, test_export_path_without_map, test_resolution,
-             test_replace_builds_hierarchy, test_name_conflict_is_reported,
-             test_rollback_removes_new_collections, test_export_then_restore_hierarchy,
-             test_houdini_edits_moved_removed_and_added):
+             test_import_builds_hierarchy, test_name_conflict_is_reported,
+             test_rollback_removes_new_collections, test_export_then_import_hierarchy,
+             test_houdini_edits_everything_is_replaced):
     test()
 mrt.unregister()
 print('MRT_COLNAME_PATH_PASSED')

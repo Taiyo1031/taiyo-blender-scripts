@@ -56,7 +56,6 @@ def reset():
     p.zones.clear()
     p.zone_scope = 'SCENE'
     p.zone_choice = 'ALL'
-    p.zone_override = ''
 
 
 def rename(old_name, new_name):
@@ -81,11 +80,10 @@ def test_rename_updates_everything_of_that_zone_only():
     orphan['ub_mirror_of'] = 'Orphan'
     orphan['ub_mirror_tag'] = 'ZONE_A'
     p.zone_choice = 'ZONE_A'
-    p.zone_override = 'ZONE_A'
     assert rename(old_name='ZONE_A', new_name=' ZONE_X ') == {'FINISHED'}
     empty, live, archive, mirror, old = a
     assert sorted(registered()) == ['ZONE_B', 'ZONE_X'], registered()
-    assert p.zone_choice == 'ZONE_X' and p.zone_override == 'ZONE_X'
+    assert p.zone_choice == 'ZONE_X'
     assert empty['zone'] == 'ZONE_X' and zone_name(empty) == 'ZONE_X'
     assert live['ub_zone'] == 'ZONE_X' and json.loads(live['ub_run'])['zone'] == 'ZONE_X'
     assert old['ub_archived_from'] == 'ZONE_X' and json.loads(old['ub_run'])['zone'] == 'ZONE_X'

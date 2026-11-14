@@ -28,7 +28,7 @@ class MRT_OT_ExportZoneCSV(ChunkedOperator, bpy.types.Operator):
         if not p.zone_csv_dir:
             raise ValueError('CSV Output Folder is empty.')
         self.progress('Finding meshes in zones', 0, 1)
-        groups, _overlap = yield from zone_members(context, choice)
+        groups, overlap = yield from zone_members(context, choice)
         groups = {name: objects for name, objects in groups.items() if objects}
         if not groups:
             raise ValueError('No mesh objects inside any zone.' if choice == 'ALL' else 'No mesh objects inside the zone.')
@@ -109,8 +109,9 @@ class MRT_OT_ExportZoneCSV(ChunkedOperator, bpy.types.Operator):
             raise
         if len(groups) == 1:
             name, objects = next(iter(groups.items()))
-            p.zone_override = name
-            self.result = f'Exported {len(objects)} meshes to {os.path.join(folder, name + ".csv")}'
+            note = f'; {overlap} meshes also inside an earlier zone were left to that zone' if overlap else ''
+            self.result = f'Exported {len(objects)} meshes to {os.path.join(folder, name + ".csv")}{note}'
         else:
             detail = ' / '.join(f'{name} {len(objects)}' for name, objects in groups.items())
-            self.result = f'Exported {total} meshes in {len(groups)} zones to {folder} ({detail})'
+            note = f'; {overlap} meshes inside several zones went to the first one' if overlap else ''
+            self.result = f'Exported {total} meshes in {len(groups)} zones to {folder} ({detail}){note}'
