@@ -32,9 +32,15 @@ def add_constraint_node(graph, owner_id, constraint, filters, owner_name):
 
 
 def add_object_constraints(graph, obj, filters):
+    for _ in iter_object_constraints(graph, obj, filters):
+        pass
+
+
+def iter_object_constraints(graph, obj, filters):
     for constraint in obj.constraints:
         node_id = add_constraint_node(graph, object_id(obj), constraint, filters, obj.name)
         _add_constraint_targets(graph, node_id, constraint, filters)
+        yield None
 
 
 def add_pose_bone_constraints(graph, armature_obj, pose_bone, filters):

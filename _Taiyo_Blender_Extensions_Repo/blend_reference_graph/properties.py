@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import EnumProperty, IntProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
 from bpy.types import AddonPreferences, PropertyGroup
 
 
@@ -30,6 +30,13 @@ class BRG_Settings(PropertyGroup):
         min=1,
         max=5,
     )
+
+    include_internals: BoolProperty(name="Include Internals", default=True)
+    include_bones: BoolProperty(name="Include Bones", default=False)
+    max_bones: IntProperty(name="Maximum Bones", default=2000, min=100, max=50000)
+    open_viewer_after_scan: BoolProperty(name="Open Viewer After Scan", default=True)
+    scan_progress: FloatProperty(name="Progress", default=0, min=0, max=100, subtype="PERCENTAGE")
+    scan_seconds: FloatProperty(name="Scan Seconds", default=0, min=0)
 
     status_message: StringProperty(default="No graph data generated yet.")
     last_update: StringProperty(name="Last Update", default="-")

@@ -43,3 +43,19 @@ class VIEW3D_PT_blend_reference_graph(Panel):
         row.prop(settings, "resolved_output_path", text="")
         if settings.status_message:
             box.label(text=settings.status_message)
+
+
+        box = layout.box()
+        box.label(text="Whole File", icon="FILE_BLEND")
+        box.prop(settings, "include_internals")
+        box.prop(settings, "include_bones")
+        row = box.row()
+        row.enabled = settings.include_bones
+        row.prop(settings, "max_bones")
+        box.prop(settings, "open_viewer_after_scan")
+        box.operator("brg.scan_whole_file", icon="VIEWZOOM")
+        row = box.row()
+        row.enabled = False
+        row.prop(settings, "scan_progress")
+        box.label(text=f"Nodes: {settings.node_count}  Edges: {settings.edge_count}")
+        box.label(text=f"Scan: {settings.scan_seconds:.2f} s")

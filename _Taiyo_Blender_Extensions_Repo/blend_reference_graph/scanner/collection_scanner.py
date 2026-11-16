@@ -1,19 +1,21 @@
+from .id_utils import id_key
 from .object_scanner import object_id
 from .path_utils import collection_paths
 
 
 def collection_id(collection):
-    return f"Collection:{collection.name}"
+    return f"Collection:{id_key(collection)}"
 
 
 def _allowed(filters, node_type):
     return filters.get(node_type, True)
 
 
-def add_collection_node(graph, collection, filters):
-    if not _allowed(filters, "COLLECTION"):
+def add_collection_node(graph, collection, filters, path_cache=None):
+    if collection_id(collection) in graph.nodes or not _allowed(filters, "COLLECTION"):
         return
-    paths = collection_paths(collection)
+    path_cache = path_cache or getattr(graph, "path_cache", None)
+    paths = path_cache.collection_paths(collection) if path_cache else collection_paths(collection)
     graph.add_node(
         collection_id(collection),
         "COLLECTION",
@@ -29,7 +31,9 @@ def add_collection_node(graph, collection, filters):
 
 
 def add_object_collections(graph, obj, filters):
-    for collection in obj.users_collection:
+    cache = getattr(graph, "path_cache", None)
+    collections = cache.memberships.get(obj, ()) if cache else obj.users_collection
+    for collection in collections:
         add_collection_node(graph, collection, filters)
         graph.add_edge(collection_id(collection), object_id(obj), "contains", "contains")
         for child in collection.children:
