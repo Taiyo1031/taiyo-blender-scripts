@@ -28,6 +28,10 @@
     LIBRARY: "#8ea0ff",
     SAFE_DELETE: "#ff6f91",
     WARNING: "#ff6262",
+    SCENE: "#81c7b5", WORLD: "#79a8da", CAMERA: "#d4a6e9",
+    LIGHT: "#ffe08a", CURVE: "#b7a0f5", TEXT: "#9ec8db",
+    FONT: "#ceaeb8", SOUND: "#82cdb8", PARTICLE: "#e9b982",
+    TEXTURE: "#c2ce8d", OTHER: "#b0bac9",
   };
   const typeOrder = [
     "COLLECTION",
@@ -46,9 +50,61 @@
     "LIBRARY",
     "SAFE_DELETE",
     "WARNING",
+    "SCENE", "WORLD", "CAMERA", "LIGHT", "CURVE", "TEXT", "FONT",
+    "SOUND", "PARTICLE", "TEXTURE", "OTHER",
   ];
   const nodeById = new Map(graphData.nodes.map((node) => [node.id, node]));
+  const overview = graphData.meta.scope === "WHOLE_FILE";
+  const nodeElements = new Map();
+  const edgeElements = new Map();
+  const adjacentEdges = new Map();
+  const dataEdgesByNode = new Map();
+  const searchIndex = new Map(graphData.nodes.map((node) => [node.id,
+    [node.name, node.type, node.path, ...Object.values(node.details || {}).map((value) =>
+      typeof value === "object" ? JSON.stringify(value) : String(value)),
+      JSON.stringify(node)].join(" ").toLowerCase(),
+  ]));
+  for (const edge of graphData.edges) {
+    for (const id of new Set([edge.from, edge.to])) {
+      if (!dataEdgesByNode.has(id)) dataEdgesByNode.set(id, []);
+      dataEdgesByNode.get(id).push(edge);
+    }
+  }
+  const clusters = new Map();
+  const clusterByNode = new Map();
+  const enabledTypes = new Set(graphData.nodes.map((node) => node.type));
+  const expandedGroups = new Set();
   const selectedIds = new Set();
+  let previousSelection = new Set();
+  let searchHitIds = new Set();
+  let displayedNodes = graphData.nodes;
+  let displayedClusters = [];
+  let orphanOnly = false;
+  let renderRevision = 0;
+  let rendering = false;
+  let fitAfterRender = false;
+  let focusAfterRender = false;
+  const realEdgeLimit = 2500;
+  let visibleRealEdges = [];
+  let realEdgeRevision = 0;
+  let realEdgeFrame = null;
+  let overviewFrame = null;
+  let overviewWork = null;
+  let drawProgress = { stage: "準備中", done: 0, total: 0 };
+  let selectionRevision = 0;
+  let realEdgesDirty = false;
+  let hoveredCluster = null;
+  let selectedCluster = null;
+  const aggregateEdgesByCluster = new Map();
+  if (overview) {
+    for (const node of graphData.nodes) {
+      const name = node.group || node.type;
+      if (!clusters.has(name)) clusters.set(name, { name, nodes: [], expanded: false });
+      const cluster = clusters.get(name);
+      cluster.nodes.push(node);
+      clusterByNode.set(node.id, cluster);
+    }
+  }
   const state = {
     scale: 1,
     tx: 0,
@@ -75,19 +131,33 @@
     ].filter(Boolean).join("   ");
     buildLegend();
     syncPanelSwap();
+    wireInteractions();
     render();
     fitView();
+    initLiveViewer();
     updateDetails();
   }
 
   function buildLegend() {
     const present = new Set(graphData.nodes.map((node) => node.type));
     legend.innerHTML = "";
-    for (const type of typeOrder) {
+    for (const type of [...typeOrder, ...[...present].filter((type) => !typeOrder.includes(type)).sort()]) {
       if (!present.has(type)) continue;
       const row = document.createElement("div");
       row.className = "filter";
-      row.innerHTML = `<span class="swatch" style="background:${colors[type] || "#aaa"}"></span>${type}`;
+      row.innerHTML = `<span class="swatch" style="background:${colors[type] || "#aaa"}"></span>${escapeHtml(type)}`;
+      if (overview) {
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = true;
+        checkbox.setAttribute("aria-label", type);
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) enabledTypes.add(type);
+          else enabledTypes.delete(type);
+          applySearch();
+        });
+        row.prepend(checkbox);
+      }
       legend.appendChild(row);
     }
   }
@@ -98,10 +168,10 @@
     if (targetId && nodeById.has(targetId)) {
       levels.set(targetId, 0);
       const queue = [targetId];
-      while (queue.length) {
-        const current = queue.shift();
+      for (let index = 0; index < queue.length; index++) {
+        const current = queue[index];
         const currentLevel = levels.get(current);
-        for (const edge of graphData.edges) {
+        for (const edge of dataEdgesByNode.get(current) || []) {
           let next;
           let proposed;
           if (edge.from === current) {
@@ -152,7 +222,13 @@
   }
 
   function render() {
+    if (overview) {
+      document.getElementById("overview-controls").hidden = false;
+      renderOverview();
+      return;
+    }
     layoutNodes();
+    resetElementMaps();
     svg.innerHTML = `<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#687586"></path></marker></defs>`;
     root = makeSvg("g", { id: "viewport" });
     edgeLayer = makeSvg("g", {});
@@ -171,7 +247,6 @@
       nodeLayer.appendChild(makeNode(node));
     }
 
-    wireInteractions();
     applyTransform();
     applySearch();
     refreshSelection();
@@ -208,6 +283,18 @@
     const title = makeSvg("title", {});
     title.textContent = relation;
     group.append(path, label, title);
+    group.classList.toggle("dim", Boolean(state.query)
+      && !(searchHitIds.has(from.id) || searchHitIds.has(to.id) || from.searchHit || to.searchHit));
+    if (edge.count) {
+      group.classList.add("aggregate-edge");
+      path.style.strokeWidth = String(Math.min(6, 1 + Math.log2(edge.count + 1) * 0.5));
+    }
+    const record = { group, path, label, from, to };
+    edgeElements.set(edge, record);
+    for (const id of new Set([from.id, to.id].filter((id) => id !== undefined))) {
+      if (!adjacentEdges.has(id)) adjacentEdges.set(id, new Set());
+      adjacentEdges.get(id).add(record);
+    }
     return group;
   }
 
@@ -279,7 +366,21 @@
     const title = makeSvg("title", {});
     title.textContent = node.path ? `${node.name}\n${node.path}` : node.name;
     group.appendChild(title);
+    group.classList.toggle("search-hit", searchHitIds.has(node.id));
+    group.classList.toggle("search-current", state.searchMatches[state.searchIndex]?.id === node.id);
+    group.classList.toggle("dim", Boolean(state.query) && !searchHitIds.has(node.id));
+    nodeElements.set(node.id, group);
     group.addEventListener("pointerdown", (event) => beginNodeDrag(event, node));
+    if (overview) {
+      group.addEventListener("pointerenter", () => {
+        hoveredCluster = clusterByNode.get(node.id);
+        refreshClusterEmphasis();
+      });
+      group.addEventListener("pointerleave", () => {
+        if (hoveredCluster === clusterByNode.get(node.id)) hoveredCluster = null;
+        refreshClusterEmphasis();
+      });
+    }
     return group;
   }
 
@@ -332,7 +433,7 @@
       type: "nodes",
       startX: event.clientX,
       startY: event.clientY,
-      positions: [...selectedIds].map((id) => {
+      positions: [...selectedIds].filter((id) => nodeElements.has(id)).map((id) => {
         const selected = nodeById.get(id);
         return { node: selected, x: selected.x, y: selected.y };
       }),
@@ -372,7 +473,7 @@
       if (event.button === 1 || (event.button === 0 && state.spaceDown)) {
         event.preventDefault();
         beginPan(event);
-      } else if (event.button === 0) {
+      } else if (event.button === 0 && !rendering) {
         beginBoxSelection(event);
       }
     };
@@ -428,7 +529,11 @@
         return;
       }
 
-      if (event.code === "Space") {
+      if (document.activeElement && document.activeElement.matches("input, select, textarea, [contenteditable=true]")) return;
+      if (key === "r" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        if (!document.getElementById("rescan-node").disabled) requestNodeScan();
+      } else if (event.code === "Space") {
         state.spaceDown = true;
         if (document.activeElement !== search) event.preventDefault();
       } else if (key === "/" || (event.metaKey && key === "f")) {
@@ -526,7 +631,7 @@
     const right = (Math.max(interaction.startX, interaction.currentX) - svgRect.left - state.tx) / state.scale;
     const top = (Math.min(interaction.startY, interaction.currentY) - svgRect.top - state.ty) / state.scale;
     const bottom = (Math.max(interaction.startY, interaction.currentY) - svgRect.top - state.ty) / state.scale;
-    const hits = graphData.nodes.filter((node) => (
+    const hits = displayedNodes.filter((node) => (
       node.x < right
       && node.x + node.w > left
       && node.y < bottom
@@ -540,16 +645,27 @@
   }
 
   function refreshSelection() {
-    document.querySelectorAll(".node").forEach((el) => {
-      el.classList.toggle("selected", selectedIds.has(el.dataset.id));
-    });
-    document.querySelectorAll(".edge-group").forEach((el) => {
-      el.classList.toggle(
-        "selected",
-        selectedIds.has(el.dataset.from) || selectedIds.has(el.dataset.to),
-      );
-    });
+    const selectionChanged = selectedIds.size !== previousSelection.size
+      || [...selectedIds].some((id) => !previousSelection.has(id));
+    if (selectionChanged) {
+      selectionRevision++;
+      if (rendering) realEdgesDirty = true;
+    }
+    const changed = new Set([...selectedIds, ...previousSelection]);
+    const edges = new Set();
+    for (const id of changed) {
+      if (selectedIds.has(id) === previousSelection.has(id)) continue;
+      const el = nodeElement(id);
+      if (el) el.classList.toggle("selected", selectedIds.has(id));
+      for (const edge of adjacentEdges.get(id) || []) edges.add(edge);
+    }
+    for (const { group, from, to } of edges) {
+      group.classList.toggle("selected", selectedIds.has(from.id) || selectedIds.has(to.id));
+    }
+    previousSelection = new Set(selectedIds);
+    if (overview && selectionChanged && !rendering) refreshOverviewEdges();
     updateDetails();
+    updateLiveControls();
   }
 
   function updateDetails() {
@@ -579,50 +695,51 @@
 
   function applySearch() {
     const query = state.query.toLowerCase();
-    const matches = [];
-    const previousId = state.searchMatches[state.searchIndex]
-      ? state.searchMatches[state.searchIndex].id
-      : "";
-    document.querySelectorAll(".node").forEach((el) => {
-      const node = nodeById.get(el.dataset.id);
-      const text = JSON.stringify(node || {}).toLowerCase();
-      const hit = Boolean(query) && text.includes(query);
-      if (hit && node) matches.push(node);
-      el.classList.toggle("dim", Boolean(query) && !hit);
-      el.classList.toggle("search-hit", hit);
-    });
-    document.querySelectorAll(".edge-group").forEach((el) => {
-      const from = nodeById.get(el.dataset.from);
-      const to = nodeById.get(el.dataset.to);
-      const visible = !query
-        || JSON.stringify(from || {}).toLowerCase().includes(query)
-        || JSON.stringify(to || {}).toLowerCase().includes(query);
-      el.classList.toggle("dim", !visible);
-    });
+    const previousId = state.searchMatches[state.searchIndex]?.id;
+    const matches = query ? graphData.nodes.filter((node) =>
+      (!overview || nodePassesFilters(node)) && searchIndex.get(node.id).includes(query)) : [];
+    searchHitIds = new Set(matches.map((node) => node.id));
     state.searchMatches = matches;
     if (query && matches.length) {
       state.searchIndex = matches.findIndex((node) => node.id === previousId);
       if (state.searchIndex < 0) state.searchIndex = 0;
       selectedIds.clear();
       selectedIds.add(matches[state.searchIndex].id);
-      focusNodes([matches[state.searchIndex]]);
-      refreshSelection();
+      if (overview) {
+        for (const node of matches) expandedGroups.add(clusterByNode.get(node.id).name);
+      } else {
+        focusNodes([matches[state.searchIndex]]);
+      }
     } else {
       state.searchIndex = -1;
-      updateDetails();
     }
-    refreshSearchClasses();
+    if (overview) {
+      focusAfterRender = matches.length > 0;
+      renderOverview();
+    } else {
+      refreshSearchClasses();
+      refreshSelection();
+    }
     updateSearchStatus();
   }
 
   function fitView() {
     const box = svg.getBoundingClientRect();
-    if (!graphData.nodes.length || !box.width || !box.height) return;
-    const minX = Math.min(...graphData.nodes.map((node) => node.x));
-    const maxX = Math.max(...graphData.nodes.map((node) => node.x + node.w));
-    const minY = Math.min(...graphData.nodes.map((node) => node.y));
-    const maxY = Math.max(...graphData.nodes.map((node) => node.y + node.h));
-    state.scale = Math.min(1.15, Math.max(0.22, Math.min(
+    if (rendering) { fitAfterRender = true; return; }
+    const nodes = overview ? [...displayedClusters, ...displayedNodes] : graphData.nodes;
+    if (!nodes.length || !box.width || !box.height) return;
+    let bounds = nodeBounds(nodes);
+    if (overview) {
+      // getBBox includes the full current layout, labels, edges and dragged nodes.
+      const drawn = root.getBBox();
+      bounds = {
+        minX: Math.min(bounds.minX, drawn.x), minY: Math.min(bounds.minY, drawn.y),
+        maxX: Math.max(bounds.maxX, drawn.x + drawn.width),
+        maxY: Math.max(bounds.maxY, drawn.y + drawn.height),
+      };
+    }
+    const { minX, maxX, minY, maxY } = bounds;
+    state.scale = Math.min(1.15, Math.max(overview ? 0.02 : 0.22, Math.min(
       (box.width - 100) / (maxX - minX || 1),
       (box.height - 100) / (maxY - minY || 1),
     )));
@@ -634,10 +751,7 @@
   function focusNodes(nodes) {
     const box = svg.getBoundingClientRect();
     if (!nodes.length || !box.width || !box.height) return;
-    const minX = Math.min(...nodes.map((node) => node.x));
-    const maxX = Math.max(...nodes.map((node) => node.x + node.w));
-    const minY = Math.min(...nodes.map((node) => node.y));
-    const maxY = Math.max(...nodes.map((node) => node.y + node.h));
+    const { minX, maxX, minY, maxY } = nodeBounds(nodes);
     const padding = nodes.length === 1 ? 240 : 150;
     const nextScale = Math.min(1.25, Math.max(0.35, Math.min(
       (box.width - padding) / (maxX - minX || 1),
@@ -656,7 +770,7 @@
     const mouseY = clientY - rect.top;
     const graphX = (mouseX - state.tx) / state.scale;
     const graphY = (mouseY - state.ty) / state.scale;
-    const nextScale = Math.max(0.2, Math.min(2.8, state.scale * factor));
+    const nextScale = Math.max(overview ? 0.02 : 0.2, Math.min(2.8, state.scale * factor));
     state.tx = mouseX - graphX * nextScale;
     state.ty = mouseY - graphY * nextScale;
     state.scale = nextScale;
@@ -675,25 +789,38 @@
   }
 
   function applyTransform() {
+    svg.classList.toggle("low-detail", overview && state.scale < 0.5);
     if (root) root.setAttribute("transform", `translate(${state.tx},${state.ty}) scale(${state.scale})`);
   }
 
   function nodeElement(id) {
-    return [...document.querySelectorAll(".node")].find((el) => el.dataset.id === id);
+    return nodeElements.get(id);
   }
 
   function updateEdgesForNode(node) {
-    document.querySelectorAll(".edge-group").forEach((group) => {
-      if (group.dataset.from !== node.id && group.dataset.to !== node.id) return;
-      const from = nodeById.get(group.dataset.from);
-      const to = nodeById.get(group.dataset.to);
+    for (const { path, label, from, to } of adjacentEdges.get(node.id) || []) {
       const geometry = edgeGeometry(from, to);
-      group.querySelector(".edge").setAttribute("d", geometry.d);
-      group.querySelector(".edge-label").setAttribute(
-        "transform",
-        `translate(${geometry.labelX},${geometry.labelY})`,
-      );
-    });
+      path.setAttribute("d", geometry.d);
+      label.setAttribute("transform", `translate(${geometry.labelX},${geometry.labelY})`);
+    }
+  }
+
+  function resetElementMaps() {
+    nodeElements.clear();
+    edgeElements.clear();
+    adjacentEdges.clear();
+    previousSelection.clear();
+  }
+
+  function nodeBounds(nodes) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const node of nodes) {
+      minX = Math.min(minX, node.x);
+      minY = Math.min(minY, node.y);
+      maxX = Math.max(maxX, node.x + node.w);
+      maxY = Math.max(maxY, node.y + node.h);
+    }
+    return { minX, minY, maxX, maxY };
   }
 
   function escapeHtml(value) {
@@ -717,7 +844,13 @@
     const node = state.searchMatches[state.searchIndex];
     selectedIds.clear();
     selectedIds.add(node.id);
-    focusNodes([node]);
+    if (overview && (rendering || !nodeElements.has(node.id))) {
+      expandedGroups.add(clusterByNode.get(node.id).name);
+      focusAfterRender = true;
+      renderOverview();
+    } else {
+      focusNodes([node]);
+    }
     refreshSelection();
     refreshSearchClasses();
     updateSearchStatus();
@@ -725,9 +858,16 @@
 
   function refreshSearchClasses() {
     const current = state.searchMatches[state.searchIndex];
-    document.querySelectorAll(".node").forEach((el) => {
-      el.classList.toggle("search-current", Boolean(current) && el.dataset.id === current.id);
-    });
+    for (const [id, el] of nodeElements) {
+      el.classList.toggle("search-current", Boolean(current) && id === current.id);
+      el.classList.toggle("search-hit", searchHitIds.has(id));
+      el.classList.toggle("dim", Boolean(state.query) && !searchHitIds.has(id));
+    }
+    for (const { group, from, to } of edgeElements.values()) {
+      const hit = searchHitIds.has(from.id) || searchHitIds.has(to.id)
+        || from.searchHit || to.searchHit;
+      group.classList.toggle("dim", Boolean(state.query) && !hit);
+    }
   }
 
   function updateSearchStatus() {
@@ -768,6 +908,560 @@
   function fileSafeName(value) {
     return String(value || "graph").replace(/[\\/:*?"<>|\s]+/g, "_").replace(/^_+|_+$/g, "") || "graph";
   }
+
+  function nodePassesFilters(node) {
+    return enabledTypes.has(node.type) && (!orphanOnly || node.details?.orphan === true);
+  }
+
+  function toggleCluster(cluster) {
+    selectedCluster = cluster;
+    if (expandedGroups.has(cluster.name)) expandedGroups.delete(cluster.name);
+    else expandedGroups.add(cluster.name);
+    renderOverview();
+  }
+
+  function refreshClusterEmphasis() {
+    for (const [cluster, edges] of aggregateEdgesByCluster) {
+      cluster.header?.classList.toggle("active", cluster === hoveredCluster || cluster === selectedCluster);
+      for (const record of edges) {
+        record.group.classList.toggle("emphasized", record.clusters.some((item) =>
+          item === hoveredCluster || item === selectedCluster));
+      }
+    }
+  }
+
+  function makeCluster(cluster) {
+    const group = makeSvg("g", { transform: `translate(${cluster.x},${cluster.y})` });
+    group.appendChild(makeSvg("rect", {
+      class: "cluster-body", width: cluster.w, height: cluster.h, rx: 10,
+    }));
+    const header = makeSvg("g", {
+      class: "cluster-header", role: "button", tabindex: 0,
+      "aria-label": `${cluster.name}: ${cluster.count} nodes, ${cluster.orphans} orphans`,
+      "aria-expanded": cluster.expanded,
+      style: `--cluster-color:${colors[cluster.name] || colors.OTHER}`,
+    });
+    cluster.header = header;
+    group.addEventListener("pointerenter", () => {
+      hoveredCluster = cluster;
+      refreshClusterEmphasis();
+    });
+    group.addEventListener("pointerleave", () => {
+      if (hoveredCluster === cluster) hoveredCluster = null;
+      refreshClusterEmphasis();
+    });
+    header.appendChild(makeSvg("rect", { width: cluster.w, height: 62, rx: 10 }));
+    const title = makeSvg("text", { class: "cluster-title", x: 18, y: 26 });
+    title.textContent = `${cluster.expanded ? "▾" : "▸"} ${cluster.name}`;
+    const count = makeSvg("text", { class: "cluster-count", x: 18, y: 48 });
+    count.textContent = `${cluster.count} nodes · ${cluster.orphans} orphan`;
+    header.append(title, count);
+    header.addEventListener("pointerdown", (event) => {
+      if (event.button === 0 && !state.spaceDown) event.stopPropagation();
+    });
+    header.addEventListener("click", (event) => {
+      if (state.spaceDown) return;
+      event.stopPropagation();
+      toggleCluster(cluster);
+    });
+    header.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleCluster(cluster);
+      }
+    });
+    group.appendChild(header);
+    if (cluster.expanded && cluster.omitted) {
+      const more = makeSvg("text", { class: "cluster-more", x: 18, y: cluster.h - 16 });
+      more.textContent = `+${cluster.omitted} more — use filter/search`;
+      group.appendChild(more);
+    }
+    return group;
+  }
+
+  function* drawOverview() {
+    const ordered = [...clusters.values()].sort((a, b) => {
+      const rank = (name) => typeOrder.includes(name) ? typeOrder.indexOf(name) : typeOrder.length;
+      return rank(a.name) - rank(b.name) || a.name.localeCompare(b.name);
+    });
+    displayedNodes = [];
+    displayedClusters = [];
+    visibleRealEdges = [];
+    drawProgress = { stage: "レイアウト", done: 0, total: graphData.nodes.length };
+
+    const visibleIds = new Set();
+    for (const cluster of ordered) {
+      cluster.visible = [];
+      cluster.count = 0;
+      cluster.orphans = 0;
+      cluster.searchHit = false;
+      cluster.expanded = expandedGroups.has(cluster.name);
+      for (const node of cluster.nodes) {
+        if (nodePassesFilters(node)) {
+          cluster.count++;
+          if (node.details?.orphan === true) cluster.orphans++;
+          if (searchHitIds.has(node.id)) cluster.searchHit = true;
+          if (cluster.expanded && (cluster.visible.length < 500
+              || searchHitIds.has(node.id) || selectedIds.has(node.id))) {
+            cluster.visible.push(node);
+            visibleIds.add(node.id);
+            displayedNodes.push(node);
+          }
+        }
+        drawProgress.done++;
+        yield;
+      }
+      if (!cluster.count) continue;
+      cluster.omitted = cluster.count - cluster.visible.length;
+      cluster.w = cluster.expanded ? 962 : 340;
+      cluster.h = cluster.expanded
+        ? 88 + Math.ceil(cluster.visible.length / 3) * 108 + (cluster.omitted ? 30 : 0)
+        : 62;
+      displayedClusters.push(cluster);
+    }
+    const columns = overviewColumnCount(displayedClusters);
+    let y = 40;
+    for (let index = 0; index < displayedClusters.length; index += columns) {
+      const row = displayedClusters.slice(index, index + columns);
+      let x = 40;
+      for (const cluster of row) {
+        cluster.x = x;
+        cluster.y = y;
+        cluster.endpoint = { x, y, w: cluster.w, h: 62, searchHit: cluster.searchHit, cluster };
+        for (let nodeIndex = 0; nodeIndex < cluster.visible.length; nodeIndex++) {
+          const node = cluster.visible[nodeIndex];
+          node.x = x + 24 + (nodeIndex % 3) * 310;
+          node.y = y + 84 + Math.floor(nodeIndex / 3) * 108;
+          node.w = 286;
+          node.h = node.type === "COLLECTION" && node.path ? 88 : 70;
+          yield;
+        }
+        clusterLayer.appendChild(makeCluster(cluster));
+        x += cluster.w + 100;
+        yield;
+      }
+      y += Math.max(...row.map((cluster) => cluster.h)) + 100;
+    }
+
+    // Object keys keep cluster endpoints distinct from every public node ID.
+    drawProgress = { stage: "エッジ集計", done: 0, total: graphData.edges.length };
+    const aggregated = new Map();
+    for (const edge of graphData.edges) {
+      const fromNode = nodeById.get(edge.from);
+      const toNode = nodeById.get(edge.to);
+      if (fromNode && toNode && nodePassesFilters(fromNode) && nodePassesFilters(toNode)) {
+        const fromCluster = clusterByNode.get(edge.from);
+        const toCluster = clusterByNode.get(edge.to);
+        if (fromCluster === toCluster) {
+          if (fromCluster.expanded && visibleIds.has(edge.from) && visibleIds.has(edge.to)) {
+            visibleRealEdges.push(edge);
+          }
+        } else {
+          const endpoints = [];
+          if (!fromCluster.expanded && !toCluster.expanded) {
+            endpoints.push([fromCluster.endpoint, toCluster.endpoint]);
+          } else {
+            if (fromCluster.expanded && visibleIds.has(edge.from)) {
+              endpoints.push([fromNode, toCluster.endpoint]);
+            }
+            if (toCluster.expanded && visibleIds.has(edge.to)) {
+              endpoints.push([fromCluster.endpoint, toNode]);
+            }
+          }
+          for (const [from, to] of endpoints) {
+            if (!aggregated.has(from)) aggregated.set(from, new Map());
+            const destinations = aggregated.get(from);
+            destinations.set(to, (destinations.get(to) || 0) + 1);
+          }
+        }
+      }
+      drawProgress.done++;
+      yield;
+    }
+    drawProgress = { stage: "ノード描画", done: 0, total: displayedNodes.length };
+    for (const node of displayedNodes) {
+      nodeLayer.appendChild(makeNode(node));
+      drawProgress.done++;
+      yield;
+    }
+    drawProgress = { stage: "集約エッジ描画", done: 0,
+      total: [...aggregated.values()].reduce((sum, destinations) => sum + destinations.size, 0) };
+    for (const [from, destinations] of aggregated) {
+      for (const [to, count] of destinations) {
+        const edge = { from: from.id || "", to: to.id || "", label: String(count), count,
+          overviewFrom: from, overviewTo: to, nodeEdge: Boolean(from.id || to.id) };
+        if (edge.nodeEdge) visibleRealEdges.push(edge);
+        else {
+          aggregateLayer.appendChild(makeEdge(edge, from, to));
+          registerAggregateEdge(edgeElements.get(edge));
+        }
+        drawProgress.done++;
+        yield;
+      }
+    }
+    refreshClusterEmphasis();
+    yield* drawRealEdges();
+  }
+
+  function registerAggregateEdge(record) {
+    const { from, to } = record;
+    record.clusters = [...new Set([from.cluster || clusterByNode.get(from.id),
+      to.cluster || clusterByNode.get(to.id)].filter(Boolean))];
+    for (const cluster of record.clusters) {
+      if (!aggregateEdgesByCluster.has(cluster)) aggregateEdgesByCluster.set(cluster, new Set());
+      aggregateEdgesByCluster.get(cluster).add(record);
+    }
+    record.group.classList.toggle("emphasized", record.clusters.some((cluster) =>
+      cluster === hoveredCluster || cluster === selectedCluster));
+  }
+
+  function overviewColumnCount(items) {
+    const viewport = svg.getBoundingClientRect();
+    let bestColumns = 1, bestScale = 0;
+    for (let columns = 1; columns <= items.length; columns++) {
+      let width = 0, height = 0;
+      for (let index = 0; index < items.length; index += columns) {
+        const row = items.slice(index, index + columns);
+        width = Math.max(width, row.reduce((sum, cluster) => sum + cluster.w + 100, -100));
+        height += Math.max(...row.map((cluster) => cluster.h)) + 100;
+      }
+      const scale = Math.min(Math.max(1, viewport.width - 100) / Math.max(1, width),
+        Math.max(1, viewport.height - 100) / Math.max(1, height - 100));
+      if (scale > bestScale) { bestScale = scale; bestColumns = columns; }
+    }
+    return bestColumns;
+  }
+
+  function* drawRealEdges() {
+    const revision = selectionRevision;
+    realEdgesDirty = false;
+    const mandatory = [], priority = [], ordinary = [];
+    drawProgress = { stage: "実エッジ選択", done: 0, total: visibleRealEdges.length };
+    for (const edge of visibleRealEdges) {
+      if (selectedIds.has(edge.from) || selectedIds.has(edge.to)) mandatory.push(edge);
+      else if (searchHitIds.has(edge.from) || searchHitIds.has(edge.to)) priority.push(edge);
+      else ordinary.push(edge);
+      drawProgress.done++;
+      yield;
+    }
+    const chosen = mandatory.concat(priority.slice(0, Math.max(0, realEdgeLimit - mandatory.length)));
+    chosen.push(...ordinary.slice(0, Math.max(0, realEdgeLimit - chosen.length)));
+    const wanted = new Set(chosen);
+    for (const [edge, record] of edgeElements) {
+      if ((edge.count && !edge.nodeEdge) || wanted.has(edge)) continue;
+      record.group.remove();
+      edgeElements.delete(edge);
+      for (const id of new Set([edge.from, edge.to])) adjacentEdges.get(id)?.delete(record);
+      for (const cluster of record.clusters || []) aggregateEdgesByCluster.get(cluster)?.delete(record);
+      yield;
+    }
+    drawProgress = { stage: "実エッジ描画", done: 0, total: chosen.length };
+    for (const edge of chosen) {
+      const from = edge.overviewFrom || nodeById.get(edge.from);
+      const to = edge.overviewTo || nodeById.get(edge.to);
+      if (!edgeElements.has(edge)) {
+        (edge.count ? aggregateLayer : edgeLayer).appendChild(makeEdge(edge, from, to));
+        if (edge.count) registerAggregateEdge(edgeElements.get(edge));
+      }
+      edgeElements.get(edge).group.classList.toggle("selected",
+        selectedIds.has(edge.from) || selectedIds.has(edge.to));
+      drawProgress.done++;
+      yield;
+    }
+    if (revision !== selectionRevision) realEdgesDirty = true;
+    const omitted = visibleRealEdges.length - chosen.length;
+    const status = document.getElementById("edge-limit-status");
+    status.hidden = omitted === 0;
+    status.textContent = omitted
+      ? `実エッジ ${omitted} 本を省略(ノードを選ぶと、そのエッジを表示)` : "";
+  }
+
+  function showDrawProgress() {
+    const status = document.getElementById("overview-status");
+    status.hidden = false;
+    status.textContent = `${drawProgress.stage}中 ${drawProgress.done}/${drawProgress.total}`;
+  }
+
+  function refreshOverviewEdges() {
+    const revision = ++realEdgeRevision;
+    if (realEdgeFrame !== null) cancelAnimationFrame(realEdgeFrame);
+    const work = drawRealEdges();
+    function frame() {
+      if (revision !== realEdgeRevision || rendering) { work.return(); return; }
+      const deadline = performance.now() + 6;
+      let result;
+      do { result = work.next(); } while (!result.done && performance.now() < deadline);
+      showDrawProgress();
+      if (!result.done) realEdgeFrame = requestAnimationFrame(frame);
+      else {
+        realEdgeFrame = null;
+        document.getElementById("overview-status").textContent = `${displayedClusters.length} groups · ${displayedNodes.length} nodes shown`;
+      }
+    }
+    realEdgeFrame = requestAnimationFrame(frame);
+  }
+
+  let clusterLayer;
+  let aggregateLayer;
+  function renderOverview() {
+    cancelInteraction();
+    if (overviewFrame !== null) cancelAnimationFrame(overviewFrame);
+    overviewWork?.return();
+    realEdgeRevision++;
+    if (realEdgeFrame !== null) cancelAnimationFrame(realEdgeFrame);
+    realEdgeFrame = null;
+    aggregateEdgesByCluster.clear();
+    hoveredCluster = null;
+    const revision = ++renderRevision;
+    rendering = true;
+    svg.setAttribute("aria-busy", "true");
+    drawProgress = { stage: "描画", done: 0, total: graphData.nodes.length };
+    showDrawProgress();
+    document.getElementById("edge-limit-status").hidden = true;
+    resetElementMaps();
+    svg.innerHTML = `<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#687586"></path></marker></defs>`;
+    root = makeSvg("g", { id: "viewport" });
+    clusterLayer = makeSvg("g", {});
+    aggregateLayer = makeSvg("g", {});
+    edgeLayer = makeSvg("g", {});
+    nodeLayer = makeSvg("g", {});
+    root.append(aggregateLayer, clusterLayer, edgeLayer, nodeLayer);
+    svg.appendChild(root);
+    applyTransform();
+    const work = drawOverview();
+    overviewWork = work;
+    function frame() {
+      if (revision !== renderRevision) { work.return(); return; }
+      const deadline = performance.now() + 6;
+      let result;
+      do { result = work.next(); } while (!result.done && performance.now() < deadline);
+      showDrawProgress();
+      if (!result.done) {
+        overviewFrame = requestAnimationFrame(frame);
+        return;
+      }
+      overviewFrame = null;
+      overviewWork = null;
+      rendering = false;
+      svg.setAttribute("aria-busy", "false");
+      document.getElementById("overview-status").textContent = `${displayedClusters.length} groups · ${displayedNodes.length} nodes shown`;
+      refreshSelection();
+      if (realEdgesDirty) refreshOverviewEdges();
+      if (fitAfterRender) fitView();
+      if (focusAfterRender) {
+        const current = state.searchMatches[state.searchIndex];
+        if (current && nodeElements.has(current.id)) focusNodes([current]);
+      }
+      fitAfterRender = false;
+      focusAfterRender = false;
+    }
+    overviewFrame = requestAnimationFrame(frame);
+  }
+
+  const liveHint = "Blender の Live Viewer で開くと使えます";
+  const live = { available: false, busy: false, submitting: false, cancelling: false,
+    requestId: null, history: [], pending: null };
+  const historyKey = `brg.requests:${location.pathname.replace(/[^/]*$/, "")}`;
+  const liveStatus = document.getElementById("rescan-status");
+
+  function validRequest(request) {
+    return request && ["NODE", "WHOLE_FILE"].includes(request.scope)
+      && typeof request.node_id === "string" && (request.scope !== "NODE" || request.node_id.length > 0)
+      && ["USES", "USED_BY", "BOTH"].includes(request.mode)
+      && Number.isInteger(request.depth) && request.depth >= 1 && request.depth <= 5;
+  }
+
+  function requestForGraph() {
+    const request = {
+      scope: overview ? "WHOLE_FILE" : "NODE",
+      node_id: overview ? "" : graphData.meta.target_id || "",
+      mode: graphData.meta.mode || "BOTH",
+      depth: Number(graphData.meta.depth || 2),
+    };
+    return validRequest(request) ? request : null;
+  }
+
+  function saveHistory() {
+    try {
+      sessionStorage.setItem(historyKey, JSON.stringify({ history: live.history.slice(-20), pending: live.pending }));
+    } catch (_) { /* Storage may be disabled; keep this page usable. */ }
+  }
+
+  function updateLiveControls() {
+    const unavailable = !live.available;
+    const busy = live.busy || live.submitting;
+    for (const id of ["rescan-node", "rescan-mode", "rescan-depth", "rescan-whole", "rescan-back"]) {
+      const el = document.getElementById(id);
+      el.disabled = unavailable || busy;
+      el.title = unavailable ? liveHint : busy ? "Scan in progress" : "";
+    }
+    const nodeButton = document.getElementById("rescan-node");
+    if (!unavailable && !busy) {
+      nodeButton.disabled = selectedIds.size !== 1;
+      nodeButton.title = nodeButton.disabled ? "Select exactly one node" : "Re-scan from selection (R)";
+      document.getElementById("rescan-back").disabled = live.history.length < 2;
+    }
+    const cancel = document.getElementById("rescan-cancel");
+    cancel.disabled = unavailable || !live.busy || live.submitting || live.cancelling;
+    cancel.title = unavailable ? liveHint : "Cancel the running scan";
+    document.getElementById("rescan-hint").hidden = !unavailable;
+    document.getElementById("rescan-progress").hidden = unavailable || !live.busy;
+  }
+
+  async function liveApi(path, body) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(`api/${path}`, {
+        method: body === undefined ? "GET" : "POST",
+        cache: "no-store", signal: controller.signal,
+        ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || data.message || `HTTP ${response.status}`);
+      if (path === "status" && (response.status !== 200
+          || !["idle", "queued", "running", "done", "error", "cancelled"].includes(data.state)
+          || !Number.isInteger(data.request_id))) throw new Error("Invalid Live Viewer status");
+      if (path === "rescan" && (response.status !== 202 || !Number.isInteger(data.request_id))) {
+        throw new Error("Invalid Live Viewer response");
+      }
+      return data;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function requestScan(request, back = false) {
+    if (!live.available || live.busy || live.submitting || !validRequest(request)) return;
+    live.submitting = true;
+    updateLiveControls();
+    liveStatus.classList.remove("error");
+    liveStatus.textContent = "Requesting scan…";
+    try {
+      const result = await liveApi("rescan", request);
+      live.pending = { request, back, requestId: result.request_id };
+      live.requestId = result.request_id;
+      live.busy = true;
+      saveHistory();
+      liveStatus.textContent = "Queued…";
+    } catch (error) {
+      liveStatus.textContent = error.message;
+      liveStatus.classList.add("error");
+    } finally {
+      live.submitting = false;
+      updateLiveControls();
+    }
+  }
+
+  function requestNodeScan() {
+    if (selectedIds.size !== 1) return;
+    requestScan({ scope: "NODE", node_id: [...selectedIds][0],
+      mode: document.getElementById("rescan-mode").value,
+      depth: Number(document.getElementById("rescan-depth").value) });
+  }
+
+  async function pollLiveStatus() {
+    let reloading = false;
+    try {
+      if (live.submitting) return;
+      const status = await liveApi("status");
+      if (live.submitting) return;
+      live.available = true;
+      if (live.pending && status.request_id < live.pending.requestId) return;
+      const pending = live.pending?.requestId === status.request_id ? live.pending : null;
+      const changed = live.requestId !== null && status.request_id !== live.requestId;
+      const wasBusy = live.busy;
+      live.requestId = status.request_id;
+      live.busy = status.state === "queued" || status.state === "running";
+      if (live.pending && !pending) { live.pending = null; saveHistory(); }
+      document.getElementById("rescan-progress").value = Math.max(0, Math.min(1, Number(status.progress) || 0));
+      if (live.busy || pending || wasBusy || changed || !liveStatus.textContent) {
+        liveStatus.textContent = live.busy
+          ? `${Math.round((Number(status.progress) || 0) * 100)}% · ${status.message || status.state}`
+          : status.error || status.message || status.state;
+        liveStatus.classList.toggle("error", status.state === "error");
+      }
+      if (!live.busy) {
+        live.cancelling = false;
+        if (pending) {
+          if (status.state === "done") {
+            if (pending.back) live.history.pop();
+            else live.history = [...live.history, pending.request].slice(-20);
+          }
+          live.pending = null;
+          saveHistory();
+        }
+        if (status.state === "done" && (pending || wasBusy || changed)) {
+          reloading = true;
+          location.reload();
+        }
+      }
+    } catch (error) {
+      live.available = false;
+      liveStatus.textContent = "";
+      liveStatus.classList.remove("error");
+    } finally {
+      updateLiveControls();
+      if (!reloading) setTimeout(pollLiveStatus, 500);
+    }
+  }
+
+  function initLiveViewer() {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(historyKey) || "null");
+      live.history = Array.isArray(saved?.history) ? saved.history.filter(validRequest).slice(-20) : [];
+      if (validRequest(saved?.pending?.request) && Number.isInteger(saved.pending.requestId)) {
+        live.pending = saved.pending;
+      }
+    } catch (_) { /* A missing or invalid history starts a new session. */ }
+    const current = requestForGraph();
+    if (current && !live.pending && JSON.stringify(current) !== JSON.stringify(live.history.at(-1))) {
+      live.history = [...live.history, current].slice(-20);
+    }
+    if (current) {
+      document.getElementById("rescan-mode").value = current.mode;
+      document.getElementById("rescan-depth").value = String(current.depth);
+    }
+    saveHistory();
+    updateLiveControls();
+    document.getElementById("rescan-node").addEventListener("click", requestNodeScan);
+    document.getElementById("rescan-whole").addEventListener("click", () => requestScan({
+      scope: "WHOLE_FILE", node_id: "", mode: document.getElementById("rescan-mode").value,
+      depth: Number(document.getElementById("rescan-depth").value),
+    }));
+    document.getElementById("rescan-back").addEventListener("click", () => {
+      if (live.history.length >= 2) requestScan(live.history[live.history.length - 2], true);
+    });
+    document.getElementById("rescan-cancel").addEventListener("click", async () => {
+      if (!live.available || !live.busy || live.cancelling) return;
+      live.cancelling = true;
+      updateLiveControls();
+      try {
+        await liveApi("cancel", {});
+        liveStatus.textContent = "Cancelling…";
+      } catch (error) {
+        live.cancelling = false;
+        liveStatus.textContent = error.message;
+        liveStatus.classList.add("error");
+      }
+      updateLiveControls();
+    });
+    if (location.protocol === "http:") pollLiveStatus();
+  }
+
+  document.getElementById("orphan-only").addEventListener("change", (event) => {
+    orphanOnly = event.target.checked;
+    applySearch();
+  });
+  document.getElementById("expand-all").addEventListener("click", () => {
+    for (const name of clusters.keys()) expandedGroups.add(name);
+    renderOverview();
+  });
+  document.getElementById("collapse-all").addEventListener("click", () => {
+    expandedGroups.clear();
+    renderOverview();
+  });
 
   document.getElementById("reload").addEventListener("click", () => window.location.reload());
   document.getElementById("fit").addEventListener("click", fitView);

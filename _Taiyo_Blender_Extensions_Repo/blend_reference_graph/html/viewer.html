@@ -18,6 +18,17 @@
     <button id="reload">Reload Data</button>
     <button id="fit">Fit View</button>
   </header>
+  <div id="rescan-toolbar" role="toolbar" aria-label="Live Viewer">
+    <button id="rescan-node" type="button" disabled>Re-scan from selection</button>
+    <label>Mode <select id="rescan-mode" disabled><option value="USES">Uses</option><option value="USED_BY">Used By</option><option value="BOTH" selected>Both</option></select></label>
+    <label>Depth <select id="rescan-depth" disabled><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select></label>
+    <button id="rescan-whole" type="button" disabled>Whole file</button>
+    <button id="rescan-back" type="button" disabled>Back</button>
+    <button id="rescan-cancel" type="button" disabled>キャンセル</button>
+    <progress id="rescan-progress" max="1" value="0" hidden></progress>
+    <span id="rescan-status" role="status" aria-live="polite"></span>
+    <span id="rescan-hint">Blender の Live Viewer で開くと使えます</span>
+  </div>
   <main>
     <aside id="left-panel">
       <div class="search-row">
@@ -29,12 +40,19 @@
       <section>
         <h2>Node Types</h2>
         <div id="legend"></div>
+        <div id="overview-controls" hidden>
+          <label class="filter"><input id="orphan-only" type="checkbox">Orphanのみ</label>
+          <button id="expand-all" type="button">すべて展開</button>
+          <button id="collapse-all" type="button">すべて折りたたみ</button>
+        </div>
       </section>
     </aside>
     <section id="graph-wrap">
       <svg id="graph" aria-label="Reference graph"></svg>
       <div id="selection-box"></div>
       <div class="graph-bottom-help">
+        <span id="overview-status" role="status" aria-live="polite" hidden></span>
+        <span id="edge-limit-status" role="status" aria-live="polite" hidden></span>
         <span id="usage-hint">Mac trackpad: two-finger scroll pans. Pinch or Cmd-scroll zooms. Search selects and focuses matches.</span>
         <span id="shortcuts">Keys: / search / Enter next / Shift+Enter previous / arrows or HJKL pan / +/- zoom / 0 or F fit / B box select / Esc cancel</span>
       </div>
