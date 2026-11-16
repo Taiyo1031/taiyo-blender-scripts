@@ -1,30 +1,32 @@
+from .id_utils import id_key
 from .path_utils import object_collection_paths
 
 
 def object_id(obj):
-    return f"Object:{obj.name}"
+    return f"Object:{id_key(obj)}"
 
 
 def mesh_id(mesh):
-    return f"Mesh:{mesh.name}"
+    return f"Mesh:{id_key(mesh)}"
 
 
 def armature_id(obj):
-    return f"Armature:{obj.name}"
+    return f"Armature:{id_key(obj)}"
 
 
 def bone_id(armature_obj, bone_name):
-    return f"Bone:{armature_obj.name}:{bone_name}"
+    return f"Bone:{id_key(armature_obj)}:{bone_name}"
 
 
 def _allowed(filters, node_type):
     return filters.get(node_type, True)
 
 
-def add_object_node(graph, obj, filters):
-    if not _allowed(filters, "OBJECT"):
+def add_object_node(graph, obj, filters, path_cache=None):
+    if object_id(obj) in graph.nodes or not _allowed(filters, "OBJECT"):
         return
-    paths = object_collection_paths(obj)
+    path_cache = path_cache or getattr(graph, "path_cache", None)
+    paths = path_cache.object_paths(obj) if path_cache else object_collection_paths(obj)
     details = {
         "object_type": obj.type,
         "data": obj.data.name if obj.data else "",
@@ -44,7 +46,7 @@ def add_object_node(graph, obj, filters):
 
 
 def add_mesh_node(graph, mesh, filters):
-    if not mesh or not _allowed(filters, "MESH"):
+    if not mesh or mesh_id(mesh) in graph.nodes or not _allowed(filters, "MESH"):
         return
     details = {
         "users": mesh.users,
@@ -64,20 +66,27 @@ def add_object_data_refs(graph, obj, filters):
 
 
 def add_armature_and_bones(graph, obj, filters, include_all_bones=True):
+    for _ in iter_armature_and_bones(graph, obj, filters, include_all_bones):
+        pass
+
+
+def iter_armature_and_bones(graph, obj, filters, include_all_bones=True):
     if obj.type != "ARMATURE" or not obj.data:
         return
+    data_id = getattr(graph, "datablock_ids", {}).get(obj.data, armature_id(obj))
     if _allowed(filters, "ARMATURE"):
-        graph.add_node(armature_id(obj), "ARMATURE", obj.name, f"ARM {obj.name}")
-        graph.add_edge(object_id(obj), armature_id(obj), "uses_armature", "uses armature")
+        graph.add_node(data_id, "ARMATURE", obj.name, f"ARM {obj.name}")
+        graph.add_edge(object_id(obj), data_id, "uses_armature", "uses armature")
     if not _allowed(filters, "BONE"):
         return
     bones = obj.data.bones if include_all_bones else []
     for bone in bones:
         add_bone_node(graph, obj, bone.name)
-        graph.add_edge(armature_id(obj), bone_id(obj, bone.name), "contains_bone", "bone")
+        graph.add_edge(data_id, bone_id(obj, bone.name), "contains_bone", "bone")
         if bone.parent:
             add_bone_node(graph, obj, bone.parent.name)
             graph.add_edge(bone_id(obj, bone.parent.name), bone_id(obj, bone.name), "parent_of", "child bone")
+        yield None
 
 
 def add_bone_node(graph, armature_obj, bone_name):

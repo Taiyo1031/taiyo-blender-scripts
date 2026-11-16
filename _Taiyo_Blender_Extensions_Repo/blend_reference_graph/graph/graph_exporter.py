@@ -41,16 +41,18 @@ def ensure_output_folder(raw_path):
     return folder
 
 
-def export_graph_data(graph, meta, output_folder):
+def export_graph_data(graph, meta, output_folder, compact=False):
     folder = ensure_output_folder(output_folder)
     payload = graph.as_payload(meta)
     output_path = folder / "graph_data.js"
     json_path = folder / "graph_data.json"
     with open(json_path, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        json.dump(payload, handle, ensure_ascii=False, indent=None if compact else 2,
+                  separators=(",", ":") if compact else None)
         handle.write("\n")
     with open(output_path, "w", encoding="utf-8") as handle:
         handle.write("window.BRG_GRAPH_DATA = ")
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        json.dump(payload, handle, ensure_ascii=False, indent=None if compact else 2,
+                  separators=(",", ":") if compact else None)
         handle.write(";\n")
     return str(output_path), payload

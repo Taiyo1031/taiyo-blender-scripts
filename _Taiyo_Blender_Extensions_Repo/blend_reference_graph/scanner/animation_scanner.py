@@ -1,3 +1,4 @@
+from .id_utils import id_key
 import bpy
 
 from . import library_scanner
@@ -16,7 +17,7 @@ from .object_scanner import (
 
 
 def action_id(action):
-    return f"Action:{action.name}"
+    return f"Action:{id_key(action)}"
 
 
 def driver_id(owner_id, fcurve):
@@ -31,6 +32,8 @@ def add_action_node(graph, action, filters):
     if not action or not _allowed(filters, "ACTION"):
         return ""
     node_id = action_id(action)
+    if node_id in graph.nodes:
+        return node_id
     graph.add_node(
         node_id,
         "ACTION",
@@ -38,8 +41,8 @@ def add_action_node(graph, action, filters):
         f"ACT {action.name}",
         details={
             "frame_range": [round(value, 3) for value in action.frame_range],
-            "fcurves": len(action.fcurves),
-            "groups": [group.name for group in action.groups],
+            "fcurves": len(getattr(action, "fcurves", ())),
+            "groups": [group.name for group in getattr(action, "groups", ())],
             "users": action.users,
         },
     )
@@ -47,18 +50,33 @@ def add_action_node(graph, action, filters):
     return node_id
 
 
-def add_object_animation_refs(graph, obj, filters):
-    add_animation_data_refs(graph, obj, object_id(obj), obj.name, filters)
+def add_object_animation_refs(graph, obj, filters, visited=None):
+    for _ in iter_object_animation_refs(graph, obj, filters, visited):
+        pass
+
+
+def iter_object_animation_refs(graph, obj, filters, visited=None):
+    yield from iter_animation_data_refs(graph, obj, object_id(obj), obj.name, filters)
+    if visited is not None:
+        if obj.data in visited:
+            return
+        visited.add(obj.data)
     if not obj.data:
         return
     if obj.type == "MESH":
         add_mesh_node(graph, obj.data, filters)
-        add_animation_data_refs(graph, obj.data, mesh_id(obj.data), obj.data.name, filters)
+        yield from iter_animation_data_refs(graph, obj.data, mesh_id(obj.data), obj.data.name, filters)
     elif obj.type == "ARMATURE":
-        add_animation_data_refs(graph, obj.data, armature_id(obj), obj.data.name, filters)
+        data_id = getattr(graph, "datablock_ids", {}).get(obj.data, armature_id(obj))
+        yield from iter_animation_data_refs(graph, obj.data, data_id, obj.data.name, filters)
 
 
 def add_animation_data_refs(graph, owner, owner_id, owner_name, filters):
+    for _ in iter_animation_data_refs(graph, owner, owner_id, owner_name, filters):
+        pass
+
+
+def iter_animation_data_refs(graph, owner, owner_id, owner_name, filters):
     animation_data = getattr(owner, "animation_data", None)
     if not animation_data:
         return
@@ -74,8 +92,10 @@ def add_animation_data_refs(graph, owner, owner_id, owner_name, filters):
                 f"NLA {track.name}",
                 filters,
             )
+            yield None
     for fcurve in animation_data.drivers:
         add_driver_ref(graph, owner_id, owner_name, fcurve, filters)
+        yield None
 
 
 def add_driver_ref(graph, owner_id, owner_name, fcurve, filters):
@@ -109,17 +129,25 @@ def add_driver_ref(graph, owner_id, owner_name, fcurve, filters):
 
 
 def add_incoming_driver_users(graph, target_datablock, filters):
+    for _ in iter_incoming_driver_users(graph, target_datablock, filters):
+        pass
+
+
+def iter_incoming_driver_users(graph, target_datablock, filters):
     target_node_id = _add_datablock_node(graph, target_datablock, filters)
     if not target_node_id:
         return
     for owner, owner_id, owner_name, owner_node_source in _iter_animation_owners():
         animation_data = getattr(owner, "animation_data", None)
         if not animation_data:
+            yield None
             continue
         for fcurve in animation_data.drivers:
             if _driver_targets_datablock(fcurve.driver, target_datablock):
                 _add_owner_node(graph, owner_node_source, filters)
                 add_driver_ref(graph, owner_id, owner_name, fcurve, filters)
+            yield None
+        yield None
 
 
 def _add_action_ref(graph, owner_id, owner_name, action, relation, label, filters):
@@ -134,7 +162,7 @@ def _add_driver_targets(graph, driver_node_id, driver, filters):
         for target in variable.targets:
             target_id = _add_datablock_node(graph, target.id, filters)
             if target_id:
-                if target.bone_target and getattr(target.id, "type", "") == "ARMATURE":
+                if target.bone_target and getattr(target.id, "type", "") == "ARMATURE" and _allowed(filters, "BONE"):
                     add_bone_node(graph, target.id, target.bone_target)
                     graph.add_edge(driver_node_id, bone_id(target.id, target.bone_target), "driver_bone_target", "driver bone")
                 else:
@@ -154,6 +182,9 @@ def _add_driver_targets(graph, driver_node_id, driver, filters):
 def _add_datablock_node(graph, datablock, filters):
     if not datablock:
         return ""
+    if hasattr(graph, "datablock_ids"):
+        owner = getattr(graph, "embedded_owner", {}).get(datablock, datablock)
+        return graph.datablock_ids.get(owner, "")
     if isinstance(datablock, bpy.types.Object):
         add_object_node(graph, datablock, filters)
         return object_id(datablock)
@@ -164,12 +195,12 @@ def _add_datablock_node(graph, datablock, filters):
         add_collection_node(graph, datablock, filters)
         return collection_id(datablock)
     if isinstance(datablock, bpy.types.Material) and _allowed(filters, "MATERIAL"):
-        node_id = f"Material:{datablock.name}"
+        node_id = f"Material:{id_key(datablock)}"
         graph.add_node(node_id, "MATERIAL", datablock.name, f"MAT {datablock.name}")
         library_scanner.add_id_library_link(graph, node_id, datablock, filters)
         return node_id
     if isinstance(datablock, bpy.types.Image) and _allowed(filters, "IMAGE"):
-        node_id = f"Image:{datablock.name}"
+        node_id = f"Image:{id_key(datablock)}"
         graph.add_node(node_id, "IMAGE", datablock.name, f"IMG {datablock.name}")
         library_scanner.add_id_library_link(graph, node_id, datablock, filters)
         return node_id

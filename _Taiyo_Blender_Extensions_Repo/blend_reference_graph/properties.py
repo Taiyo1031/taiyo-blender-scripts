@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import EnumProperty, IntProperty, StringProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, IntProperty, StringProperty
 from bpy.types import AddonPreferences, PropertyGroup
 
 
@@ -31,6 +31,13 @@ class BRG_Settings(PropertyGroup):
         max=5,
     )
 
+    include_internals: BoolProperty(name="Include Internals", default=True)
+    include_bones: BoolProperty(name="Include Bones", default=False)
+    max_bones: IntProperty(name="Maximum Bones", default=2000, min=100, max=50000)
+    open_viewer_after_scan: BoolProperty(name="Open Viewer After Scan", default=True)
+    scan_progress: FloatProperty(name="Progress", default=0, min=0, max=100, subtype="PERCENTAGE")
+    scan_seconds: FloatProperty(name="Scan Seconds", default=0, min=0)
+
     status_message: StringProperty(default="No graph data generated yet.")
     last_update: StringProperty(name="Last Update", default="-")
     node_count: IntProperty(name="Nodes", default=0, min=0)
@@ -40,6 +47,12 @@ class BRG_Settings(PropertyGroup):
 
 class BRG_AddonPreferences(AddonPreferences):
     bl_idname = ADDON_ID
+
+    live_viewer: BoolProperty(
+        name="Live Viewer",
+        description="Serve the viewer locally and allow browser rescan requests",
+        default=True,
+    )
 
     output_mode: EnumProperty(
         name="Output Location",
@@ -59,6 +72,7 @@ class BRG_AddonPreferences(AddonPreferences):
 
     def draw(self, context):
         layout = self.layout
+        layout.prop(self, "live_viewer")
         layout.prop(self, "output_mode")
         if self.output_mode == "CUSTOM":
             layout.prop(self, "custom_output_folder")

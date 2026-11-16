@@ -13,6 +13,7 @@ sys.path.insert(0, str(SOURCE_ROOT))
 
 import blend_reference_graph
 from blend_reference_graph.graph import build_graph
+from blend_reference_graph.scanner.id_utils import id_key
 from blend_reference_graph.graph.graph_exporter import resolve_output_folder
 
 
@@ -198,7 +199,7 @@ def test_object_graph(fixture):
     collection_id = f"Collection:{fixture['collection'].name}"
     action_id = f"Action:{fixture['action'].name}"
     driver_id = f"Driver:{source_id}:scale:0"
-    linked_object_id = f"Object:{fixture['linked_object'].name}"
+    linked_object_id = f"Object:{id_key(fixture['linked_object'])}"
     library_id = f"Library:{fixture['library_path']}"
     safe_delete_id = f"SafeDelete:{source_id}"
 

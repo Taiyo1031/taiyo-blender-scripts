@@ -376,6 +376,60 @@ body.panels-swapped #details {
   padding-left: 18px;
 }
 
+select {
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #272c33;
+  color: var(--text);
+}
+
+button:disabled, select:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+#rescan-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+#rescan-hint, #overview-status {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+#rescan-status.error { color: #ff9b9b; }
+#rescan-progress { width: 100px; }
+.filter input { width: 15px; height: 15px; margin: 0; }
+#overview-controls button { margin: 4px 0; }
+#graph.low-detail .edge-label,
+#graph.low-detail .node-type,
+#graph.low-detail .node-path { display: none; }
+.cluster-body { fill: #1a2028; stroke: #465261; stroke-width: 2; }
+.cluster-header { cursor: pointer; }
+.cluster-header rect { fill: #283442; stroke: var(--cluster-color); stroke-width: 2; }
+.cluster-header text { fill: var(--text); pointer-events: none; }
+.cluster-title { font-size: 18px; font-weight: 700; }
+.cluster-count, .cluster-more { fill: var(--muted); font-size: 13px; }
+.cluster-more { pointer-events: none; }
+.cluster-header:focus { outline: none; }
+.cluster-header:focus rect { stroke: white; stroke-width: 4; }
+.edge-group.aggregate-edge { opacity: 0.25; pointer-events: none; }
+.aggregate-edge .edge { marker-end: none; }
+.aggregate-edge .edge-label { display: none; }
+.edge-group.aggregate-edge.emphasized,
+.edge-group.aggregate-edge.selected { opacity: 0.9; }
+.aggregate-edge.emphasized .edge-label { display: inline; }
+.aggregate-edge.selected .edge-label { display: inline; }
+#graph.low-detail .aggregate-edge .edge-label { display: none; }
+.cluster-header.active rect { stroke: white; stroke-width: 3; }
+
 @media (max-width: 900px) {
   header {
     gap: 8px;
