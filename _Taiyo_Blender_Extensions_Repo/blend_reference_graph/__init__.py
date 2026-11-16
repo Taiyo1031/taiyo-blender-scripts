@@ -12,6 +12,7 @@ import bpy
 from bpy.props import PointerProperty
 
 from . import operators, panels, properties
+from .live import controller
 
 
 classes = (
@@ -22,6 +23,7 @@ classes = (
     operators.BRG_OT_scan_whole_file,
     operators.BRG_OT_open_viewer,
     operators.BRG_OT_update_and_open_viewer,
+    operators.BRG_OT_stop_live_viewer,
     panels.VIEW3D_PT_blend_reference_graph,
 )
 
@@ -33,6 +35,7 @@ def register():
 
 
 def unregister():
+    controller.stop()
     if hasattr(bpy.types.Scene, "brg_settings"):
         delattr(bpy.types.Scene, "brg_settings")
     for cls in reversed(classes):

@@ -11,6 +11,7 @@ from .graph import GraphData, build_graph, export_graph_data, resolve_output_fol
 from .scanner.object_scanner import bone_id, object_id
 from .scanner.whole_file_scanner import ScanOptions, iter_scan
 from .version import VERSION
+from .live import controller
 
 
 def _addon_dir():
@@ -25,6 +26,15 @@ def _copy_viewer_files(output_folder):
         target = os.path.join(output_folder, filename)
         shutil.copyfile(source, target)
     return os.path.join(output_folder, "viewer.html")
+
+
+def _open_viewer(context, viewer_path):
+    if controller.enabled(context):
+        destination = controller.start(context)
+    else:
+        controller.stop()
+        destination = Path(viewer_path).resolve().as_uri()
+    webbrowser.open(destination)
 
 
 def _set_active_target(context, settings):
@@ -113,11 +123,11 @@ class BRG_OT_open_viewer(Operator):
             viewer_path = os.path.join(output_folder, "viewer.html")
             if not os.path.exists(viewer_path):
                 _copy_viewer_files(output_folder)
+            _open_viewer(context, viewer_path)
         except (OSError, ValueError) as exc:
             settings.status_message = str(exc)
             self.report({"ERROR"}, str(exc))
             return {"CANCELLED"}
-        webbrowser.open(Path(viewer_path).resolve().as_uri())
         settings.resolved_output_path = str(output_folder)
         settings.status_message = "Opened viewer."
         return {"FINISHED"}
@@ -243,4 +253,16 @@ class BRG_OT_scan_whole_file(Operator):
         settings.resolved_output_path = str(output_folder)
         settings.status_message = f"Wrote {os.path.basename(output_path)}"
         if settings.open_viewer_after_scan:
-            webbrowser.open(Path(viewer_path).resolve().as_uri())
+            _open_viewer(context, viewer_path)
+
+
+class BRG_OT_stop_live_viewer(Operator):
+    bl_idname = "brg.stop_live_viewer"
+    bl_label = "Stop Live Viewer"
+    bl_description = "Stop the local server and cancel any live scan"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        controller.stop()
+        context.scene.brg_settings.status_message = "Live Viewer stopped"
+        return {"FINISHED"}

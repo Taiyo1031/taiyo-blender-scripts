@@ -11,6 +11,9 @@ website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_B
 license = ["SPDX:GPL-3.0-or-later"]
 tags = ["Object", "Scene", "Pipeline"]
 
+[permissions]
+network = "Local viewer server on 127.0.0.1"
+
 [build]
 paths_exclude_pattern = [
   "__pycache__/",

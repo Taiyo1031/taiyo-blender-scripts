@@ -48,6 +48,12 @@ class BRG_Settings(PropertyGroup):
 class BRG_AddonPreferences(AddonPreferences):
     bl_idname = ADDON_ID
 
+    live_viewer: BoolProperty(
+        name="Live Viewer",
+        description="Serve the viewer locally and allow browser rescan requests",
+        default=True,
+    )
+
     output_mode: EnumProperty(
         name="Output Location",
         description="Choose where temporary viewer files are written",
@@ -66,6 +72,7 @@ class BRG_AddonPreferences(AddonPreferences):
 
     def draw(self, context):
         layout = self.layout
+        layout.prop(self, "live_viewer")
         layout.prop(self, "output_mode")
         if self.output_mode == "CUSTOM":
             layout.prop(self, "custom_output_folder")

@@ -1,5 +1,7 @@
 from bpy.types import Panel
 
+from .live import controller
+
 
 class VIEW3D_PT_blend_reference_graph(Panel):
     bl_label = "Blend Reference Graph"
@@ -59,3 +61,11 @@ class VIEW3D_PT_blend_reference_graph(Panel):
         row.prop(settings, "scan_progress")
         box.label(text=f"Nodes: {settings.node_count}  Edges: {settings.edge_count}")
         box.label(text=f"Scan: {settings.scan_seconds:.2f} s")
+
+
+        box = layout.box()
+        box.label(text="Live Viewer", icon="URL")
+        box.label(text="Running" if controller.is_running() else "Stopped")
+        if controller.is_running():
+            box.label(text=controller.url())
+            box.operator("brg.stop_live_viewer", icon="CANCEL")
