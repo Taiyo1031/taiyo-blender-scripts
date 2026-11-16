@@ -1,6 +1,6 @@
 # Map Roundtrip Tools
 
-**対象version: 0.10.0 / Blender 4.5.0以上**
+**対象version: 0.11.0 / Blender 4.5.0以上**
 
 ゾーン管理・配置CSV・HoudiniとのFBX往復・リンク複製での配置復元を担当するExtensionです。Unreal Bridge Toolsなしで利用できます。
 
@@ -18,6 +18,14 @@
 `Zone Empties`（折りたたみ）にはEmptyの一覧・検索・`Select Zone Empties`があります。
 
 CSVの12列、ワールド座標、XYZ回転の度数、名前正規化は維持します。Mesh CandidatesでMap配下／現在Sceneを選べます。旧UBTの登録ゾーン・EmptyのAdd/Subtract・登録解除状態も読み取れます。
+
+0.10.0からの変更（0.11.0、後方互換あり）:
+
+- **ゾーンごとのパス**: Importパネルの`Placement CSV`と`Mesh FBX`は、`Zone`で選んだゾーンごとに保存します。ゾーンを切り替えると、そのゾーンのパスが表示されます。`.blend`に保存され、ゾーン名を変えても保持します。0.10.0のファイルでは、従来のシーン共通パスを最初に表示されたゾーンへ引き継ぎます。`Return Folder`と`Convert Houdini FBX to Blender size`は引き続きシーン共通です。
+- **頂点カラー**: FBX取り込み時は、常にLinearとして読みます。
+- **Swap Meshes from FBX**: 選んだゾーンの`Mesh FBX`を取り込み、Library内の同名Meshを新しいMeshへ差し替えます。古いMeshを使うすべてのObjectが新しいMeshへ切り替わり、名前は保持します。`Dry Run`がONの間は**Preview Swap**になり、`replace N`／`add M`／このゾーンのMeshのうちFBXに無いものの件数だけを報告します。取り込んだMeshには`mrt_src_fbx`（FBXパス）と`mrt_src_zone`（ゾーン）を保存します。新しいFBXに無いMeshは残します。**古いMeshにしかないマテリアルスロット・頂点カラーは失われます**（同じベース名のマテリアルは従来どおり再割り当てします）。
+- **Helperの確認機能**: `Select Library Meshes of Zone`（事前にScan Usage）は、現在Mapにある選択ゾーンのObjectが使うLibrary Objectを選択します。`Names not in Library`は、ゾーン内のMap ObjectのうちMeshがLibraryに無いものと、どのLibrary Objectにも一致しないCSVの`objname`をTextの`MRT Debug Report`へ書きます。`Zone State Counts`は、ゾーンごとの元のObject／Importで作ったObject／退避中のObject、ゾーンタグはあるがMapにも退避先にも無いObject（`outside`）、`ub_csv_id`の重複を調べます。`Write Debug Report to Text`は、これらと未使用のLibrary Objectを`MRT Debug Report`へまとめます。4機能はデータを変更せず、最初の機能だけ選択を変えます。
+- **Scan Usage**: ゾーンごとのインスタンス数も表示し、Library Objectの照合を、1個ずつの比較から集合の照合に変えました(速度は未計測)。既存の`Select Unused Library Objects`の意味は同じで、Map内のどのObjectもMeshを使っていないLibrary Objectが対象です。退避中のObjectは使用数に含めません。`Select Library Meshes of Zone`も退避中のObjectは数えません。
 
 0.9.2からの変更（0.10.0、**動作の変更**。後方互換なし）: **Importがゾーンの入れ替えになりました。** ①Importパネルの`Zone`は、自由入力から**登録済みゾーンのリスト**（`Zones`パネルと共通）になりました。CSVのファイル名は関係ありません。②Importは、ゾーンの元のObjectを**すべて**`_Replaced_<ゾーン名>`へ退避し、戻りCSVの**全行**を新しく置きます。書き出したCSVと戻りのCSVが違っても、`id`では照合しないので問題は起きません。**CSVにないObjectも退避されます。戻りCSVには、ゾーンの全Objectの行を入れてください**（行数が半分未満なら警告）。③2回目以降は、前回のImportで作ったObjectを**削除**して挿げ替えます。元のObjectは退避に残るので、`Restore Original Map`はいつでも使えます。④置けない行（Libraryに無いMesh・読めない行・置く行が0件）があるとImportは止まります（`Skip rows that cannot be placed`で飛ばせます）。⑤1つのObjectは1つのゾーンだけに属します。複数のゾーンの範囲に入るMeshは、名前順で最初のゾーンのCSVにだけ入ります（単独書き出しでも同じ）。⑥全パネルの先頭にゾーンとマップの状態を出し、`Library`・`Map`・`New Meshes To`・`Archive To`の欄に、コレクションの色タグのアイコンを出します。旧版（0.9.2まで）の差分更新は、[詳細使用書](WORKFLOW_JA.md)の「過去バージョン」のZIPで使えます。
 
@@ -91,3 +99,10 @@ Exchange Folder／Return Folderは参考欄です。パス自動連動やファ�
 - 6万Objectの実測：`tools/benchmark_map_roundtrip_add_objects.py`
 
 [過去の性能測定と制約](VALIDATION.md)。0.1.0では6万件Replace約282.5秒でした。0.7.0では、Replace Zoneを差分更新にして処理の流れを変えました（6万件の実測は検証報告）。
+
+## 過去バージョン
+
+古い動作が必要なときだけ使用してください。0.9.2は、Replace Zoneが差分更新だった最後の版です。その他は[詳細使用書の過去バージョン](WORKFLOW_JA.md#過去バージョン)を参照してください。
+
+- [Map Roundtrip Tools 0.10.0（ZIP）](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/map_roundtrip_tools-0.10.0.zip)
+- [Map Roundtrip Tools 0.9.2（ZIP）](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/map_roundtrip_tools-0.9.2.zip)

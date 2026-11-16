@@ -173,6 +173,16 @@ def effective_zone(p):
     return '' if choice in ('', 'ALL') else choice
 
 
+ZONE_PATH_FALLBACK = {'csv_path': 'placement_csv', 'fbx_path': 'mesh_fbx'}
+
+
+def zone_path(p, zone, key):
+    """The CSV ('csv_path') or FBX ('fbx_path') path saved for the zone. Empty there -> the old scene-wide field (0.10 files, tests)."""
+    entry = p.zones.get(zone) if zone else None
+    value = getattr(entry, key, '') if entry is not None else ''
+    return value or getattr(p, ZONE_PATH_FALLBACK[key])
+
+
 def made_by_import(ob, zone):
     """True for an object that an import created (ub_run says it did not exist in the original map; also 0.6-0.9 Replace)."""
     spec = read_run(ob)
@@ -245,9 +255,10 @@ def build_plan(p, progress=lambda *args: None):
     zone = effective_zone(p)
     if not zone:
         raise ValueError('Choose the zone to import into (the Zone list at the top; not All Zones).')
-    path = bpy.path.abspath(p.placement_csv)
-    if not p.placement_csv or not os.path.isfile(path):
-        raise ValueError(f'Placement CSV does not exist: {path or "(not set)"}')
+    csv_path = zone_path(p, zone, 'csv_path')
+    path = bpy.path.abspath(csv_path) if csv_path else ''
+    if not csv_path or not os.path.isfile(path):
+        raise ValueError(f'Placement CSV of {zone} does not exist: {path or "(not set)"}')
     if p.archive_coll is not None:
         scene = bpy.context.scene
         if p.archive_coll != scene.collection and p.archive_coll not in scene.collection.children_recursive:

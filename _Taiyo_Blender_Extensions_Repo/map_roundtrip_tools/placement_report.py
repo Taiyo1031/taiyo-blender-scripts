@@ -39,6 +39,18 @@ def report_lines(plan_summary, issues):
     return lines
 
 
+def write_text(name, lines):
+    """Replace a Text datablock with the given report lines."""
+    import bpy
+    text = bpy.data.texts.get(name)
+    if text is None:
+        text = bpy.data.texts.new(name)
+    else:
+        text.clear()
+    text.write('\n'.join(lines) + '\n')
+    return text
+
+
 def publish(plan_summary, issues):
     """Remember the issues for the panel and write them to a Text datablock (removed when there are none)."""
     import bpy

@@ -34,6 +34,8 @@ def zone_empties(scene, prefix):
 
 class MRT_ZoneEntry(bpy.types.PropertyGroup):
     name: StringProperty(name='Zone Name', description='ゾーンの識別名。CSVファイル名もこの名前に揃えてください')
+    csv_path: StringProperty(name='Placement CSV', subtype='FILE_PATH', description='このゾーンのImportで読む配置CSV。ゾーンを切り替えると、そのゾーンの値に変わります')
+    fbx_path: StringProperty(name='Mesh FBX', subtype='FILE_PATH', description='このゾーンのImport New Meshes / Swap Meshes from FBXで読むFBX。ゾーンを切り替えると、そのゾーンの値に変わります')
 
 
 def ensure_zone(props, name):

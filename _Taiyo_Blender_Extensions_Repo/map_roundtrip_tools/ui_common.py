@@ -62,3 +62,39 @@ def collection_icon(collection):
 def collection_prop(layout, owner, name):
     """A collection field that shows the color of the chosen collection."""
     layout.prop(owner, name, icon=collection_icon(getattr(owner, name)))
+
+
+_PENDING = set()  # (scene name, zone) whose registry entry is being prepared by a timer
+
+
+def paths_entry(p, zone):
+    """The zone's registry entry, which holds its Placement CSV / Mesh FBX paths (None until it exists).
+
+    A panel cannot write while it draws, so a missing entry (or an old file's scene-wide paths that still have to move into it)
+    is handled by a timer that runs right after the draw."""
+    entry = p.zones.get(zone)
+    if entry is None or (not entry.csv_path and not entry.fbx_path and (p.placement_csv or p.mesh_fbx)):
+        key = (p.id_data.name, zone)
+        if key not in _PENDING:
+            _PENDING.add(key)
+            bpy.app.timers.register(lambda: prepare_paths(*key), first_interval=0.0)
+    return entry
+
+
+def prepare_paths(scene_name, zone):
+    """Create the zone's entry; a 0.10 file's scene-wide CSV / FBX paths move into the entry of the zone shown."""
+    _PENDING.discard((scene_name, zone))
+    scene = bpy.data.scenes.get(scene_name)
+    p = getattr(scene, 'mrt_props', None)
+    if p is None or p.running:
+        return None
+    if zone not in p.zones:
+        p.zones.add().name = zone
+    entry = p.zones[zone]
+    if not entry.csv_path and not entry.fbx_path and (p.placement_csv or p.mesh_fbx):
+        entry.csv_path, entry.fbx_path = p.placement_csv, p.mesh_fbx
+        p.placement_csv = p.mesh_fbx = ''
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            area.tag_redraw()
+    return None

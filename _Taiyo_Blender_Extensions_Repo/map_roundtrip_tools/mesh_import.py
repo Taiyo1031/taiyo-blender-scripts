@@ -6,22 +6,41 @@ import bpy
 from mathutils import Matrix
 from .chunked import ChunkedOperator
 from .mirror import mirror_path
-from .placement import colname_parts, normalize, walk_library
+from .placement import colname_parts, effective_zone, normalize, walk_library, zone_path
 
 LAST_IMPORTER = ''
+LAST_IMPORT_OPTIONS = {}  # the vertex color option the last import was given
 DEFAULT_NEW_MESHES = 'FromHoudini'
+SRC_FBX_KEY = 'mrt_src_fbx'    # on a mesh: the FBX file it was imported from
+SRC_ZONE_KEY = 'mrt_src_zone'  # on a mesh: the zone whose FBX path was used
 
 
-def fbx_import(path):
-    global LAST_IMPORTER
+def linear_color_options(operator):
+    """{option: 'LINEAR'} for the vertex color option this importer has (wm.fbx_import: import_colors, import_scene.fbx: colors_type)."""
+    try:
+        properties = operator.get_rna_type().properties
+    except (AttributeError, KeyError, RuntimeError):
+        return {}
+    for name in ('import_colors', 'colors_type'):
+        if name in properties and 'LINEAR' in {item.identifier for item in properties[name].enum_items}:
+            return {name: 'LINEAR'}
+    return {}
+
+
+def fbx_import(path, linear_colors=True):
+    """Import an FBX. Vertex colors are read as Linear (Blender stores them as linear; sRGB would be converted)."""
+    global LAST_IMPORTER, LAST_IMPORT_OPTIONS
     before = data_snapshot()
     try:
-        result = bpy.ops.wm.fbx_import(filepath=path)
+        options = linear_color_options(bpy.ops.wm.fbx_import) if linear_colors else {}
+        result = bpy.ops.wm.fbx_import(filepath=path, **options)
         LAST_IMPORTER = 'wm.fbx_import'
     except (AttributeError, RuntimeError):
         remove_imported(before)
-        result = bpy.ops.import_scene.fbx(filepath=path)
+        options = linear_color_options(bpy.ops.import_scene.fbx) if linear_colors else {}
+        result = bpy.ops.import_scene.fbx(filepath=path, **options)
         LAST_IMPORTER = 'import_scene.fbx'
+    LAST_IMPORT_OPTIONS = options
     if 'FINISHED' not in result:
         raise RuntimeError('FBX import did not finish.')
     return result
@@ -76,19 +95,26 @@ def choose_colname(colnames):
     return chosen, len(counts)
 
 
-class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
-    bl_description = '指定したMesh FBXをLibraryへ取り込みます。配置を置換する操作ではありません'
-    bl_idname = 'mrt.import_meshes'
+class ImportMeshesWork(ChunkedOperator):
+    """The FBX import shared by Import New Meshes and Swap Meshes from FBX.
+
+    A registered operator must not be subclassed by another registered operator (Blender then breaks the base operator's poll),
+    so both operators derive from this plain class."""
     undo_push = True
-    bl_label = 'Import New Meshes'
+    swap = False  # True (Swap Meshes from FBX): same-name meshes are always replaced; Dry Run only reports
 
     def work(self, context):
         p = context.scene.mrt_props
         if p.library_coll is None:
             raise ValueError('Library collection is not set.')
-        path = bpy.path.abspath(p.mesh_fbx)
-        if not p.mesh_fbx or not os.path.isfile(path):
-            raise ValueError('Mesh FBX does not exist.')
+        zone = effective_zone(p)  # one read: the zone enum scans every empty
+        swap = getattr(self, 'swap', False)
+        fbx_path = zone_path(p, zone, 'fbx_path')
+        path = bpy.path.abspath(fbx_path) if fbx_path else ''
+        if not fbx_path or not os.path.isfile(path):
+            raise ValueError(f'Mesh FBX {"of " + zone + " " if zone else ""}does not exist: {path or "(not set)"}')
+        dry = swap and p.dry_run
+        use_update = swap or p.if_exists == 'UPDATE'
         exact, norm = {}, {}
         for c in walk_library(p):
             for ob in c.objects:
@@ -129,7 +155,7 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
                 if old is None:
                     old = norm.get(normalize(ob.name, p.name_mode))
                 if old is not None:
-                    if p.if_exists == 'SKIP' or old.data in updated_meshes:
+                    if not use_update or old.data in updated_meshes:
                         skipped += 1
                     else:
                         updated_meshes.add(old.data)
@@ -140,6 +166,16 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
                     kept.append(ob)
                 self.progress('Planning imported meshes', i + 1, len(meshes))
                 yield
+            # Meshes recorded from this zone's FBX that the new FBX no longer has (they are kept).
+            absent = sorted({ob.data.name for ob in exact.values() if zone and ob.data.get(SRC_ZONE_KEY) == zone and ob.data not in updated_meshes})
+            if dry:
+                # Swap preview: report only. The imported objects are removed again; nothing existing was touched.
+                remove_imported(snapshot)
+                committed = True
+                shown = ', '.join(absent[:5]) + (' ...' if len(absent) > 5 else '')
+                self.result = (f'Swap preview: replace {updated} meshes, add {len(kept)} new, {skipped} repeated names; '
+                               f'{len(absent)} meshes of {zone or "no zone"} are not in this FBX (kept)' + (f': {shown}' if absent else ''))
+                return
             # Validate the entire import plan before changing existing data.
             unique_updates = []
             used_new_meshes = set()
@@ -157,7 +193,8 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
                 root = bpy.data.collections.new(DEFAULT_NEW_MESHES)
                 p.library_coll.children.link(root)
             # Where each new mesh goes: the colname path of the CSV rows that use it, rebuilt below the destination.
-            csv_path = bpy.path.abspath(p.placement_csv) if p.placement_csv else ''
+            csv_setting = zone_path(p, zone, 'csv_path')
+            csv_path = bpy.path.abspath(csv_setting) if csv_setting else ''
             colnames_of = csv_colnames(csv_path, p.name_mode) if csv_path and os.path.isfile(csv_path) else {}
             map_name = p.map_coll.name if p.map_coll else ''
             created_collections, destination, from_csv = [], {}, 0
@@ -230,6 +267,10 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
                 bpy.data.batch_remove(ids=[old for old, new in remapped])
             for mesh, name in rename:
                 mesh.name = name
+            for mesh in {*(mesh for _, mesh in remapped), *(ob.data for ob in kept)}:
+                mesh[SRC_FBX_KEY] = path
+                mesh[SRC_ZONE_KEY] = zone
+                mesh.update_tag()  # a custom property alone is not recorded by Undo
             for kind in ('meshes', 'materials'):
                 unused = [item for item in getattr(bpy.data, kind) if item not in snapshot[kind] and item.users == 0]
                 if unused:
@@ -242,7 +283,7 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
             p.plan_new_meshes_imported += imported
             if off_origin:
                 self.report({'WARNING'}, f'{off_origin} imported meshes are not at the origin; transforms preserved.')
-            self.result = f'Imported {imported} meshes (skipped {skipped}, updated {updated}); importer {LAST_IMPORTER}; collection paths from CSV {from_csv}' + (f'; FBX transform baked into {transformed} meshes' if p.convert_houdini_fbx else '')
+            self.result = f'Imported {imported} meshes (skipped {skipped}, updated {updated}); importer {LAST_IMPORTER}; collection paths from CSV {from_csv}' + (f'; {len(absent)} meshes of {zone} are not in this FBX (kept)' if swap and absent else '') + (f'; FBX transform baked into {transformed} meshes' if p.convert_houdini_fbx else '')
         except BaseException as exc:
             if not committed:
                 for old_mesh, new_mesh in reversed(remapped):
@@ -261,3 +302,17 @@ class MRT_OT_ImportMeshes(ChunkedOperator, bpy.types.Operator):
                 except ReferenceError:
                     pass
             context.view_layer.objects.active = active
+
+
+class MRT_OT_ImportMeshes(ImportMeshesWork, bpy.types.Operator):
+    bl_description = '指定したMesh FBXをLibraryへ取り込みます。配置を置換する操作ではありません'
+    bl_idname = 'mrt.import_meshes'
+    bl_label = 'Import New Meshes'
+
+
+class MRT_OT_SwapMeshes(ImportMeshesWork, bpy.types.Operator):
+    bl_description = ('ゾーンのFBXをLibraryへ取り込み、同じ名前のMeshを新しいMeshへ置き換えます(そのMeshを使うObject全てが入れ替わります)。'
+                      'Dry Run がONのときは件数の確認だけで、何も変えません')
+    bl_idname = 'mrt.swap_meshes'
+    bl_label = 'Swap Meshes from FBX'
+    swap = True
