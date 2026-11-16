@@ -26,6 +26,7 @@ Blender 4.2以降のExtensions用ローカルリポジトリです。
 - `overlap_selector`: Overlap Object Selector
 - `proportional_dimensions`: Proportional Dimensions
 - `rb_instance_helper`: RB Instance Helper
+- `reimport_selected_meshes`: Reimport Selected Meshes
 - `replace_selected_with_active`: Replace Selected with Active
 - `taiyo_extension_manager`: Taiyo Extension Manager
 - `uv_channel_placement_tool`: UV Channel Placement Tool

@@ -48,7 +48,7 @@ repo/
 
 このスクリプトは以下を行います。
 
-- 28個の Extensions パッケージを `blender --command extension validate` で検証
+- 29個の Extensions パッケージを `blender --command extension validate` で検証
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `blender --command extension server-generate --repo-dir docs/extensions --html` で `index.json` と `index.html` を生成
 
@@ -65,7 +65,7 @@ repo/
 ## 配布前チェック
 
 - `find . -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store'` で不要物を確認します。
-- `docs/extensions/index.json` の配布パッケージが28個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は28個より多くても問題ありません。
+- `docs/extensions/index.json` の配布パッケージが29個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は29個より多くても問題ありません。
 - `docs/extensions/index.json` と `docs/extensions/index.html` が生成されていることを確認します。
 - 可能ならBlenderのPreferencesからRemote Repositoryに `index.json` URLを追加して確認します。
 
@@ -140,3 +140,4 @@ repo/
 - Map Roundtrip 0.8.1: Previewの`new meshes N of M rows with id -1`は、`id`が-1の行の数(`plan.new_rows`)と、Libraryで見つかって置ける数(`plan.added`)です。Replaceを繰り返すと、前に追加した`id -1`のObjectは退避され、同数が作り直されます(未対応)。`.001`が付いたCollectionの扱いは0.9.1で修正。
 - Map Roundtrip 0.11.0(後方互換あり): Importの`Placement CSV`/`Mesh FBX`はゾーンごとに.blendへ保存し、Rename後も保持します。0.10.0の共通パスは最初に表示したゾーンへ移行し、`Return Folder`/`Convert Houdini FBX to Blender size`はシーン共通です。FBX頂点カラーは常に`LINEAR`。`mrt.swap_meshes`(Dry Run中はPreview Swap)は同名Library Meshの全使用Objectを差し替え、名前を保持し、取り込みMeshへ`mrt_src_fbx`/`mrt_src_zone`を保存します(FBXに無いMeshは保持、旧Meshだけのマテリアルスロット/頂点カラーは失われます)。Helperは現行Mapだけのゾーン別Library選択・Libraryに無い名前・状態別件数/outside/ub_csv_id重複・`MRT Debug Report`を追加し、Scan Usageはゾーン別件数と大規模走査を改善します。追加予定の回帰は`tools/test_map_roundtrip_zone_paths.py`/`tools/test_map_roundtrip_debug_tools.py`、結果は実行後に追記。
 - Map Roundtrip 0.11.0の注意: **登録済みのOperatorを、別のOperatorとして登録するクラスが継承してはいけません**(Blenderが基底Operatorの`poll`をFalseにして、`bpy.ops`から実行できなくなります。`ImportMeshesWork`のような登録しない共通クラスから、両方を派生させます)。Blender 4.5.9 / 5.2.2の`wm.fbx_import`は、どちらも`import_colors`(NONE/SRGB/LINEAR)を持ちます。実UIの見た目(ゾーン切替でパス欄が変わること)は、スクリーンショットでは未確認です。
+- Reimport Selected Meshes 1.0.0: 選択Meshを元FBXから再インポートし、`user_remap`でリンク複製ごと入れ替えます(`blender --background --factory-startup --python-exit-code 1 --python tools/test_reimport_selected_meshes.py`)。元FBXは Mesh上の `rsm_src_fbx`(MRTの`mrt_src_fbx`も可) → FBXフォルダ内のファイル名一致 → ファイルダイアログ の順。MRTのモジュールは相対importで共有できないため、インポート/マテリアル/焼き込みの手順はコピーです。MRTと違い**変換の焼き込みは既定ON**(サイズが0.5〜2倍の範囲外なら警告)。`bpy.ops`のERRORレポートは、Pythonから呼ぶと`RuntimeError`になります(テストはそれで確認)。
