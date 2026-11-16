@@ -124,6 +124,14 @@ def test_mesh_attribute_batch_remover_metadata(manager):
     assert descriptions["ja"]
 
 
+def test_reimport_selected_meshes_metadata(manager):
+    tags = set(manager.TAG_ALIASES["reimport_selected_meshes"])
+    assert {"reimport", "fbx", "linked", "再インポート", "差し替え"}.issubset(tags)
+    descriptions = manager.DESCRIPTION_ALIASES["reimport_selected_meshes"]
+    assert descriptions["en"]
+    assert descriptions["ja"]
+
+
 def test_distributed_index_metadata(manager):
     index_path = os.path.join(ROOT, "docs", "extensions", "index.json")
     with open(index_path, "r", encoding="utf-8") as handle:
@@ -131,7 +139,7 @@ def test_distributed_index_metadata(manager):
 
     errors = []
     items = index_data["data"]
-    assert len(items) == 28
+    assert len(items) == 29
     zone = next(item for item in items if item['id'] == 'zone_groups')
     assert zone['name'] == 'Taiyo Object Groups'
     assert zone['blender_version_min'] == '4.5.9'
@@ -177,6 +185,7 @@ def main():
     test_release_timestamp_cache(manager)
     test_csv_mesh_instancer_metadata(manager)
     test_mesh_attribute_batch_remover_metadata(manager)
+    test_reimport_selected_meshes_metadata(manager)
     test_distributed_index_metadata(manager)
     test_registration_and_tag_operators(manager)
     print("Taiyo Extension Manager tests passed")

@@ -59,7 +59,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 
 このコマンドは以下を行います。
 
-- `_Taiyo_Blender_Extensions_Repo` 内の28個のパッケージを validate
+- `_Taiyo_Blender_Extensions_Repo` 内の29個のパッケージを validate
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `docs/extensions/index.json` と `docs/extensions/index.html` を生成
 
@@ -89,6 +89,7 @@ Remote Repositoryとして必須なのは `docs/extensions/index.json` と `docs
 | `overlap_selector` | Overlap Object Selector | 重なりオブジェクトを検出・選択 |
 | `proportional_dimensions` | Proportional Dimensions | 比率維持で寸法合わせ |
 | `rb_instance_helper` | RB Instance Helper | インスタンス用Rigid Body補助 |
+| `reimport_selected_meshes` | Reimport Selected Meshes | 選択MeshをFBXから再インポートしリンク全体を更新 |
 | `replace_selected_with_active` | Replace Selected with Active | 選択をアクティブで置き換え |
 | `taiyo_extension_manager` | Taiyo Extension Manager | Taiyo製Extensionをサイドバーから管理 |
 | `uv_channel_placement_tool` | UV Channel Placement Tool | UVをスロット配置 |

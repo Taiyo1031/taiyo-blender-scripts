@@ -86,6 +86,24 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "unreal_bridge_tools",
+      "name": "Unreal Bridge Tools",
+      "tagline": "Export transforms and collision tags for Unreal Engine PCG",
+      "version": "2.3.3",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
+      "archive_url": "./unreal_bridge_tools-2.3.3.zip",
+      "archive_size": 17423,
+      "archive_hash": "sha256:51f8895900d671c24d1364d068524c068b25f98b360954c8f0e160d904c8ce24",
+      "taiyo_updated_at": 1794410423
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "laid_collection_instance_linker",
       "name": "CW_Laid Collection Instance Linker",
       "tagline": "Rebuild laid maps with matched collection instances",
@@ -111,7 +129,7 @@
       "schema_version": "1.0.0",
       "id": "proportional_dimensions",
       "name": "Proportional Dimensions",
-      "tagline": "指定したX/Y/Z寸法を基準に、選択オブジェクトを縦横比を保ったまま均等スケールします",
+      "tagline": "\u6307\u5b9a\u3057\u305fX/Y/Z\u5bf8\u6cd5\u3092\u57fa\u6e96\u306b\u3001\u9078\u629e\u30aa\u30d6\u30b8\u30a7\u30af\u30c8\u3092\u7e26\u6a2a\u6bd4\u3092\u4fdd\u3063\u305f\u307e\u307e\u5747\u7b49\u30b9\u30b1\u30fc\u30eb\u3057\u307e\u3059",
       "version": "1.0.1",
       "type": "add-on",
       "maintainer": "Taiyo",
@@ -142,6 +160,31 @@
       "archive_size": 7546,
       "archive_hash": "sha256:106fcf5b47a08574a06c174da06199a5546989ec075ac7881e90e4f550fed913",
       "taiyo_updated_at": 1779596198
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "map_roundtrip_tools",
+      "name": "Map Roundtrip Tools",
+      "tagline": "Roundtrip linked map placements and library FBX through Houdini",
+      "version": "0.11.0",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/WORKFLOW_JA.md",
+      "permissions": {
+        "files": "Read placement CSV and FBX, write FBX files and user presets"
+      },
+      "tags": [
+        "Import-Export",
+        "Object"
+      ],
+      "archive_url": "./map_roundtrip_tools-0.11.0.zip",
+      "archive_size": 188024,
+      "archive_hash": "sha256:0c00738259b1c41a673a26477b08e0dd349af8747c612a346307a6eef2ff3fe7",
+      "taiyo_updated_at": 1794813049
     },
     {
       "schema_version": "1.0.0",
@@ -186,21 +229,28 @@
     },
     {
       "schema_version": "1.0.0",
-      "id": "unreal_bridge_tools",
-      "name": "Unreal Bridge Tools",
-      "tagline": "Export transforms and collision tags for Unreal Engine PCG",
-      "version": "2.3.3",
+      "id": "reimport_selected_meshes",
+      "name": "Reimport Selected Meshes",
+      "tagline": "Reimport selected meshes from their FBX and swap all linked uses",
+      "version": "1.0.0",
       "type": "add-on",
       "maintainer": "Taiyo",
       "license": [
         "SPDX:GPL-3.0-or-later"
       ],
-      "blender_version_min": "4.5.0",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/unreal_bridge_tools/Unreal_Bridge_Tools_%E4%BD%BF%E7%94%A8%E6%9B%B8.md",
-      "archive_url": "./unreal_bridge_tools-2.3.3.zip",
-      "archive_size": 17423,
-      "archive_hash": "sha256:51f8895900d671c24d1364d068524c068b25f98b360954c8f0e160d904c8ce24",
-      "taiyo_updated_at": 1794410423
+      "blender_version_min": "4.5.9",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/reimport_selected_meshes/README.md",
+      "permissions": {
+        "files": "Read the source FBX files of selected meshes"
+      },
+      "tags": [
+        "Import-Export",
+        "Object"
+      ],
+      "archive_url": "./reimport_selected_meshes-1.0.0.zip",
+      "archive_size": 8631,
+      "archive_hash": "sha256:909ef4e20323506689175c8a8e9548b86ca2ccf1243869bdc73772fe5d551d10",
+      "taiyo_updated_at": 1794816206
     },
     {
       "schema_version": "1.0.0",
@@ -271,6 +321,24 @@
     },
     {
       "schema_version": "1.0.0",
+      "id": "taiyo_extension_manager",
+      "name": "Taiyo Extension Manager",
+      "tagline": "Search, install, update, and uninstall Taiyo Extensions",
+      "version": "1.0.18",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.2.0",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
+      "archive_url": "./taiyo_extension_manager-1.0.18.zip",
+      "archive_size": 13765,
+      "archive_hash": "sha256:6826db0f42ae630430e03bf92c926cacc43eca590c2f01342bedeef9e9031ded",
+      "taiyo_updated_at": 1794816206
+    },
+    {
+      "schema_version": "1.0.0",
       "id": "csv_mesh_instancer",
       "name": "CSV Mesh Instancer",
       "tagline": "Import CSV and FBX files and place linked meshes quickly",
@@ -286,6 +354,29 @@
       "archive_size": 14433,
       "archive_hash": "sha256:758d196e3bbf52072bc3228e80a620ca4e3d5342e6a7188339466bf4624781a9",
       "taiyo_updated_at": 1786254701
+    },
+    {
+      "schema_version": "1.0.0",
+      "id": "zone_groups",
+      "name": "Taiyo Object Groups",
+      "tagline": "Manage spatial groups with reversible colors and restrictions",
+      "version": "1.1.2",
+      "type": "add-on",
+      "maintainer": "Taiyo",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "4.5.9",
+      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/zone_groups/README.md",
+      "tags": [
+        "Object",
+        "Scene",
+        "User Interface"
+      ],
+      "archive_url": "./zone_groups-1.1.2.zip",
+      "archive_size": 35048,
+      "archive_hash": "sha256:9dcbaf0e7dcce2496218286da886d3ddeee156eefd63ee423a6661daeb8c3d7a",
+      "taiyo_updated_at": 1793077791
     },
     {
       "schema_version": "1.0.0",
@@ -330,24 +421,6 @@
       "archive_size": 50350,
       "archive_hash": "sha256:3ec5920a8fed59fe33bdcffa299538477182804fd3ac5fb8f81c6916fb10fb90",
       "taiyo_updated_at": 1794842322
-    },
-    {
-      "schema_version": "1.0.0",
-      "id": "taiyo_extension_manager",
-      "name": "Taiyo Extension Manager",
-      "tagline": "Search, install, update, and uninstall Taiyo Extensions",
-      "version": "1.0.17",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.2.0",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/taiyo_extension_manager/README.md",
-      "archive_url": "./taiyo_extension_manager-1.0.17.zip",
-      "archive_size": 13612,
-      "archive_hash": "sha256:64f0695296e30d45d10d941f147f1f7a78957be62d12c0e52118e303bdcdafd6",
-      "taiyo_updated_at": 1794393245
     },
     {
       "schema_version": "1.0.0",
@@ -428,29 +501,6 @@
     },
     {
       "schema_version": "1.0.0",
-      "id": "zone_groups",
-      "name": "Taiyo Object Groups",
-      "tagline": "Manage spatial groups with reversible colors and restrictions",
-      "version": "1.1.2",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.5.9",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/zone_groups/README.md",
-      "tags": [
-        "Object",
-        "Scene",
-        "User Interface"
-      ],
-      "archive_url": "./zone_groups-1.1.2.zip",
-      "archive_size": 35048,
-      "archive_hash": "sha256:9dcbaf0e7dcce2496218286da886d3ddeee156eefd63ee423a6661daeb8c3d7a",
-      "taiyo_updated_at": 1793077791
-    },
-    {
-      "schema_version": "1.0.0",
       "id": "attribute_csv_exporter",
       "name": "Attribute CSV Exporter",
       "tagline": "Export selected mesh attributes to CSV (TRANSPOSED). Rows=index",
@@ -525,7 +575,7 @@
       "schema_version": "1.0.0",
       "id": "instance_name_fixer",
       "name": "Instance Name Fixer",
-      "tagline": "コレクションインスタンスの名前をインスタンス元に揃える",
+      "tagline": "\u30b3\u30ec\u30af\u30b7\u30e7\u30f3\u30a4\u30f3\u30b9\u30bf\u30f3\u30b9\u306e\u540d\u524d\u3092\u30a4\u30f3\u30b9\u30bf\u30f3\u30b9\u5143\u306b\u63c3\u3048\u308b",
       "version": "0.1.2",
       "type": "add-on",
       "maintainer": "Taiyo",
@@ -538,31 +588,6 @@
       "archive_size": 8721,
       "archive_hash": "sha256:a96e3446389e3173c4034aad555f3ea40a7888b6c29c0591b0f7b04efbef6238",
       "taiyo_updated_at": 1779596198
-    },
-    {
-      "schema_version": "1.0.0",
-      "id": "map_roundtrip_tools",
-      "name": "Map Roundtrip Tools",
-      "tagline": "Roundtrip linked map placements and library FBX through Houdini",
-      "version": "0.11.0",
-      "type": "add-on",
-      "maintainer": "Taiyo",
-      "license": [
-        "SPDX:GPL-3.0-or-later"
-      ],
-      "blender_version_min": "4.5.0",
-      "website": "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/map_roundtrip_tools/WORKFLOW_JA.md",
-      "permissions": {
-        "files": "Read placement CSV and FBX, write FBX files and user presets"
-      },
-      "tags": [
-        "Import-Export",
-        "Object"
-      ],
-      "archive_url": "./map_roundtrip_tools-0.11.0.zip",
-      "archive_size": 188024,
-      "archive_hash": "sha256:0c00738259b1c41a673a26477b08e0dd349af8747c612a346307a6eef2ff3fe7",
-      "taiyo_updated_at": 1794813049
     }
   ]
 }

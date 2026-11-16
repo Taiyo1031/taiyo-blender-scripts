@@ -45,6 +45,7 @@ packages=(
   "overlap_selector"
   "proportional_dimensions"
   "rb_instance_helper"
+  "reimport_selected_meshes"
   "replace_selected_with_active"
   "taiyo_extension_manager"
   "uv_channel_placement_tool"

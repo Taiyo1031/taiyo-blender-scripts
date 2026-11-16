@@ -48,7 +48,7 @@ repo/
 
 このスクリプトは以下を行います。
 
-- 28個の Extensions パッケージを `blender --command extension validate` で検証
+- 29個の Extensions パッケージを `blender --command extension validate` で検証
 - 各パッケージをzip化して `docs/extensions/` に出力
 - `blender --command extension server-generate --repo-dir docs/extensions --html` で `index.json` と `index.html` を生成
 
@@ -65,7 +65,7 @@ repo/
 ## 配布前チェック
 
 - `find . -name '__pycache__' -o -name '*.pyc' -o -name '.DS_Store'` で不要物を確認します。
-- `docs/extensions/index.json` の配布パッケージが28個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は28個より多くても問題ありません。
+- `docs/extensions/index.json` の配布パッケージが29個あることを確認します。Blender側の古いRepository indexキャッシュが旧zipを参照する場合があるため、直近旧バージョンの互換用zipをindexに載せずに残すことがあります。この場合、zip実ファイル数は29個より多くても問題ありません。
 - `docs/extensions/index.json` と `docs/extensions/index.html` が生成されていることを確認します。
 - 可能ならBlenderのPreferencesからRemote Repositoryに `index.json` URLを追加して確認します。
 
@@ -145,3 +145,4 @@ repo/
 - `node_tree.id_data`(Material等の埋め込みID)は所有者ではなく自身を返します。`is_embedded_data` と所有者辞書で付け替えてください。`bpy.data.user_map()` にはWindowManager/WorkSpace/Screenも出るので除外します。linkedのID照合は `library.name`(basenameは同名別フォルダで衝突)。
 - Live Viewerは127.0.0.1のみ+token+Host/Origin検証。background Blenderではタイマーが回らないため、テストは別スレッドからHTTPを打ち、主スレッドで `controller.pump()` を回します。macOSのtempは `/var` → `/private/var` のシンボリックリンクなので、URL比較は `.resolve()` を通します。
 - Codexのsandbox(workspace-write)内ではBlenderがMetal初期化で落ちます(終了コード139)。テストと検証は必ずsandbox外で実行し直してください。組み込みブラウザの `file://` は静的スナップショットになりJSが動かないため、ビューア確認は `.claude/launch.json` のhttpサーバーで行い、終了後に削除します。
+- Reimport Selected Meshes 1.0.0: 選択Meshを元FBXから再インポートし、`user_remap`でリンク複製ごと入れ替えます(`blender --background --factory-startup --python-exit-code 1 --python tools/test_reimport_selected_meshes.py`)。元FBXは Mesh上の `rsm_src_fbx`(MRTの`mrt_src_fbx`も可) → FBXフォルダ内のファイル名一致 → ファイルダイアログ の順。MRTのモジュールは相対importで共有できないため、インポート/マテリアル/焼き込みの手順はコピーです。MRTと違い**変換の焼き込みは既定ON**(サイズが0.5〜2倍の範囲外なら警告)。`bpy.ops`のERRORレポートは、Pythonから呼ぶと`RuntimeError`になります(テストはそれで確認)。

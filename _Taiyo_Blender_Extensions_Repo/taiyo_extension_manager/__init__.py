@@ -1,7 +1,7 @@
 bl_info = {
     "name": "Taiyo Extension Manager",
     "author": "Taiyo",
-    "version": (1, 0, 17),
+    "version": (1, 0, 18),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar(N) > Taiyo",
     "description": "Install, update, and uninstall Taiyo Blender Extensions from a side panel.",
@@ -125,6 +125,10 @@ TAG_ALIASES = {
         "collection", "instance", "physics", "rb", "rigid-body", "simulation",
         "物理", "剛体", "リジッドボディ", "インスタンス", "シミュレーション",
     ),
+    "reimport_selected_meshes": (
+        "reimport", "import", "fbx", "mesh", "linked", "swap", "refresh", "unreal", "update",
+        "再インポート", "リインポート", "取り込み", "差し替え", "更新", "リンク", "選択", "メッシュ",
+    ),
     "replace_selected_with_active": (
         "active", "copy", "duplicate", "replace", "selected", "swap",
         "置換", "選択", "アクティブ", "コピー", "差し替え",
@@ -233,6 +237,10 @@ DESCRIPTION_ALIASES = {
     "rb_instance_helper": {
         "ja": "リンクCollection Instance向けのRigid Body作業を補助します。",
         "en": "Help rigid-body workflows for linked Collection Instances.",
+    },
+    "reimport_selected_meshes": {
+        "ja": "選択したMeshを元のFBXから再インポートし、リンク複製を含む全使用箇所を一括で入れ替えます。",
+        "en": "Reimport selected meshes from their FBX and swap every linked use at once.",
     },
     "replace_selected_with_active": {
         "ja": "選択オブジェクトをアクティブオブジェクトのコピーで置き換えます。",
