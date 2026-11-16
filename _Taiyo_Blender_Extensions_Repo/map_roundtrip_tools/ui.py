@@ -3,7 +3,7 @@ from . import placement_report
 from .placement import effective_zone
 from .constants import FBX_DEFAULTS
 from .journal import STATE_AFTER, STATE_BEFORE, map_state
-from .ui_common import collection_prop, draw_zone_banner, shown_zone
+from .ui_common import collection_prop, draw_zone_banner, paths_entry, shown_zone
 
 MAX_ISSUE_ROWS = 5
 
@@ -90,13 +90,27 @@ class MRT_PT_Import(bpy.types.Panel):
         box = layout.box()
         box.label(text='Return Files')
         box.label(text='Return Folder is a reference, not an automatic import.')
-        for name in ('return_dir', 'placement_csv', 'mesh_fbx', 'convert_houdini_fbx', 'name_mode', 'if_exists'):
+        box.prop(p, 'return_dir')
+        if zone in ('', 'ALL'):
+            box.label(text='Choose a zone: the CSV and FBX paths are saved per zone.', icon='INFO')
+        else:
+            entry = paths_entry(p, zone)
+            if entry is None:
+                box.label(text=f'Preparing the paths of {zone}...')
+            else:
+                box.prop(entry, 'csv_path')
+                box.prop(entry, 'fbx_path')
+                box.label(text=f'The CSV and FBX paths above belong to {zone}.', icon='INFO')
+        for name in ('convert_houdini_fbx', 'name_mode', 'if_exists'):
             box.prop(p, name)
         box = layout.box()
         box.label(text=f'Import into {zone}' if zone not in ('', 'ALL') else 'Import')
         box.prop(p, 'dry_run')
         box.prop(p, 'skip_bad_rows')
-        box.operator('mrt.import_meshes')
+        row = box.row()
+        row.enabled = zone not in ('', 'ALL')
+        row.operator('mrt.import_meshes')
+        row.operator('mrt.swap_meshes', text='Swap Meshes' if not p.dry_run else 'Preview Swap')
         state = map_state(zone) if zone not in ('', 'ALL') else ''
         row = box.row()
         row.enabled = zone not in ('', 'ALL')

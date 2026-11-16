@@ -243,11 +243,125 @@ def test_cancel_removes_new_collections(fbx):
     print('PASS ESC removes the collections made for the structure')
 
 
+def test_linear_vertex_colors(fbx):
+    operators = {'wm.fbx_import': bpy.ops.wm.fbx_import, 'import_scene.fbx': bpy.ops.import_scene.fbx}
+    for name, operator in operators.items():
+        options = mesh_import.linear_color_options(operator)
+        assert options in ({}, {'import_colors': 'LINEAR'}, {'colors_type': 'LINEAR'}), (name, options)
+        try:
+            properties = operator.get_rna_type().properties
+        except (AttributeError, KeyError, RuntimeError):
+            assert options == {}, (name, options)
+            continue  # this Blender version may provide only one of the two importers
+        supported = [key for key in ('import_colors', 'colors_type')
+                     if key in properties and 'LINEAR' in {item.identifier for item in properties[key].enum_items}]
+        expected = {supported[0]: 'LINEAR'} if supported else {}
+        assert options == expected, (name, options, expected)
+
+    fixture(fbx)  # build_fbx() exported two tiny triangles; it does not create color attributes
+    before_meshes = set(bpy.data.meshes)
+    assert mesh_import.fbx_import(fbx) == {'FINISHED'}
+    imported = set(bpy.data.meshes) - before_meshes
+    assert imported and all(len(mesh.vertices) == 3 for mesh in imported), [mesh.name for mesh in imported]
+    assert mesh_import.LAST_IMPORTER in operators, mesh_import.LAST_IMPORTER
+    expected = mesh_import.linear_color_options(operators[mesh_import.LAST_IMPORTER])
+    assert mesh_import.LAST_IMPORT_OPTIONS == expected, (mesh_import.LAST_IMPORTER, mesh_import.LAST_IMPORT_OPTIONS, expected)
+    if mesh_import.LAST_IMPORT_OPTIONS:
+        assert len(mesh_import.LAST_IMPORT_OPTIONS) == 1
+        assert list(mesh_import.LAST_IMPORT_OPTIONS.values()) == ['LINEAR']
+    print('PASS runtime importer RNA chooses only a supported LINEAR option and fbx_import records that option')
+
+
+def build_swap_fbx():
+    """Export Rock with four vertices and Fresh, using the same exporter as build_fbx()."""
+    bpy.data.batch_remove(ids=list(bpy.data.objects))
+    bpy.data.batch_remove(ids=list(bpy.data.collections))
+    bpy.data.batch_remove(ids=list(bpy.data.meshes))
+    for name, vertices, faces in (
+            ('Rock', [(0, 0, 0), (2, 0, 0), (2, 2, 0), (0, 2, 0)], [(0, 1, 2, 3)]),
+            ('Fresh', [(0, 0, 0), (1, 0, 0), (0, 1, 0)], [(0, 1, 2)])):
+        mesh = bpy.data.meshes.new(name)
+        mesh.from_pydata(vertices, [], faces)
+        bpy.context.scene.collection.objects.link(bpy.data.objects.new(name, mesh))
+    bpy.ops.object.select_all(action='DESELECT')
+    for ob in bpy.data.objects:
+        ob.select_set(True)
+    p.fbx_out_dir = str(TEMP)
+    p.fbx_files = 'COMBINED'
+    p.zone_name = 'swap_meshes'
+    assert bpy.ops.mrt.export_fbx() == {'FINISHED'}
+    path = TEMP / 'swap_meshes.fbx'
+    assert path.is_file(), path
+    return str(path)
+
+
+def run_swap():
+    h = Harness()
+    h.swap = True
+    drain(mesh_import.MRT_OT_SwapMeshes.work(h, bpy.context))
+    return h
+
+
+def test_swap_meshes(fbx):
+    swap_fbx = build_swap_fbx()
+    lib, mapc = fixture(swap_fbx)
+    entry = p.zones['Z']
+    entry.csv_path, entry.fbx_path = '', swap_fbx
+    p.mesh_fbx = ''  # the operator must read Z's path, with no legacy fallback available
+    p.convert_houdini_fbx = False
+    p.if_exists = 'SKIP'  # Swap always replaces same-name meshes, regardless of this setting
+    rock = lib.objects['Rock']
+    old_mesh = rock.data
+    old_name = old_mesh.name
+    old_pointer = old_mesh.as_pointer()
+    placed = []
+    for index in range(2):
+        ob = bpy.data.objects.new(f'Rock.{index + 1:03d}', old_mesh)
+        ob['ub_zone'] = 'Z'
+        mapc.objects.link(ob)
+        placed.append(ob)
+    bpy.context.view_layer.update()
+    assert len(old_mesh.vertices) == 3
+    before = {kind: set(getattr(bpy.data, kind)) for kind in ('objects', 'meshes', 'materials', 'collections')}
+    coordinates = [tuple(vertex.co) for vertex in old_mesh.vertices]
+    old_properties = dict(old_mesh.items())
+    imported_count = p.plan_new_meshes_imported
+
+    p.dry_run = True
+    h = run_swap()
+    assert h.result.startswith('Swap preview: replace 1 meshes, add 1 new,'), h.result
+    for kind, items in before.items():
+        assert set(getattr(bpy.data, kind)) == items, ('Dry Run left changed data', kind)
+    assert bpy.data.meshes.get(old_name) == old_mesh and len(old_mesh.vertices) == 3
+    assert rock.data == old_mesh and all(ob.data == old_mesh for ob in placed)
+    assert [tuple(vertex.co) for vertex in old_mesh.vertices] == coordinates
+    assert dict(old_mesh.items()) == old_properties
+    assert bpy.data.objects.get('Fresh') is None
+    assert p.plan_new_meshes_imported == imported_count
+
+    p.dry_run = False
+    h = run_swap()
+    new_mesh = rock.data
+    assert new_mesh.as_pointer() != old_pointer, 'Swap must replace the mesh data block'
+    assert new_mesh.name == old_name and bpy.data.meshes.get(old_name) == new_mesh
+    assert len(new_mesh.vertices) == 4, len(new_mesh.vertices)
+    assert all(ob.data == new_mesh and ob.get('ub_zone') == 'Z' for ob in placed)
+    assert all(ob in mapc.objects[:] for ob in placed)
+    fresh = bpy.data.objects.get('Fresh')
+    assert fresh is not None and fresh.type == 'MESH', h.result
+    assert any(fresh in collection.objects[:] for collection in placement.walk_collections(lib))
+    for mesh in (new_mesh, fresh.data):
+        assert mesh.get('mrt_src_fbx') == swap_fbx, (mesh.name, dict(mesh.items()))
+        assert mesh.get('mrt_src_zone') == 'Z', (mesh.name, dict(mesh.items()))
+    assert p.if_exists == 'SKIP'
+    print('PASS Swap previews without changing data, then replaces shared Rock despite SKIP and adds Fresh with source tags')
+
+
 fbx = build_fbx()
 for test in (test_default_destination_and_no_csv, test_user_chosen_destination, test_structure_follows_colname,
              test_existing_structure_is_reused_and_conflicts_warn, test_destination_outside_library_is_searched, test_fbx_object_transform_is_baked_into_the_mesh,
              test_fbx_conversion_is_off_by_default,
-             test_cancel_removes_new_collections):
+             test_cancel_removes_new_collections, test_linear_vertex_colors, test_swap_meshes):
     test(fbx)
 mrt.unregister()
 print('MRT_MESH_IMPORT_PATHS_PASSED')

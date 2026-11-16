@@ -1,12 +1,12 @@
 # Map Roundtrip 検証報告
 
-対象version: Map Roundtrip Tools **0.10.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
+対象version: Map Roundtrip Tools **0.11.0**（Replaceの性能実測は0.1.0。0.1.1はUI・ヒントを更新。0.3.0の実測は末尾。0.4.0はidの扱い、0.5.0はCollection階層の復元のみ追加） / Unreal Bridge Tools **2.3.3**（性能測定時は2.3.0） / Taiyo Extension Manager **1.0.17**
 
 検証日: 2026-11-11（日本時間）。macOS arm64、Blender **4.5.9 LTS** / **5.2.2 LTS**。外部のHoudini／Unrealは実行対象外です。
 
 ## 結果
 
-配置・FBXの統合回帰と実UIのESC復元は合格しました。**6万件での生成時間の線形性、および最大0.5秒のUI応答目標は未達です。** Mesh共有のリンク複製方式は維持しています。
+0.10.0までの配置・FBXの統合回帰と実UIのESC復元は合格しました。0.11.0の結果は実行後に追記。**6万件での生成時間の線形性、および最大0.5秒のUI応答目標は未達です。** Mesh共有のリンク複製方式は維持しています。
 
 ## 性能（秒）
 
@@ -247,3 +247,11 @@ SceneへのZone登録・既存Empty登録・解除・保存復元・日本語ホ
 - 未確認: Blender 5.1.2（5.2.2と4.5.9で確認）、実UIでの見た目（色アイコンの表示）、Houdiniの再実行。
 - **6万件のImportは未実測です**: 全置換では、6万個の削除だけで約11分（1個あたり約10ミリ秒）かかる計算で、`tools/benchmark_map_roundtrip_diff.py`（既定は6万件）は30分のCPU時間を使っても終わらず、中止しました。件数は引数で減らせます（`-- 45`で2,025個）。`tools/benchmark_map_roundtrip_tools.py`も、出力先に続けて件数をコンマ区切りで渡せます（既定は10000,30000,60000）。性能の目安は、上の実シーン（6.6万個のシーンで647個）の値を使ってください。
 - 全テスト（`tools/test_map_roundtrip_*.py`、`test_mrt_zone_from_objects.py`、`test_unreal_bridge_tools.py`）は、Blender 4.5.9で合格しました。`test_map_roundtrip_*.py`と`test_mrt_zone_from_objects.py`は、5.2.2でも合格しました。実UI（物理ESC）の`tools/ui_test_map_roundtrip_tools.py`は、4.5.9で15項目すべて合格しました。
+
+## 0.11.0の追加（ゾーンごとのパス・FBX差し替え・Helper）
+
+0.10.0と後方互換があります。以下のテストを追加予定です。結果は実行後に追記。
+
+- `tools/test_map_roundtrip_zone_paths.py`: ゾーンごとのPlacement CSV／Mesh FBXの切り替え・保存・Rename後の保持、0.10.0のシーン共通パスの引き継ぎを確認予定です。
+- `tools/test_map_roundtrip_debug_tools.py`: Helperのゾーン別Library選択、Libraryに無い名前、状態別件数・outside・ub_csv_id重複、Debug Reportと未使用Libraryの判定を確認予定です。
+- FBX取り込みの頂点カラーは常にLinear（`wm.fbx_import`の`import_colors`／`import_scene.fbx`の`colors_type`は`LINEAR`）です。Swap Meshes from FBXの全使用ObjectのMesh差し替え・名前保持・Dry Runの件数・出典プロパティ・FBXに無いMeshの保持についても、結果は実行後に追記。

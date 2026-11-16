@@ -1,6 +1,6 @@
 # Map Roundtrip 詳細使用書
 
-**対象version: Map Roundtrip Tools 0.10.0 / Blender 4.5.0以上**
+**対象version: Map Roundtrip Tools 0.11.0 / Blender 4.5.0以上**
 
 ## 1. 担当する機能
 
@@ -153,6 +153,8 @@ Unreal用の個別SMなら、配置Objectではなく原点に置いたLibrary�
 
 **Importは、ゾーンの入れ替えです。** 選んだゾーンの元のObjectをすべて退避し、戻りCSVの全行を新しく配置します。書き出したCSVと戻りのCSVが多少違っても問題は起きません（`id`では照合しません）。**戻りCSVには、ゾーンの全Objectの行を入れてください。** CSVにないObjectも、退避されてマップから消えます。
 
+0.11.0は0.10.0と後方互換があります。`Placement CSV`と`Mesh FBX`は、`Zone`で選んだゾーンごとのパスです。ゾーンを切り替えると保存したパスに切り替わり、`.blend`への保存・ゾーン名の変更後も保持します。0.10.0のファイルでは、従来のシーン共通パスを最初に表示されたゾーンへ引き継ぎます。`Return Folder`と`Convert Houdini FBX to Blender size`はシーン共通のままです。
+
 ### 手順
 
 1. **Zone**: Importパネルの`Zone`リストで、入れ替えるゾーンを選びます（`Zones`パネルと同じZoneです。All Zonesは選べません）。CSVのファイル名とゾーン名は関係ありません。
@@ -199,6 +201,14 @@ Blenderの中には、Houdiniに出す前の**元のマップ**と、Import後�
 - **構造**: `Placement CSV`が指定してあれば、追加Meshを使う行の`colname`の階層を、取り込み先の中に再現します（例 `Area2/NewRocks` → 取り込み先の中の`Area2 [FromHoudini]` > `NewRocks [FromHoudini]`）。無い階層は作り、ある階層は再利用します。`colname`が空欄、またはCSVが無いMeshは、取り込み先の直下に並びます。
 - **`colname`が複数ある**: 同じ追加Meshを、`colname`が違う複数の行が使っているときは**警告**を出し、最も多い`colname`を使います（同数ならCSVで先に出る行）。
 - ESCや失敗では、作ったCollectionも含めて取り込み前に戻ります。
+
+### LibraryのMeshをFBXから差し替える（Swap Meshes from FBX）
+
+選んだゾーンの`Mesh FBX`を指定し、**Swap Meshes from FBX**（`mrt.swap_meshes`）を使います。`Dry Run`がONの間はボタンが**Preview Swap**になり、変更せずに`replace N`／`add M`／このゾーンのMeshのうちFBXに無いものの件数だけを報告します。確認してから`Dry Run`をOFFにして実行してください。
+
+Library内の同名Meshを、FBXから取り込んだ新しいMeshへ差し替えます。古いMeshを使う**すべてのObject**が新しいMeshへ切り替わり、名前は保持します。取り込んだMeshには、カスタムプロパティ`mrt_src_fbx`（FBXパス）と`mrt_src_zone`（ゾーン）を保存します。新しいFBXに無いMeshは、そのまま残します。
+
+**古いMeshにしかないマテリアルスロットや頂点カラーは失われます。** 同じベース名のマテリアルは、従来どおり再割り当てします。FBXの頂点カラーは、Import New Meshes・Swapともに**常にLinear**として読みます。
 
 ### Collectionの階層
 
@@ -249,21 +259,31 @@ Preview Importは、CSVの**行・列・値・理由**を出します。パネ�
 
 `N > Map Roundtrip` の一番下の**Helper**パネル（初期は閉じています）で、Library（FromHoudiniを含む）のObjectが、Mapの中でどう使われているかを調べます。使われているかどうかは、**Meshデータの共有**で判定します。
 
-1. **Scan Usage**: LibraryとMapを一度走査します。大量のObjectでも進捗が出て、ESCで中断できます。シーンを変えたら、もう一度実行してください。
+1. **Scan Usage**: LibraryとMapを一度走査します。0.11.0ではゾーンごとのインスタンス数も表示します(Libraryの照合は集合に変えました。速度は未計測)。退避中のObjectは使用数に含めません。大量のObjectでも進捗が出て、ESCで中断できます。シーンを変えたら、もう一度実行してください。
 2. 結果の1行（`Scanned: N library objects, M map instances, K unused`）が出ます。
 3. Libraryのうち、選択中のObject（なければアクティブ。最大5つ）の使用数と、使われているCollection（多い順に最大3つ）が出ます。Map内のObjectを選ぶと、元のLibrary Objectが出ます。
 4. ボタン:
    - **Select Usage in Map**: 選択中のLibrary Objectを使っているMap内のObjectを選択します。
    - **Select Library Object**: 選択中のMap内のObjectの、元のLibrary Objectを選択します。
-   - **Select Unused Library Objects**: Mapで1つも使われていないLibrary Objectを選択します。
+   - **Select Unused Library Objects**: Map内のどのObjectもMeshを使っていないLibrary Objectを選択します。退避中のObjectは数えません（従来と同じ意味です）。
    - **Write Usage Report**: Textエディターの`MRT Usage Report`に、Library Objectごとの使用数・Collection・ゾーンを書きます。
 
 Scan Usageを実行する前の選択操作は、`Run Scan Usage first.`と表示されます。
+
+0.11.0では、次の確認機能も使えます。4機能はデータを変更せず、選択を変えるのは最初の機能だけです。
+
+| ボタン | 確認する内容 |
+|---|---|
+| **Select Library Meshes of Zone**（事前にScan Usage） | 選択ゾーンの、現在MapにあるObjectが使うLibrary Objectを選択します。退避中のObjectは数えません。 |
+| **Names not in Library** | ゾーン内のMap ObjectのうちMeshがLibraryのMeshでないものと、どのLibrary Objectにも一致しないCSVの`objname`を、Textの`MRT Debug Report`へ書きます。 |
+| **Zone State Counts** | ゾーンごとの元のObject（`original`）／Importで作ったObject（`imported`）／退避中のObject（`archived`）の数、ゾーンタグはあるがMapにも退避先にも無いObject（`outside`）、`ub_csv_id`の重複を調べます。 |
+| **Write Debug Report to Text** | 上記の確認内容に未使用のLibrary Objectも加え、Textの`MRT Debug Report`へまとめます。 |
 
 ## 過去バージョン
 
 古い動作が必要なときだけ使用してください。**0.9.2は、Replace Zoneが差分更新（`ub_csv_id`で照合し、CSVにない`id`はそのまま残す）だった最後の版です。** 0.6.0は、Replace Zoneが全作り直しで`Delete`を選べた最後の版です。0.2.0は、CSV出力が「選択したMesh」だった版です。
 
+- [Map Roundtrip Tools 0.10.0（ZIP）](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/map_roundtrip_tools-0.10.0.zip)
 - [Map Roundtrip Tools 0.9.2（ZIP）](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/map_roundtrip_tools-0.9.2.zip)
 - [Map Roundtrip Tools 0.6.0（ZIP）](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/map_roundtrip_tools-0.6.0.zip)
 - [Map Roundtrip Tools 0.2.0（ZIP）](https://taiyo1031.github.io/taiyo-blender-scripts/extensions/map_roundtrip_tools-0.2.0.zip)

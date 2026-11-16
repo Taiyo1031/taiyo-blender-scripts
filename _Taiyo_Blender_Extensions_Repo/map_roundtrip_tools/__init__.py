@@ -1,5 +1,5 @@
 bl_info = {
-    'name': 'Map Roundtrip Tools', 'author': 'Taiyo', 'version': (0, 10, 0),
+    'name': 'Map Roundtrip Tools', 'author': 'Taiyo', 'version': (0, 11, 0),
     'blender': (4, 5, 0), 'location': 'View3D > Sidebar > Map Roundtrip',
     'description': 'Roundtrip linked map placements and library FBX meshes through Houdini',
     'category': 'Import-Export',
@@ -14,7 +14,7 @@ from .zone_rename import MRT_OT_RenameZone
 from .props import MRT_Props
 from .presets import MRT_OT_SavePreset, MRT_OT_DeletePreset
 from .placement import MRT_OT_ReplaceZone
-from .mesh_import import MRT_OT_ImportMeshes
+from .mesh_import import MRT_OT_ImportMeshes, MRT_OT_SwapMeshes
 from .restore import MRT_OT_SwitchMapState
 from .fbx_export import MRT_OT_ExportFBX, MRT_OT_ExportFBXNative
 from .ui import MRT_PT_Export, MRT_PT_Import
@@ -26,7 +26,7 @@ from .ui_zones import (MRT_PT_Zones, MRT_PT_ZoneRange, MRT_PT_ZoneEmpties, MRT_P
 classes = (MRT_LegacyZoneEntry, MRT_LegacyUBTProps, MRT_ZoneEntry, MRT_Props, MRT_OT_NewZone, MRT_OT_RenameZone, MRT_OT_RegisterZoneEmpties,
            MRT_OT_ZoneEmptyAction, MRT_OT_AddZoneEmpty, MRT_OT_SelectInZone, MRT_OT_SelectZoneEmpties,
            MRT_OT_ExportZoneCSV, MRT_OT_AddObjectsToZone, MRT_OT_SavePreset, MRT_OT_DeletePreset, MRT_OT_ReplaceZone,
-           MRT_OT_SwitchMapState, MRT_OT_ImportMeshes, MRT_OT_ExportFBX, MRT_OT_ExportFBXNative,
+           MRT_OT_SwitchMapState, MRT_OT_ImportMeshes, MRT_OT_SwapMeshes, MRT_OT_ExportFBX, MRT_OT_ExportFBXNative,
            MRT_PT_Zones, MRT_PT_ZoneRange, MRT_PT_ZoneEmpties, MRT_PT_ZoneCheck, MRT_PT_ZoneCSV, MRT_PT_ZoneAdvanced,
            MRT_PT_Export, MRT_PT_Import, *HELPER_CLASSES)
 
