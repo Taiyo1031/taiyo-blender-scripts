@@ -1,0 +1,22 @@
+schema_version = "1.0.0"
+
+id = "reimport_selected_meshes"
+version = "1.0.0"
+name = "Reimport Selected Meshes"
+tagline = "Reimport selected meshes from their FBX and swap all linked uses"
+maintainer = "Taiyo"
+type = "add-on"
+blender_version_min = "4.5.9"
+website = "https://github.com/Taiyo1031/taiyo-blender-scripts/blob/main/_Taiyo_Blender_Extensions_Repo/reimport_selected_meshes/README.md"
+license = ["SPDX:GPL-3.0-or-later"]
+tags = ["Import-Export", "Object"]
+
+[permissions]
+files = "Read the source FBX files of selected meshes"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "*.zip",
+]
